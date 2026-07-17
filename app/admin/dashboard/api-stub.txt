@@ -1,0 +1,11 @@
+You must implement the following API endpoints for optimal dashboard speed:
+
+- GET /api/admin/events?fields=...  (returns minimal event data for list)
+- GET /api/admin/events/stats        (returns { total, pending, approved, rejected })
+
+These endpoints should:
+- Use lean SQL queries (select only needed fields)
+- Return data in a shape matching the new dashboard components
+- Be fast and cacheable
+
+Update your /api/admin/events and /api/admin/events/stats handlers accordingly.
