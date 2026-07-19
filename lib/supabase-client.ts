@@ -46,6 +46,8 @@ export interface Event {
   image_url?: string;
   image_urls?: string[];
   currency?: string; // Currency code (USD, EUR, GBP, etc.)
+  /** sports | concert | movies | other */
+  category?: 'sports' | 'concert' | 'movies' | 'other';
   status: 'pending' | 'approved' | 'rejected';
   rejection_reason?: string;
   is_featured?: boolean;

@@ -11,6 +11,7 @@ import { AlertCircle, CheckCircle2, ChevronLeft, ChevronRight, Trash2, Plus, Ima
 import { createEvent, createSponsor, createTicketTypes, updateEvent, replaceEventSponsors, replaceEventTicketTypes } from '@/lib/supabase-db';
 import { supabase } from '@/lib/supabase-client';
 import { isEventDatePast } from '@/lib/event-status';
+import { EVENT_CATEGORIES, normalizeEventCategory, type EventCategoryId } from '@/lib/event-categories';
 
 type WizardStep = 'basic' | 'pricing' | 'organizer' | 'sponsors' | 'review';
 
@@ -46,6 +47,7 @@ type InitialEventData = {
   organizer_logo_url?: string;
   image_url?: string;
   image_urls?: string[];
+  category?: EventCategoryId;
   status?: 'pending' | 'approved' | 'rejected';
   rejection_reason?: string | null;
 };
@@ -210,6 +212,7 @@ export function EventCreationWizard({
     ),
     venue: initialEvent?.venue || '',
     currency: initialEvent?.currency || 'USD',
+    category: normalizeEventCategory(initialEvent?.category) as EventCategoryId,
     ticketPrice: initialEvent?.ticket_price != null ? String(initialEvent.ticket_price) : '',
     totalTickets: initialEvent?.total_tickets != null ? String(initialEvent.total_tickets) : '',
   });
@@ -433,6 +436,7 @@ export function EventCreationWizard({
       case 'basic':
         return !!(
           formData.name.trim() &&
+          formData.category &&
           eventDate &&
           eventHour &&
           eventMinute &&
@@ -655,6 +659,7 @@ export function EventCreationWizard({
           date: formData.date,
           venue: formData.venue,
           currency: formData.currency,
+          category: formData.category,
           ticket_price: createTicketPrice,
           total_tickets: createTotalTickets,
           tickets_available: createTotalTickets,
@@ -732,6 +737,7 @@ export function EventCreationWizard({
           date: formData.date,
           venue: formData.venue,
           currency: formData.currency,
+          category: formData.category,
           ticket_price: nextTicketPrice,
           total_tickets: desiredTotal,
           tickets_available: nextAvailable,
@@ -915,6 +921,34 @@ export function EventCreationWizard({
                     className="mt-1"
                   />
                   <p className="text-xs text-muted-foreground mt-1">Use a clear title people will recognize instantly.</p>
+                </div>
+
+                <div>
+                  <label className="text-sm font-semibold">Category *</label>
+                  <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    {EVENT_CATEGORIES.map((category) => {
+                      const selected = formData.category === category.id;
+                      return (
+                        <button
+                          key={category.id}
+                          type="button"
+                          onClick={() =>
+                            setFormData((prev) => ({ ...prev, category: category.id }))
+                          }
+                          className={`rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors ${
+                            selected
+                              ? 'border-slate-900 bg-slate-900 text-white'
+                              : 'border-border bg-background text-foreground hover:border-slate-400 hover:bg-muted/40'
+                          }`}
+                        >
+                          {category.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Choose the category that best matches your event.
+                  </p>
                 </div>
 
                 <div>
@@ -1490,6 +1524,13 @@ export function EventCreationWizard({
                   <div className="p-4 bg-muted rounded-lg">
                     <p className="text-xs text-muted-foreground">Event Name</p>
                     <p className="font-semibold">{formData.name}</p>
+                  </div>
+
+                  <div className="p-4 bg-muted rounded-lg">
+                    <p className="text-xs text-muted-foreground">Category</p>
+                    <p className="font-semibold">
+                      {EVENT_CATEGORIES.find((c) => c.id === formData.category)?.label || 'Other Events'}
+                    </p>
                   </div>
 
                   <div className="p-4 bg-muted rounded-lg">

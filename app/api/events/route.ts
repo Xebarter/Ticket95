@@ -7,6 +7,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status');
     const search = searchParams.get('search');
+    const category = searchParams.get('category');
     const limit = searchParams.get('limit');
 
     // Build the query - fetch only essential fields for performance
@@ -24,6 +25,7 @@ export async function GET(request: NextRequest) {
         organizer_logo_url,
         status,
         currency,
+        category,
         ticket_price,
         total_tickets,
         tickets_available
@@ -37,6 +39,10 @@ export async function GET(request: NextRequest) {
       if (status === 'approved') {
         query = query.gt('date', nowIso);
       }
+    }
+
+    if (category) {
+      query = query.eq('category', category);
     }
 
     // Apply search filter

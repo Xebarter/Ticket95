@@ -2,6 +2,8 @@ import type { Metadata } from 'next'
 import { Lexend } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import { AuthProvider } from '@/lib/supabase-auth-context'
+import { EventSearchProvider } from '@/lib/event-search-context'
+import { BRAND_ICON_PATHS, brandAssetUrl } from '@/lib/brand-assets'
 import './globals.css'
 
 const lexend = Lexend({
@@ -16,15 +18,20 @@ export const metadata: Metadata = {
   description: 'Buy and sell event tickets online. Create events, manage approvals, and discover amazing events.',
   generator: 'v0.app',
   applicationName: 'Ticket95.com',
-  manifest: '/site.webmanifest',
   icons: {
     icon: [
-      { url: '/favicon.ico', sizes: 'any' },
-      { url: '/favicon.svg', type: 'image/svg+xml' },
-      { url: '/favicon-96x96.png', sizes: '96x96', type: 'image/png' },
+      { url: brandAssetUrl(BRAND_ICON_PATHS.ico), sizes: 'any' },
+      { url: brandAssetUrl(BRAND_ICON_PATHS.svg), type: 'image/svg+xml' },
+      { url: brandAssetUrl(BRAND_ICON_PATHS.png96), sizes: '96x96', type: 'image/png' },
     ],
-    apple: [{ url: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' }],
-    shortcut: ['/favicon.ico'],
+    apple: [
+      {
+        url: brandAssetUrl(BRAND_ICON_PATHS.apple),
+        sizes: '180x180',
+        type: 'image/png',
+      },
+    ],
+    shortcut: [brandAssetUrl(BRAND_ICON_PATHS.ico)],
   },
   appleWebApp: {
     title: 'Ticket95',
@@ -33,13 +40,20 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'Ticket95.com',
     description: 'Buy and sell event tickets online. Create events, manage approvals, and discover amazing events.',
-    images: [{ url: '/web-app-manifest-512x512.png', width: 512, height: 512, alt: 'Ticket95.com' }],
+    images: [
+      {
+        url: brandAssetUrl(BRAND_ICON_PATHS.manifest512),
+        width: 512,
+        height: 512,
+        alt: 'Ticket95.com',
+      },
+    ],
   },
   twitter: {
     card: 'summary',
     title: 'Ticket95.com',
     description: 'Buy and sell event tickets online.',
-    images: ['/web-app-manifest-512x512.png'],
+    images: [brandAssetUrl(BRAND_ICON_PATHS.manifest512)],
   },
 }
 
@@ -52,7 +66,9 @@ export default function RootLayout({
     <html lang="en" className={lexend.variable}>
       <body className="font-sans antialiased">
         <AuthProvider>
-          {children}
+          <EventSearchProvider>
+            {children}
+          </EventSearchProvider>
         </AuthProvider>
         <Analytics />
       </body>

@@ -300,6 +300,7 @@ export async function getApprovedEventsForLanding(limit: number = 12) {
         organizer_name,
         status,
         currency,
+        category,
         ticket_types (
           id
         )
@@ -334,7 +335,8 @@ export async function getApprovedEventsForLanding(limit: number = 12) {
         image_url,
         organizer_name,
         status,
-        currency
+        currency,
+        category
       `)
       .eq('status', 'approved')
       .gt('date', nowIso)

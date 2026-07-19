@@ -1,16 +1,20 @@
 'use client'
 
 import Link from 'next/link'
+import {
+  BRAND_LOGO_FALLBACK_SRC,
+  BRAND_LOGO_SRC,
+  brandAssetUrl,
+} from '@/lib/brand-assets'
 import { cn } from '@/lib/utils'
+
+export { BRAND_LOGO_FALLBACK_SRC, BRAND_LOGO_SRC }
 
 /**
  * Brand mark from `public/`. Plain <img> (not next/image) so replacing files
- * in public/ is not blocked by the Next image optimizer cache.
+ * in public/ is not blocked by the Next image optimizer cache. Cache-busting
+ * comes from NEXT_PUBLIC_BRAND_ASSET_VERSION (content hash in next.config).
  */
-export const BRAND_LOGO_SRC = '/apple-touch-icon.png'
-export const BRAND_LOGO_FALLBACK_SRC = '/favicon-96x96.png'
-/** Bump when replacing logo files so browsers drop cached copies. */
-export const BRAND_LOGO_VERSION = '2026-07-18b'
 
 const SIZE_MAP = {
   sm: {
@@ -63,10 +67,6 @@ function Wordmark({ className }: { className?: string }) {
   )
 }
 
-function versioned(src: string) {
-  return `${src}?v=${BRAND_LOGO_VERSION}`
-}
-
 export function BrandLogo({
   href = '/',
   size = 'md',
@@ -81,7 +81,7 @@ export function BrandLogo({
   const mark = (
     // eslint-disable-next-line @next/next/no-img-element -- intentional: avoid next/image cache for brand assets
     <img
-      src={versioned(BRAND_LOGO_SRC)}
+      src={brandAssetUrl(BRAND_LOGO_SRC)}
       alt=""
       width={px}
       height={px}
@@ -90,7 +90,7 @@ export function BrandLogo({
       onError={(event) => {
         const img = event.currentTarget
         if (img.src.includes(BRAND_LOGO_FALLBACK_SRC)) return
-        img.src = versioned(BRAND_LOGO_FALLBACK_SRC)
+        img.src = brandAssetUrl(BRAND_LOGO_FALLBACK_SRC)
       }}
       className={cn(
         'shrink-0 rounded-xl object-cover bg-black shadow-sm ring-1 ring-border/60',
