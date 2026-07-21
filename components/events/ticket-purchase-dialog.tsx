@@ -1,305 +1,239 @@
-'use client';
+'use client'
 
-import { useState, useEffect } from 'react';
-import { useAuth } from '@/lib/supabase-auth-context';
-import { supabase } from '@/lib/supabase-client';
-import type { Event, TicketType } from '@/lib/supabase-client';
-import Image from 'next/image';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { AlertCircle, ShoppingCart, CheckCircle2, Ticket, Minus, Plus, ShieldCheck, Calendar, MapPin } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react'
+import { useAuth } from '@/lib/supabase-auth-context'
+import { supabase } from '@/lib/supabase-client'
+import type { Event, TicketType } from '@/lib/supabase-client'
+import Image from 'next/image'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog'
+import {
+  AlertCircle,
+  CheckCircle2,
+  Ticket,
+  Minus,
+  Plus,
+  ShieldCheck,
+  Calendar,
+  MapPin,
+  Loader2,
+} from 'lucide-react'
+import { getEventCategoryLabel } from '@/lib/event-categories'
+import { cn } from '@/lib/utils'
 
 interface TicketPurchaseDialogProps {
-  event: Event;
-  /**
-   * If the parent already knows the ticket types (e.g. admin dashboard), it can
-   * pass them in.  On the public landing page we usually don't so the dialog
-   * will fetch them when opened.
-   */
-  ticketTypes?: TicketType[];
-  onPurchaseComplete?: () => void;
-  onDialogClose?: () => void;
-  trigger?: React.ReactNode;
+  event: Event
+  ticketTypes?: TicketType[]
+  onPurchaseComplete?: () => void
+  onDialogClose?: () => void
+  trigger?: React.ReactNode
 }
 
+export function TicketPurchaseDialog({
+  event,
+  ticketTypes,
+  onPurchaseComplete,
+  onDialogClose,
+  trigger,
+}: TicketPurchaseDialogProps) {
+  const { user } = useAuth()
+  const [open, setOpen] = useState(false)
+  const [ticketTypesState, setTicketTypesState] = useState<TicketType[]>(ticketTypes || [])
+  const [sponsorsState, setSponsorsState] = useState<
+    Array<{ id: string; name: string; logo_url?: string }>
+  >([])
+  const [selectedQuantities, setSelectedQuantities] = useState<{
+    [ticketTypeId: string]: number
+  }>({})
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState(false)
+  const [successMessage, setSuccessMessage] = useState('')
+  const [ticketsLoading, setTicketsLoading] = useState(false)
+  const [ticketsError, setTicketsError] = useState('')
+  const [hasFetchedSponsors, setHasFetchedSponsors] = useState(false)
+  const [guestEmail, setGuestEmail] = useState('')
+  const [guestName, setGuestName] = useState('')
 
-export function TicketPurchaseDialog({ event, ticketTypes, onPurchaseComplete, onDialogClose, trigger }: TicketPurchaseDialogProps) {
-  const { user } = useAuth();
-  const [open, setOpen] = useState(false);
-  const [ticketTypesState, setTicketTypesState] = useState<TicketType[]>(ticketTypes || []);
-  const [sponsorsState, setSponsorsState] = useState<Array<{ id: string; name: string; logo_url?: string }>>([]);
-  const [selectedQuantities, setSelectedQuantities] = useState<{ [ticketTypeId: string]: number }>({});
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState(false);
-  const [successMessage, setSuccessMessage] = useState('');
-  const [typingLoading, setTypingLoading] = useState(false);
-  const [typingError, setTypingError] = useState('');
-  const [hasFetchedSponsors, setHasFetchedSponsors] = useState(false);
-  const [guestEmail, setGuestEmail] = useState('');
-  const [guestName, setGuestName] = useState('');
+  const currency = event.currency || 'USD'
 
-  const currency = event.currency || 'USD';
+  const resetTransientState = useCallback(() => {
+    setSelectedQuantities({})
+    setError('')
+    setSuccess(false)
+    setSuccessMessage('')
+    setLoading(false)
+    setGuestEmail('')
+    setGuestName('')
+  }, [])
 
   const handleDialogClose = () => {
-    // Reset all state so each open starts clean.
-    setSelectedQuantities({});
-    setError('');
-    setSuccess(false);
-    setSuccessMessage('');
-    setLoading(false);
-    setOpen(false);
-    onDialogClose?.();
-  };
+    resetTransientState()
+    setOpen(false)
+    onDialogClose?.()
+  }
 
-  // Auto-open dialog when trigger is null (programmatic usage)
   useEffect(() => {
     if (trigger === null) {
-      setOpen(true);
+      setOpen(true)
     }
-  }, [trigger]);
+  }, [trigger])
 
-  // Auto-fetch ticket types and sponsors when dialog is programmatically opened (trigger={null})
-  useEffect(() => {
-    // Only fetch if we don't already have ticket types and the dialog should be open
-    if (trigger === null && open) {
-      // Check if we need to fetch ticket types (don't have data yet)
-      const hasTicketData = ticketTypes && ticketTypes.length > 0;
-      if (!hasTicketData && ticketTypesState.length === 0) {
-        fetchTicketTypes();
-      }
-      // Check if we need to fetch sponsors (don't have data yet and haven't fetched)
-      if (!hasFetchedSponsors && sponsorsState.length === 0) {
-        fetchSponsors();
-      }
-    }
-  }, [open, trigger, hasFetchedSponsors]);
-
-  // fetch ticket types if we don't already have them when the dialog opens
-  const fetchTicketTypes = async () => {
-    if (ticketTypesState.length > 0) return; // already have data
-    setTypingLoading(true);
-    setTypingError('');
+  const fetchTicketTypes = useCallback(async () => {
+    if ((ticketTypes && ticketTypes.length > 0) || ticketTypesState.length > 0) return
+    setTicketsLoading(true)
+    setTicketsError('')
 
     try {
-      const { data, error } = await supabase
+      const { data, error: fetchError } = await supabase
         .from('ticket_types')
         .select('*')
         .eq('event_id', event.id)
-        .order('order_index', { ascending: true });
+        .order('order_index', { ascending: true })
 
-      if (error) throw error;
-      setTicketTypesState(data || []);
+      if (fetchError) throw fetchError
+      setTicketTypesState(data || [])
     } catch (err) {
-      setTypingError(err instanceof Error ? err.message : 'Failed to load ticket types');
+      setTicketsError(err instanceof Error ? err.message : 'Failed to load ticket types')
     } finally {
-      setTypingLoading(false);
+      setTicketsLoading(false)
     }
-  };
+  }, [event.id, ticketTypes, ticketTypesState.length])
 
-  // fetch sponsors if we don't already have them when the dialog opens
-  const fetchSponsors = async () => {
-    if (sponsorsState.length > 0 || hasFetchedSponsors) return; // already have data or already fetched
-    setHasFetchedSponsors(true);
-    setTypingLoading(true);
-    setTypingError('');
+  const fetchSponsors = useCallback(async () => {
+    if (sponsorsState.length > 0 || hasFetchedSponsors) return
+    setHasFetchedSponsors(true)
 
     try {
-      const { data, error } = await supabase
+      const { data, error: fetchError } = await supabase
         .from('sponsors')
         .select('id, name, logo_url')
         .eq('event_id', event.id)
-        .order('order_index', { ascending: true });
+        .order('order_index', { ascending: true })
 
-      if (error) throw error;
-      setSponsorsState(data || []);
+      if (fetchError) throw fetchError
+      setSponsorsState(data || [])
     } catch (err) {
-      console.error('Failed to fetch sponsors:', err);
-      // Don't show error to user, sponsors are optional
-    } finally {
-      setTypingLoading(false);
+      console.error('Failed to fetch sponsors:', err)
     }
-  };
+  }, [event.id, hasFetchedSponsors, sponsorsState.length])
 
-  // Format event date and time
+  useEffect(() => {
+    if (!open) return
+    void fetchTicketTypes()
+    void fetchSponsors()
+  }, [open, fetchTicketTypes, fetchSponsors])
+
   const formatEventDateTime = () => {
-    const date = new Date(event.date);
-    const options: Intl.DateTimeFormatOptions = {
-      weekday: 'long',
+    const date = new Date(event.date)
+    return date.toLocaleString('en-US', {
+      weekday: 'short',
       year: 'numeric',
-      month: 'long',
+      month: 'short',
       day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    };
-    return date.toLocaleString('en-US', options);
-  };
+      hour: 'numeric',
+      minute: '2-digit',
+    })
+  }
 
-  // Format price with commas and no decimal places
-  const formatPrice = (price: number) => {
-    return Math.round(price).toLocaleString('en-US');
-  };
+  const formatPrice = (price: number) => Math.round(price).toLocaleString('en-US')
 
-  // Get modern, professional color scheme for ticket type based on name/tier
-  const getTicketTypeColor = (ticketTypeName: string) => {
-    const normalizedName = ticketTypeName.toLowerCase();
-
-    // Premium/VIP tiers
-    if (normalizedName.includes('vip') || normalizedName.includes('premium')) {
-      return {
-        bg: 'from-amber-50 to-orange-50',
-        border: 'border-amber-200/60',
-        icon: 'bg-amber-100',
-        iconText: 'text-amber-600',
-        accent: 'text-amber-700',
-        badge: 'bg-amber-500',
-        gradient: 'from-amber-500/10 to-orange-500/10'
-      };
-    }
-
-    // Early Bird tier
-    if (normalizedName.includes('early') || normalizedName.includes('bird')) {
-      return {
-        bg: 'from-emerald-50 to-teal-50',
-        border: 'border-emerald-200/60',
-        icon: 'bg-emerald-100',
-        iconText: 'text-emerald-600',
-        accent: 'text-emerald-700',
-        badge: 'bg-emerald-500',
-        gradient: 'from-emerald-500/10 to-teal-500/10'
-      };
-    }
-
-    // Standard/Regular tier
-    if (normalizedName.includes('standard') || normalizedName.includes('regular') || normalizedName.includes('general')) {
-      return {
-        bg: 'from-blue-50 to-indigo-50',
-        border: 'border-blue-200/60',
-        icon: 'bg-blue-100',
-        iconText: 'text-blue-600',
-        accent: 'text-blue-700',
-        badge: 'bg-blue-500',
-        gradient: 'from-blue-500/10 to-indigo-500/10'
-      };
-    }
-
-    // Student tier
-    if (normalizedName.includes('student')) {
-      return {
-        bg: 'from-purple-50 to-fuchsia-50',
-        border: 'border-purple-200/60',
-        icon: 'bg-purple-100',
-        iconText: 'text-purple-600',
-        accent: 'text-purple-700',
-        badge: 'bg-purple-500',
-        gradient: 'from-purple-500/10 to-fuchsia-500/10'
-      };
-    }
-
-    // Group tier
-    if (normalizedName.includes('group') || normalizedName.includes('family')) {
-      return {
-        bg: 'from-rose-50 to-pink-50',
-        border: 'border-rose-200/60',
-        icon: 'bg-rose-100',
-        iconText: 'text-rose-600',
-        accent: 'text-rose-700',
-        badge: 'bg-rose-500',
-        gradient: 'from-rose-500/10 to-pink-500/10'
-      };
-    }
-
-    // Default color scheme for any other ticket type
-    return {
-      bg: 'from-slate-50 to-gray-50',
-      border: 'border-slate-200/60',
-      icon: 'bg-slate-100',
-      iconText: 'text-slate-600',
-      accent: 'text-slate-700',
-      badge: 'bg-slate-500',
-      gradient: 'from-slate-500/10 to-gray-500/10'
-    };
-  };
-
-  // Get currency symbol
   const getCurrencySymbol = (currencyCode: string) => {
     const currencies: { [key: string]: string } = {
-      'USD': '$', 'EUR': '€', 'GBP': '£', 'JPY': '¥', 'AUD': 'A$', 'CAD': 'C$',
-      'CHF': 'Fr', 'CNY': '¥', 'INR': '₹', 'NGN': '₦', 'ZAR': 'R', 'KES': 'KSh', 'UGX': 'USh'
-    };
-    return currencies[currencyCode] || currencyCode;
-  };
+      USD: '$',
+      EUR: '€',
+      GBP: '£',
+      JPY: '¥',
+      AUD: 'A$',
+      CAD: 'C$',
+      CHF: 'Fr',
+      CNY: '¥',
+      INR: '₹',
+      NGN: '₦',
+      ZAR: 'R',
+      KES: 'KSh',
+      UGX: 'USh',
+    }
+    return currencies[currencyCode] || currencyCode
+  }
 
-  const currencySymbol = getCurrencySymbol(currency);
+  const currencySymbol = getCurrencySymbol(currency)
 
-  // Calculate totals
-  const totalQuantity = Object.values(selectedQuantities).reduce((sum, qty) => sum + qty, 0);
+  const totalQuantity = Object.values(selectedQuantities).reduce((sum, qty) => sum + qty, 0)
   const totalPrice = ticketTypesState.reduce((sum, tt) => {
-    const qty = selectedQuantities[tt.id] || 0;
-    return sum + (qty * tt.price);
-  }, 0);
+    const qty = selectedQuantities[tt.id] || 0
+    return sum + qty * tt.price
+  }, 0)
   const selectedLineItems = ticketTypesState
     .map((ticketType) => ({
       ticketType,
       qty: selectedQuantities[ticketType.id] || 0,
     }))
-    .filter(({ qty }) => qty > 0);
-  const totalAvailableTickets = ticketTypesState.reduce((sum, tt) => sum + tt.available_quantity, 0);
+    .filter(({ qty }) => qty > 0)
+  const totalAvailableTickets = ticketTypesState.reduce(
+    (sum, tt) => sum + tt.available_quantity,
+    0
+  )
 
   const updateQuantity = (ticketTypeId: string, newQuantity: number) => {
-    const ticketType = ticketTypesState.find(tt => tt.id === ticketTypeId);
-    if (!ticketType) return;
+    const ticketType = ticketTypesState.find((tt) => tt.id === ticketTypeId)
+    if (!ticketType) return
 
-    const clampedQuantity = Math.max(0, Math.min(newQuantity, ticketType.available_quantity));
-    setSelectedQuantities(prev => ({
+    const clampedQuantity = Math.max(0, Math.min(newQuantity, ticketType.available_quantity))
+    setSelectedQuantities((prev) => ({
       ...prev,
-      [ticketTypeId]: clampedQuantity
-    }));
-  };
+      [ticketTypeId]: clampedQuantity,
+    }))
+    setError('')
+  }
 
   const clearSelections = () => {
-    setSelectedQuantities({});
-    setError('');
-    setSuccessMessage('');
-  };
+    setSelectedQuantities({})
+    setError('')
+    setSuccessMessage('')
+  }
 
   const handlePurchase = async () => {
-    setError('');
-    setSuccess(false);
-    setSuccessMessage('');
-    setLoading(true);
+    setError('')
+    setSuccess(false)
+    setSuccessMessage('')
+    setLoading(true)
 
     if (totalQuantity < 1) {
-      setError('Please select at least 1 ticket');
-      setLoading(false);
-      return;
+      setError('Please select at least 1 ticket')
+      setLoading(false)
+      return
     }
 
     if (!user) {
-      const email = guestEmail.trim();
-      const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      const email = guestEmail.trim()
+      const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
       if (!email || !emailPattern.test(email)) {
-        setError('Please enter a valid email address for guest checkout.');
-        setLoading(false);
-        return;
+        setError('Please enter a valid email address for guest checkout.')
+        setLoading(false)
+        return
       }
     }
 
-    // Validate individual ticket type quantities
     for (const ticketType of ticketTypesState) {
-      const selectedQty = selectedQuantities[ticketType.id] || 0;
+      const selectedQty = selectedQuantities[ticketType.id] || 0
       if (selectedQty > ticketType.available_quantity) {
-        setError(`Only ${ticketType.available_quantity} ${ticketType.name} tickets available`);
-        setLoading(false);
-        return;
+        setError(`Only ${ticketType.available_quantity} ${ticketType.name} tickets available`)
+        setLoading(false)
+        return
       }
     }
 
     try {
-      const response = await fetch('/api/payments/pesapal/initialize', {
+      const response = await fetch('/api/payments/paytota/initialize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -308,437 +242,475 @@ export function TicketPurchaseDialog({ event, ticketTypes, onPurchaseComplete, o
           customerEmail: user?.email || guestEmail.trim(),
           customerName: guestName.trim() || undefined,
         }),
-      });
+      })
 
-      const payload = await response.json();
+      const payload = await response.json()
 
       if (!response.ok) {
-        setError(payload.error || 'Failed to initialize payment');
-        return;
+        setError(payload.error || 'Failed to initialize payment')
+        return
       }
 
       if (!payload.redirectUrl) {
         if (payload.freeCheckout) {
-          setSuccess(true);
-          setSuccessMessage('Free ticket order confirmed successfully. Your tickets are now available.');
-          onPurchaseComplete?.();
-          return;
+          setSuccess(true)
+          setSuccessMessage(
+            'Free ticket order confirmed successfully. Your tickets are now available.'
+          )
+          onPurchaseComplete?.()
+          return
         }
-        setError('No payment redirect URL returned by Pesapal.');
-        return;
+        setError('No payment redirect URL was returned.')
+        return
       }
 
-      onPurchaseComplete?.();
-      setSuccess(true);
+      onPurchaseComplete?.()
+      setSuccess(true)
       setSuccessMessage(
         payload.freeCheckout
           ? 'Free ticket order confirmed! Preparing your ticket download...'
-          : 'Purchase successful! Redirecting you to Pesapal...'
-      );
+          : 'Redirecting you to secure checkout...'
+      )
       setTimeout(() => {
-        window.location.href = payload.redirectUrl;
-      }, 500);
+        window.location.href = payload.redirectUrl
+      }, 500)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Purchase failed');
+      setError(err instanceof Error ? err.message : 'Purchase failed')
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  };
+  }
 
-  const isDisabled = ticketTypesState.length === 0 || ticketTypesState.every(tt => tt.available_quantity === 0) || event.status !== 'approved';
+  const isDisabled =
+    ticketTypesState.length === 0 ||
+    ticketTypesState.every((tt) => tt.available_quantity === 0) ||
+    event.status !== 'approved'
+
+  const guestEmailValid =
+    !user && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(guestEmail.trim())
+  const canCheckout =
+    totalQuantity >= 1 && !loading && !success && (user || guestEmailValid)
 
   return (
     <Dialog
       open={open}
       onOpenChange={(newOpen) => {
         if (!newOpen) {
-          handleDialogClose();
+          handleDialogClose()
         } else {
-          setOpen(true);
-          fetchTicketTypes();
+          setOpen(true)
         }
       }}
     >
       {trigger ? (
         isDisabled ? (
-          <div className="opacity-60 cursor-not-allowed">{trigger}</div>
+          <div className="cursor-not-allowed opacity-60">{trigger}</div>
         ) : (
           <DialogTrigger asChild>{trigger}</DialogTrigger>
         )
       ) : null}
-      <DialogContent className="w-[calc(100vw-1.5rem)] sm:max-w-2xl max-h-[90vh] p-0 overflow-hidden flex flex-col rounded-2xl border border-border/70 bg-background shadow-2xl">
-        {/* Scrollable content area - includes header and image */}
-        <div className="px-0 py-0 space-y-0 overflow-y-auto flex-1 min-h-0">
-          {/* Event Image - Hero section */}
-          {event.image_url && (
-            <div className="relative w-full h-48 sm:h-56 bg-muted">
-              <Image
-                src={event.image_url}
-                alt={event.name}
-                fill
-                className="object-cover"
-                priority
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent" />
-              <div className="absolute bottom-0 left-0 right-0 p-5">
-                <h2 className="text-2xl sm:text-3xl font-bold text-white line-clamp-2 drop-shadow-lg mb-2">
-                  {event.name}
-                </h2>
-                <div className="flex items-center gap-2 text-white/90 text-sm">
-                  <span className="font-medium">Hosted by {event.organizer_name}</span>
+
+      <DialogContent
+        className="flex max-h-[min(92vh,880px)] w-[calc(100vw-1.25rem)] flex-col gap-0 overflow-hidden rounded-2xl border border-slate-200 bg-white p-0 shadow-[0_24px_64px_rgba(15,23,42,0.18)] sm:max-w-2xl [&_[data-slot=dialog-close]]:rounded-full [&_[data-slot=dialog-close]]:bg-white/95 [&_[data-slot=dialog-close]]:p-1.5 [&_[data-slot=dialog-close]]:text-slate-700 [&_[data-slot=dialog-close]]:shadow-sm [&_[data-slot=dialog-close]]:hover:bg-white [&_[data-slot=dialog-close]]:hover:opacity-100"
+        showCloseButton
+      >
+        {/* Scrollable content — header scrolls away with the body */}
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <div className="border-b border-slate-100">
+            {event.image_url ? (
+              <div className="relative h-36 w-full bg-slate-100 sm:h-44">
+                <Image
+                  src={event.image_url}
+                  alt=""
+                  fill
+                  className="object-cover"
+                  priority
+                  sizes="(max-width: 672px) 100vw, 672px"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-slate-950/75 via-slate-950/25 to-transparent" />
+                <div className="absolute inset-x-0 bottom-0 p-5">
+                  {event.category ? (
+                    <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-white/75">
+                      {getEventCategoryLabel(event.category)}
+                    </p>
+                  ) : null}
+                  <DialogHeader className="space-y-1 text-left">
+                    <DialogTitle className="line-clamp-2 text-xl font-bold tracking-tight text-white sm:text-2xl">
+                      {event.name}
+                    </DialogTitle>
+                    <DialogDescription className="text-sm text-white/80">
+                      Hosted by {event.organizer_name}
+                    </DialogDescription>
+                  </DialogHeader>
                 </div>
               </div>
-            </div>
-          )}
-
-          {/* Header and content */}
-          <div className="px-5 py-4 space-y-4">
-            {/* Event Details Card */}
-            <Card className="border-border/70 bg-card">
-              <CardContent className="p-4 space-y-3">
-                {/* Date & Time */}
-                <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                    <Calendar className="w-5 h-5 text-primary" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Date & Time</p>
-                    <p className="text-sm font-medium mt-0.5">{formatEventDateTime()}</p>
-                  </div>
-                </div>
-
-                {/* Venue */}
-                <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                    <MapPin className="w-5 h-5 text-primary" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Venue</p>
-                    <p className="text-sm font-medium mt-0.5">{event.venue}</p>
-                  </div>
-                </div>
-
-                {/* Sponsors */}
-                {typingLoading && sponsorsState.length === 0 ? (
-                  <div className="flex items-start gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                      <ShoppingCart className="w-5 h-5 text-primary" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Sponsors</p>
-                      <p className="text-sm text-muted-foreground mt-1">Loading sponsors...</p>
-                    </div>
-                  </div>
-                ) : sponsorsState.length > 0 && (
-                  <div className="flex items-start gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                      <ShoppingCart className="w-5 h-5 text-primary" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Sponsors</p>
-                      <div className="flex flex-wrap items-center gap-2 mt-1">
-                        {sponsorsState.map((sponsor) => (
-                          <div
-                            key={sponsor.id}
-                            className="inline-flex items-center gap-2 bg-background/60 hover:bg-background/80 transition-colors rounded-md px-2.5 py-1.5 border border-border/40"
-                          >
-                            {sponsor.logo_url ? (
-                              <div className="relative w-8 h-8">
-                                <Image
-                                  src={sponsor.logo_url}
-                                  alt={sponsor.name}
-                                  fill
-                                  className="object-contain rounded"
-                                />
-                              </div>
-                            ) : (
-                              <div className="w-8 h-8 bg-primary/20 rounded flex items-center justify-center">
-                                <span className="text-xs font-bold text-primary">
-                                  {sponsor.name.charAt(0).toUpperCase()}
-                                </span>
-                              </div>
-                            )}
-                            <span className="text-sm font-medium whitespace-nowrap">{sponsor.name}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            <DialogHeader>
-              <DialogTitle className="text-xl">Purchase Tickets</DialogTitle>
-              <DialogDescription className="mt-1 text-sm">
-                {totalPrice <= 0
-                  ? 'Select free ticket quantities and complete your order instantly.'
-                  : 'Select ticket types and quantities to proceed to secure Pesapal checkout.'}
-              </DialogDescription>
-            </DialogHeader>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700">
-                <ShieldCheck className="w-4 h-4" />
-                Secure checkout by Pesapal
+            ) : (
+              <div className="px-5 py-5">
+                {event.category ? (
+                  <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#9A7B2F]">
+                    {getEventCategoryLabel(event.category)}
+                  </p>
+                ) : null}
+                <DialogHeader className="space-y-1 text-left">
+                  <DialogTitle className="text-xl font-bold tracking-tight text-slate-900">
+                    {event.name}
+                  </DialogTitle>
+                  <DialogDescription className="text-sm text-slate-500">
+                    Hosted by {event.organizer_name}
+                  </DialogDescription>
+                </DialogHeader>
               </div>
-              <div className="inline-flex items-center gap-2 rounded-full border border-border/60 bg-background px-3 py-1.5 text-xs font-medium text-muted-foreground">
-                {totalAvailableTickets} tickets currently available
-              </div>
-            </div>
-            <div className="rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-              {totalPrice <= 0
-                ? 'No payment is required for this selection. Confirm your email and complete checkout instantly.'
-                : 'Payments are encrypted and processed by Pesapal. You receive confirmation and ticket records immediately after successful payment.'}
+            )}
+
+            <div className="flex flex-wrap gap-x-5 gap-y-2 px-5 py-3 text-sm text-slate-600">
+              <span className="inline-flex items-center gap-2">
+                <Calendar className="h-3.5 w-3.5 text-slate-400" />
+                {formatEventDateTime()}
+              </span>
+              <span className="inline-flex min-w-0 items-center gap-2">
+                <MapPin className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                <span className="truncate">{event.venue}</span>
+              </span>
             </div>
           </div>
 
-          {/* Ticket types and errors */}
-          {error && (
-            <div className="px-5">
-              <div role="alert" aria-live="assertive" className="flex items-center gap-2 p-3 bg-destructive/10 text-destructive rounded-lg text-sm">
-                <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                {error}
+          <div className="space-y-5 px-5 py-5">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-medium text-slate-600">
+              <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
+              Secure checkout
+            </span>
+            <span className="inline-flex items-center rounded-md border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-500">
+              {totalAvailableTickets} ticket{totalAvailableTickets === 1 ? '' : 's'} available
+            </span>
+          </div>
+
+          {sponsorsState.length > 0 ? (
+            <div>
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">
+                Sponsors
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {sponsorsState.map((sponsor) => (
+                  <div
+                    key={sponsor.id}
+                    className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5"
+                  >
+                    {sponsor.logo_url ? (
+                      <div className="relative h-6 w-6 overflow-hidden rounded">
+                        <Image
+                          src={sponsor.logo_url}
+                          alt=""
+                          fill
+                          className="object-contain"
+                          sizes="24px"
+                        />
+                      </div>
+                    ) : (
+                      <span className="flex h-6 w-6 items-center justify-center rounded bg-slate-100 text-[10px] font-bold text-slate-600">
+                        {sponsor.name.charAt(0).toUpperCase()}
+                      </span>
+                    )}
+                    <span className="text-xs font-medium text-slate-700">{sponsor.name}</span>
+                  </div>
+                ))}
               </div>
             </div>
-          )}
+          ) : null}
 
-          {success && (
-            <div className="px-5">
-              <div role="status" aria-live="polite" className="flex items-center gap-2 p-3 bg-green-50 text-green-700 rounded-lg text-sm">
-                <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
-                {successMessage || 'Purchase successful!'}
-              </div>
+          {error ? (
+            <div
+              role="alert"
+              className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700"
+            >
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>{error}</span>
             </div>
-          )}
+          ) : null}
 
-          {!success && (
+          {success ? (
+            <div
+              role="status"
+              className="flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm text-emerald-800"
+            >
+              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>{successMessage || 'Purchase successful!'}</span>
+            </div>
+          ) : null}
+
+          {!success ? (
             <>
-              <div className="px-5">
-                <label className="text-sm font-semibold mb-3 flex items-center gap-2">
-                  <Ticket className="w-4 h-4 text-primary" />
-                  Available Tickets
-                </label>
-                <div className="space-y-3">
-                  {typingLoading ? (
-                    <p className="text-center text-sm text-muted-foreground">
-                      Loading ticket types…
-                    </p>
+              <div>
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <h3 className="inline-flex items-center gap-2 text-sm font-semibold text-slate-900">
+                    <Ticket className="h-4 w-4 text-slate-400" />
+                    Select tickets
+                  </h3>
+                  {totalQuantity > 0 ? (
+                    <button
+                      type="button"
+                      onClick={clearSelections}
+                      disabled={loading}
+                      className="text-xs font-medium text-slate-500 transition-colors hover:text-slate-800"
+                    >
+                      Clear selection
+                    </button>
+                  ) : null}
+                </div>
+
+                <div className="space-y-2.5">
+                  {ticketsLoading ? (
+                    <div className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50 py-10 text-sm text-slate-500">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Loading tickets…
+                    </div>
+                  ) : ticketsError ? (
+                    <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                      {ticketsError}
+                    </div>
                   ) : ticketTypesState.length > 0 ? (
                     ticketTypesState.map((ticketType) => {
-                      const colors = getTicketTypeColor(ticketType.name);
-                      const selectedQty = selectedQuantities[ticketType.id] || 0;
-                      const isSelected = selectedQty > 0;
+                      const selectedQty = selectedQuantities[ticketType.id] || 0
+                      const isSelected = selectedQty > 0
+                      const soldOut = ticketType.available_quantity === 0
 
                       return (
-                        <Card
+                        <div
                           key={ticketType.id}
-                          className={`overflow-hidden border ${colors.border} bg-gradient-to-br ${colors.bg} transition-all ${isSelected ? 'ring-1 ring-primary/40 shadow-sm' : 'hover:shadow-md'}`}
+                          className={cn(
+                            'rounded-xl border bg-white p-4 transition-[border-color,box-shadow] duration-200',
+                            isSelected
+                              ? 'border-slate-900 shadow-sm'
+                              : 'border-slate-200 hover:border-slate-300',
+                            soldOut && 'opacity-70'
+                          )}
                         >
-                          <CardContent className="p-4">
-                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                              <div className="min-w-0">
-                                <div className="flex items-start gap-3">
-                                  <div className={`w-10 h-10 rounded-lg ${colors.icon} flex items-center justify-center shrink-0 shadow-sm`}>
-                                    <Ticket className={`w-5 h-5 ${colors.iconText}`} />
-                                  </div>
-                                  <div className="min-w-0 flex-1">
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                      <h4 className={`font-bold text-base ${colors.accent}`}>{ticketType.name}</h4>
-                                      {ticketType.available_quantity === 0 && (
-                                        <Badge variant="destructive" className="text-xs">Sold Out</Badge>
-                                      )}
-                                      {isSelected && (
-                                        <Badge variant="secondary" className="text-xs">Selected</Badge>
-                                      )}
-                                    </div>
-                                    {ticketType.description && (
-                                      <p className="text-sm text-muted-foreground mt-1.5 line-clamp-2">{ticketType.description}</p>
-                                    )}
-                                    {/* Available quantity indicator */}
-                                    {ticketType.available_quantity > 0 && (
-                                      <p className="text-xs text-muted-foreground mt-1">
-                                        <span className="font-medium text-foreground">{ticketType.available_quantity}</span> tickets remaining
-                                      </p>
-                                    )}
-                                  </div>
-                                </div>
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <h4 className="font-semibold text-slate-900">{ticketType.name}</h4>
+                                {soldOut ? (
+                                  <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                                    Sold out
+                                  </span>
+                                ) : null}
                               </div>
-
-                              <div className="flex items-center justify-between sm:justify-end gap-3">
-                                <div className="text-right">
-                                  <p className={`font-bold text-xl ${colors.accent} whitespace-nowrap`}>
-                                    {currencySymbol}{formatPrice(ticketType.price)}
-                                  </p>
-                                  {ticketType.available_quantity > 0 && ticketType.available_quantity < 10 && (
-                                    <p className="text-xs text-amber-600 font-medium mt-0.5">
-                                      Only {ticketType.available_quantity} left!
-                                    </p>
-                                  )}
-                                </div>
-
-                                {ticketType.available_quantity > 0 ? (
-                                  <div className="flex items-center gap-1.5">
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      className={`h-8 w-8 p-0 border-2 ${colors.border} hover:bg-background/80`}
-                                      onClick={() => updateQuantity(ticketType.id, selectedQty - 1)}
-                                      disabled={loading || selectedQty <= 0}
-                                      aria-label={`Decrease ${ticketType.name} quantity`}
-                                    >
-                                      <Minus className="w-3.5 h-3.5" />
-                                    </Button>
-                                    <div
-                                      className={`w-12 text-center font-bold text-base ${colors.accent} bg-background/50 rounded-md py-1 border ${colors.border}`}
-                                      aria-live="polite"
-                                      aria-label={`${ticketType.name} quantity`}
-                                    >
-                                      {selectedQty}
-                                    </div>
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      className={`h-8 w-8 p-0 border-2 ${colors.border} hover:bg-background/80`}
-                                      onClick={() => updateQuantity(ticketType.id, selectedQty + 1)}
-                                      disabled={loading || selectedQty >= ticketType.available_quantity}
-                                      aria-label={`Increase ${ticketType.name} quantity`}
-                                    >
-                                      <Plus className="w-3.5 h-3.5" />
-                                    </Button>
-                                  </div>
-                                ) : (
-                                  <div className="text-sm text-muted-foreground text-center px-3 font-medium">
-                                    Sold Out
-                                  </div>
-                                )}
-                              </div>
+                              {ticketType.description ? (
+                                <p className="mt-1 line-clamp-2 text-sm text-slate-500">
+                                  {ticketType.description}
+                                </p>
+                              ) : null}
+                              {!soldOut ? (
+                                <p className="mt-1.5 text-xs text-slate-400">
+                                  <span className="font-medium text-slate-600">
+                                    {ticketType.available_quantity}
+                                  </span>{' '}
+                                  remaining
+                                  {ticketType.available_quantity < 10 ? (
+                                    <span className="text-amber-700"> · Limited</span>
+                                  ) : null}
+                                </p>
+                              ) : null}
                             </div>
-                          </CardContent>
-                        </Card>
-                      );
+
+                            <div className="flex items-center justify-between gap-4 sm:justify-end">
+                              <p className="text-lg font-bold tracking-tight text-slate-900 whitespace-nowrap">
+                                {currencySymbol}
+                                {formatPrice(ticketType.price)}
+                              </p>
+
+                              {!soldOut ? (
+                                <div className="flex items-center gap-1.5">
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-8 w-8 border-slate-200 p-0 text-slate-700 hover:bg-slate-50"
+                                    onClick={() =>
+                                      updateQuantity(ticketType.id, selectedQty - 1)
+                                    }
+                                    disabled={loading || selectedQty <= 0}
+                                    aria-label={`Decrease ${ticketType.name} quantity`}
+                                  >
+                                    <Minus className="h-3.5 w-3.5" />
+                                  </Button>
+                                  <div
+                                    className="w-10 rounded-md border border-slate-200 bg-slate-50 py-1 text-center text-sm font-semibold text-slate-900"
+                                    aria-live="polite"
+                                  >
+                                    {selectedQty}
+                                  </div>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-8 w-8 border-slate-200 p-0 text-slate-700 hover:bg-slate-50"
+                                    onClick={() =>
+                                      updateQuantity(ticketType.id, selectedQty + 1)
+                                    }
+                                    disabled={
+                                      loading ||
+                                      selectedQty >= ticketType.available_quantity
+                                    }
+                                    aria-label={`Increase ${ticketType.name} quantity`}
+                                  >
+                                    <Plus className="h-3.5 w-3.5" />
+                                  </Button>
+                                </div>
+                              ) : null}
+                            </div>
+                          </div>
+                        </div>
+                      )
                     })
                   ) : (
-                    <p className="text-center text-sm text-muted-foreground">
-                      No ticket types available
-                    </p>
+                    <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
+                      No ticket types available for this event.
+                    </div>
                   )}
                 </div>
               </div>
 
-              {totalQuantity > 0 && (
-                <div className="p-4 bg-muted/50 border border-border/60 rounded-xl space-y-2">
-                  <h4 className="font-semibold text-sm">Order summary</h4>
-                  {selectedLineItems.map(({ ticketType, qty }) => (
-                    <div key={ticketType.id} className="flex justify-between text-sm">
-                      <span>{ticketType.name} x {qty}</span>
-                      <span className="font-medium">{currencySymbol}{formatPrice(ticketType.price * qty)}</span>
-                    </div>
-                  ))}
-                  <div className="border-t pt-2 flex justify-between">
-                    <span className="font-semibold">Total ({totalQuantity} ticket{totalQuantity === 1 ? '' : 's'})</span>
-                    <span className="font-bold text-lg">{currencySymbol}{formatPrice(totalPrice)}</span>
+              {totalQuantity > 0 ? (
+                <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4">
+                  <h4 className="text-sm font-semibold text-slate-900">Order summary</h4>
+                  <div className="mt-3 space-y-2">
+                    {selectedLineItems.map(({ ticketType, qty }) => (
+                      <div
+                        key={ticketType.id}
+                        className="flex justify-between text-sm text-slate-600"
+                      >
+                        <span>
+                          {ticketType.name} × {qty}
+                        </span>
+                        <span className="font-medium text-slate-900">
+                          {currencySymbol}
+                          {formatPrice(ticketType.price * qty)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-3 flex justify-between border-t border-slate-200 pt-3">
+                    <span className="text-sm font-semibold text-slate-900">
+                      Total ({totalQuantity} ticket{totalQuantity === 1 ? '' : 's'})
+                    </span>
+                    <span className="text-base font-bold text-slate-900">
+                      {currencySymbol}
+                      {formatPrice(totalPrice)}
+                    </span>
                   </div>
                 </div>
-              )}
+              ) : null}
 
-              {!user && (
-                <div className="p-4 border border-border/60 bg-card rounded-xl text-sm space-y-3">
-                  <p className="font-medium text-foreground">Guest checkout</p>
-                  <p className="text-xs text-muted-foreground">
-                    Use the same email when creating an account later to automatically sync these tickets to your profile.
+              {!user ? (
+                <div className="rounded-xl border border-slate-200 bg-white p-4">
+                  <p className="text-sm font-semibold text-slate-900">Guest checkout</p>
+                  <p className="mt-1 text-xs leading-relaxed text-slate-500">
+                    Use the same email when you create an account later to sync these tickets
+                    to your profile.
                   </p>
-                  <div className="space-y-2">
-                    <label htmlFor="guest-email" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      Email for payment receipt and confirmation
-                    </label>
-                    <Input
-                      id="guest-email"
-                      type="email"
-                      value={guestEmail}
-                      onChange={(e) => setGuestEmail(e.target.value)}
-                      placeholder="you@example.com"
-                      disabled={loading}
-                      className="bg-background h-10"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label htmlFor="guest-name" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      Full name (optional)
-                    </label>
-                    <Input
-                      id="guest-name"
-                      value={guestName}
-                      onChange={(e) => setGuestName(e.target.value)}
-                      placeholder="Jane Doe"
-                      disabled={loading}
-                      className="bg-background h-10"
-                    />
+                  <div className="mt-4 space-y-3">
+                    <div className="space-y-1.5">
+                      <label
+                        htmlFor="guest-email"
+                        className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400"
+                      >
+                        Email *
+                      </label>
+                      <Input
+                        id="guest-email"
+                        type="email"
+                        value={guestEmail}
+                        onChange={(e) => setGuestEmail(e.target.value)}
+                        placeholder="you@example.com"
+                        disabled={loading}
+                        className="h-10 border-slate-200 bg-white"
+                        autoComplete="email"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label
+                        htmlFor="guest-name"
+                        className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400"
+                      >
+                        Full name (optional)
+                      </label>
+                      <Input
+                        id="guest-name"
+                        value={guestName}
+                        onChange={(e) => setGuestName(e.target.value)}
+                        placeholder="Jane Doe"
+                        disabled={loading}
+                        className="h-10 border-slate-200 bg-white"
+                        autoComplete="name"
+                      />
+                    </div>
                   </div>
                 </div>
-              )}
+              ) : null}
             </>
-          )}
+          ) : null}
+          </div>
         </div>
 
-        {/* Persistent footer with total and actions */}
-        <div className="px-5 py-4 border-t border-border/60 bg-muted/20 shrink-0">
-          <div className="flex items-center justify-between mb-3">
+        {/* Sticky footer */}
+        <div className="shrink-0 border-t border-slate-200 bg-white px-5 py-4">
+          <div className="mb-3 flex items-end justify-between gap-3">
             <div>
-              <p className="text-sm text-muted-foreground">Total Amount</p>
-              <p className="text-2xl font-bold text-primary">
-                {totalQuantity > 0 ? `${currencySymbol}${formatPrice(totalPrice)}` : `${currencySymbol}0`}
+              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">
+                Total
+              </p>
+              <p className="mt-0.5 text-2xl font-bold tracking-tight text-slate-900">
+                {currencySymbol}
+                {formatPrice(totalPrice)}
               </p>
             </div>
             <div className="text-right">
-              <p className="text-sm text-muted-foreground">Tickets</p>
-              <p className="text-lg font-semibold">{totalQuantity}</p>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">
+                Tickets
+              </p>
+              <p className="mt-0.5 text-lg font-semibold text-slate-900">{totalQuantity}</p>
             </div>
           </div>
 
           <div className="flex gap-2">
             <Button
-              className="flex-1 h-11"
+              type="button"
               variant="outline"
+              className="h-11 flex-1 border-slate-200 text-slate-700 hover:bg-slate-50"
               onClick={handleDialogClose}
               disabled={loading}
             >
               Cancel
             </Button>
             <Button
-              className="flex-1 h-11"
-              variant="outline"
-              onClick={clearSelections}
-              disabled={loading || totalQuantity === 0}
-            >
-              Clear
-            </Button>
-            <Button
-              className="flex-1 h-11 font-semibold"
+              type="button"
+              className="h-11 flex-[1.4] bg-slate-900 font-semibold text-white shadow-none hover:bg-slate-800 disabled:bg-slate-300"
               onClick={handlePurchase}
-              disabled={loading || success || totalQuantity < 1 || (!user && !guestEmail.trim())}
+              disabled={!canCheckout}
               aria-label="Proceed to secure payment"
             >
-              {loading
-                ? totalPrice <= 0
-                  ? 'Completing Order...'
-                  : 'Redirecting...'
-                : success
-                ? totalPrice <= 0
-                  ? 'Order Completed'
-                  : 'Opening Pesapal...'
-                : totalPrice <= 0
-                ? 'Complete Free Checkout'
-                : 'Pay with Pesapal'}
+              {loading ? (
+                <span className="inline-flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  {totalPrice <= 0 ? 'Completing…' : 'Redirecting…'}
+                </span>
+              ) : success ? (
+                totalPrice <= 0 ? 'Order completed' : 'Redirecting…'
+              ) : totalPrice <= 0 ? (
+                'Complete free checkout'
+              ) : (
+                'Pay'
+              )}
             </Button>
           </div>
-          <p className="mt-2 text-[11px] text-muted-foreground text-center">
+          <p className="mt-2.5 text-center text-[11px] leading-relaxed text-slate-400">
             {totalPrice <= 0
               ? 'By continuing, you confirm your ticket selection and contact details.'
-              : 'By continuing, you agree to complete payment on Pesapal&apos;s secure platform.'}
+              : 'By continuing, you agree to complete payment on our secure platform.'}
           </p>
         </div>
       </DialogContent>
     </Dialog>
-  );
+  )
 }

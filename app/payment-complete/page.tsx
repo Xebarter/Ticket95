@@ -1,226 +1,210 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState, Suspense } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
+import { CheckCircle2, Loader2, Ticket, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { CheckCircle2, Clock3, XCircle } from 'lucide-react';
-import { getEventById } from '@/lib/supabase-db';
-import { useAuth } from '@/lib/supabase-auth-context';
-import { downloadTicketAsPdf } from '@/lib/ticket-download';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
-type VerifyState = 'loading' | 'success' | 'pending' | 'failed';
+type TicketRecord = {
+  id: string;
+  ticket_type_id: string;
+  attendee_name?: string | null;
+  attendee_email?: string | null;
+  price_paid?: number | null;
+  status?: string | null;
+};
 
-export default function PaymentCompletePage() {
-  return (
-    <Suspense fallback={<main className="flex min-h-screen items-center justify-center"><Clock3 className="h-8 w-8 animate-pulse text-primary" /></main>}>
-      <PaymentCompletePageInner />
-    </Suspense>
-  );
-}
-
-function PaymentCompletePageInner() {
-  const { user } = useAuth();
+function PaymentCompleteContent() {
   const searchParams = useSearchParams();
-  const [state, setState] = useState<VerifyState>('loading');
+  const [status, setStatus] = useState<'loading' | 'success' | 'failed' | 'pending'>('loading');
   const [message, setMessage] = useState('Verifying your payment...');
-  const [orderId, setOrderId] = useState<string | null>(null);
-  const [isDownloading, setIsDownloading] = useState(false);
-  const [isGuestOrder, setIsGuestOrder] = useState(false);
-  const [guestCheckoutEmail, setGuestCheckoutEmail] = useState('');
-  const hasAutoDownloadedRef = useRef(false);
+  const [tickets, setTickets] = useState<TicketRecord[]>([]);
+  const [customerEmail, setCustomerEmail] = useState<string | null>(null);
+  const [isGuestCheckout, setIsGuestCheckout] = useState(false);
 
-  const downloadTickets = useCallback(async () => {
-    if (!orderId) return;
+  const orderId = searchParams.get('orderId') || searchParams.get('OrderMerchantReference') || '';
+  const purchaseId =
+    searchParams.get('purchaseId') ||
+    searchParams.get('orderTrackingId') ||
+    searchParams.get('OrderTrackingId') ||
+    '';
+  const freeCheckout = searchParams.get('freeCheckout') === '1';
+  const redirectStatus = (searchParams.get('status') || '').toLowerCase();
+  const customerEmailParam = searchParams.get('customerEmail') || '';
+  const guestCheckoutParam = searchParams.get('guestCheckout') === '1';
 
-    setIsDownloading(true);
-    try {
-      const orderTrackingId = searchParams.get('OrderTrackingId') || searchParams.get('orderTrackingId');
-      const freeCheckoutParam = (searchParams.get('freeCheckout') || '').toLowerCase();
-      const isFreeCheckout = freeCheckoutParam === '1' || freeCheckoutParam === 'true';
-
-      const params = new URLSearchParams({ orderId });
-      if (orderTrackingId) params.set('orderTrackingId', orderTrackingId);
-      if (isFreeCheckout) params.set('freeCheckout', '1');
-
-      const ticketsRes = await fetch(`/api/payments/tickets?${params.toString()}`);
-      const ticketsPayload = await ticketsRes.json();
-      if (!ticketsRes.ok) {
-        throw new Error(ticketsPayload?.error || 'Failed to load tickets for download.');
-      }
-
-      const tickets = Array.isArray(ticketsPayload?.tickets) ? ticketsPayload.tickets : [];
-      const orderContext = ticketsPayload?.order;
-      if (orderContext && typeof orderContext === 'object') {
-        setIsGuestOrder(Boolean(orderContext.isGuest));
-        if (typeof orderContext.customerEmail === 'string' && orderContext.customerEmail.trim()) {
-          setGuestCheckoutEmail(orderContext.customerEmail.trim());
-        }
-      }
-
-      if (tickets.length === 0) {
-        setMessage('Payment completed, but no tickets were found to download yet. Please try again in a moment.');
-        return;
-      }
-
-      for (const ticket of tickets) {
-        const event = await getEventById(ticket.event_id);
-        await downloadTicketAsPdf(ticket, event);
-      }
-
-      setMessage(
-        tickets.length > 1
-          ? `${tickets.length} ticket PDFs downloaded successfully.`
-          : 'Your ticket PDF has been downloaded successfully.'
-      );
-    } catch (error: any) {
-      setMessage(error?.message || 'Payment completed, but ticket download failed. Please try again.');
-    } finally {
-      setIsDownloading(false);
-    }
-  }, [orderId, searchParams]);
+  const verifyEndpoint = useMemo(
+    () => (freeCheckout ? null : '/api/payments/paytota/verify'),
+    [freeCheckout]
+  );
 
   useEffect(() => {
-    const verify = async () => {
-      const freeCheckoutParam = (searchParams.get('freeCheckout') || '').toLowerCase();
-      const freeOrderId = searchParams.get('orderId');
-      const guestCheckoutParam = (searchParams.get('guestCheckout') || '').toLowerCase();
-      const customerEmailParam = (searchParams.get('customerEmail') || '').trim();
-      const isFreeCheckout = freeCheckoutParam === '1' || freeCheckoutParam === 'true';
-      const isGuestCheckout = guestCheckoutParam === '1' || guestCheckoutParam === 'true';
+    let cancelled = false;
 
-      if (isFreeCheckout && freeOrderId) {
-        setState('success');
-        setOrderId(freeOrderId);
-        setIsGuestOrder(isGuestCheckout);
-        if (customerEmailParam) {
-          setGuestCheckoutEmail(customerEmailParam);
-        }
-        setMessage('Free checkout completed successfully. Your ticket is being prepared for download.');
+    async function run() {
+      if (!orderId) {
+        setStatus('failed');
+        setMessage('Missing order reference in payment callback.');
         return;
       }
 
-      const orderTrackingId = searchParams.get('OrderTrackingId') || searchParams.get('orderTrackingId');
-      const orderMerchantReference =
-        searchParams.get('OrderMerchantReference') || searchParams.get('orderMerchantReference');
-
-      if (!orderTrackingId || !orderMerchantReference) {
-        setState('failed');
-        setMessage('Missing payment reference from Pesapal.');
+      if (redirectStatus === 'failed' || redirectStatus === 'cancelled') {
+        setStatus('failed');
+        setMessage(
+          redirectStatus === 'cancelled'
+            ? 'Payment was cancelled. You can try again from the event page.'
+            : 'Payment was not completed. Please try again.'
+        );
         return;
       }
 
       try {
-        const res = await fetch('/api/payments/pesapal/verify', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            orderTrackingId,
-            orderMerchantReference,
-          }),
-        });
+        if (verifyEndpoint) {
+          const res = await fetch(verifyEndpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              orderId,
+              purchaseId: purchaseId || undefined,
+            }),
+          });
 
-        const payload = await res.json();
-        if (!res.ok) {
-          setState('failed');
-          setMessage(payload?.error || 'Unable to verify payment.');
-          return;
-        }
-
-        if (payload.success) {
-          setState('success');
-          setOrderId(payload.orderId || null);
-          setIsGuestOrder(Boolean(payload?.isGuest));
-          if (typeof payload?.customerEmail === 'string' && payload.customerEmail.trim()) {
-            setGuestCheckoutEmail(payload.customerEmail.trim());
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            if (res.status === 409) {
+              setStatus('pending');
+              setMessage('Payment is still processing. Please refresh in a moment.');
+              return;
+            }
+            throw new Error(data?.error || 'Payment verification failed');
           }
-          setMessage('Payment completed successfully. Your order has been confirmed.');
-          return;
         }
 
-        const status = String(payload.status || '').toLowerCase();
-        if (status.includes('pending')) {
-          setState('pending');
-          setMessage('Your payment is still pending. Please check again shortly.');
-        } else {
-          setState('failed');
-          setMessage(`Payment was not completed (${payload.status || 'unknown status'}).`);
+        const ticketRes = await fetch(
+          `/api/payments/tickets?orderId=${encodeURIComponent(orderId)}${
+            purchaseId ? `&orderTrackingId=${encodeURIComponent(purchaseId)}` : ''
+          }${freeCheckout ? '&freeCheckout=1' : ''}`
+        );
+        const ticketData = await ticketRes.json().catch(() => ({}));
+
+        if (!ticketRes.ok) {
+          throw new Error(ticketData?.error || 'Could not load tickets');
         }
-      } catch (error: any) {
-        setState('failed');
-        setMessage(error?.message || 'Unexpected error while verifying payment.');
+
+        if (cancelled) return;
+
+        setTickets(Array.isArray(ticketData.tickets) ? ticketData.tickets : []);
+        setCustomerEmail(ticketData?.order?.customerEmail || customerEmailParam || null);
+        setIsGuestCheckout(Boolean(ticketData?.order?.isGuest || guestCheckoutParam));
+        setStatus('success');
+        setMessage(freeCheckout ? 'Your free tickets are ready.' : 'Payment successful. Your tickets are ready.');
+      } catch (error: unknown) {
+        if (cancelled) return;
+        setStatus('failed');
+        setMessage(error instanceof Error ? error.message : 'Something went wrong while verifying payment.');
       }
+    }
+
+    run();
+
+    return () => {
+      cancelled = true;
     };
-
-    verify();
-  }, [searchParams]);
-
-  useEffect(() => {
-    if (state !== 'success' || !orderId || hasAutoDownloadedRef.current) return;
-    hasAutoDownloadedRef.current = true;
-    void downloadTickets();
-  }, [downloadTickets, orderId, state]);
-
-  const profileHref =
-    !user && isGuestOrder
-      ? `/signup?email=${encodeURIComponent(guestCheckoutEmail || '')}`
-      : '/profile';
+  }, [orderId, purchaseId, verifyEndpoint, freeCheckout, redirectStatus, customerEmailParam, guestCheckoutParam]);
 
   return (
-    <main className="min-h-screen bg-background flex items-start justify-center px-3 py-6 sm:items-center sm:p-4">
-      <Card className="w-full max-w-lg rounded-xl">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg sm:text-xl">Pesapal Payment Status</CardTitle>
+    <div className="container mx-auto max-w-3xl px-4 py-16">
+      <Card>
+        <CardHeader className="text-center">
+          {status === 'loading' || status === 'pending' ? (
+            <Loader2 className="mx-auto mb-3 h-10 w-10 animate-spin text-primary" />
+          ) : status === 'success' ? (
+            <CheckCircle2 className="mx-auto mb-3 h-10 w-10 text-green-600" />
+          ) : (
+            <XCircle className="mx-auto mb-3 h-10 w-10 text-destructive" />
+          )}
+          <CardTitle>
+            {status === 'loading'
+              ? 'Processing payment'
+              : status === 'pending'
+                ? 'Payment pending'
+                : status === 'success'
+                  ? 'Tickets confirmed'
+                  : 'Payment issue'}
+          </CardTitle>
+          <CardDescription>{message}</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4 sm:space-y-5">
-          <div className="rounded-lg border bg-muted/30 p-3 sm:p-4">
-            {state === 'loading' && (
-              <div className="flex items-start gap-2 text-sm leading-relaxed sm:items-center">
-                <Clock3 className="mt-0.5 h-4 w-4 shrink-0 animate-pulse sm:mt-0" />
-                <p className="break-words">{message}</p>
-              </div>
-            )}
-            {state === 'success' && (
-              <div className="flex items-start gap-2 text-sm leading-relaxed text-emerald-700 sm:items-center">
-                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 sm:mt-0" />
-                <p className="break-words">{message}</p>
-              </div>
-            )}
-            {state === 'pending' && (
-              <div className="flex items-start gap-2 text-sm leading-relaxed text-amber-700 sm:items-center">
-                <Clock3 className="mt-0.5 h-4 w-4 shrink-0 sm:mt-0" />
-                <p className="break-words">{message}</p>
-              </div>
-            )}
-            {state === 'failed' && (
-              <div className="flex items-start gap-2 text-sm leading-relaxed text-destructive sm:items-center">
-                <XCircle className="mt-0.5 h-4 w-4 shrink-0 sm:mt-0" />
-                <p className="break-words">{message}</p>
-              </div>
-            )}
-          </div>
 
-          <div className="flex flex-col gap-2 sm:flex-row">
-            {state === 'success' && orderId ? (
-              <Button
-                variant="secondary"
-                className="w-full sm:flex-1"
-                onClick={() => void downloadTickets()}
-                disabled={isDownloading}
-              >
-                {isDownloading ? 'Preparing Ticket...' : 'Download Ticket Again'}
+        {status === 'success' && tickets.length > 0 && (
+          <CardContent className="space-y-4">
+            {customerEmail && (
+              <p className="text-sm text-muted-foreground">
+                Confirmation sent to <span className="font-medium text-foreground">{customerEmail}</span>
+              </p>
+            )}
+
+            <div className="space-y-3">
+              {tickets.map((ticket) => (
+                <div key={ticket.id} className="flex items-center justify-between rounded-lg border p-4">
+                  <div className="flex items-center gap-3">
+                    <Ticket className="h-5 w-5 text-primary" />
+                    <div>
+                      <p className="font-medium">Ticket #{ticket.id.slice(0, 8).toUpperCase()}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {ticket.attendee_name || 'Guest'} · {ticket.status || 'valid'}
+                      </p>
+                    </div>
+                  </div>
+                  {typeof ticket.price_paid === 'number' && (
+                    <p className="text-sm font-medium">{ticket.price_paid.toLocaleString()}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <div className="flex flex-wrap gap-3 pt-2">
+              <Button asChild>
+                <Link href={isGuestCheckout ? '/' : '/profile'}>
+                  {isGuestCheckout ? 'Browse events' : 'View my tickets'}
+                </Link>
               </Button>
-            ) : null}
-            <Button asChild className="w-full sm:flex-1">
-              <Link href={profileHref}>{!user && isGuestOrder ? 'Create Account' : 'Go to Profile'}</Link>
+              <Button variant="outline" asChild>
+                <Link href="/events">Back to events</Link>
+              </Button>
+            </div>
+          </CardContent>
+        )}
+
+        {status === 'failed' && (
+          <CardContent>
+            <Button asChild>
+              <Link href="/events">Return to events</Link>
             </Button>
-            <Button asChild variant="outline" className="w-full sm:flex-1">
-              <Link href="/events">Browse Events</Link>
-            </Button>
-          </div>
-        </CardContent>
+          </CardContent>
+        )}
       </Card>
-    </main>
+    </div>
+  );
+}
+
+export default function PaymentCompletePage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="container mx-auto max-w-3xl px-4 py-16">
+          <Card>
+            <CardHeader className="text-center">
+              <Loader2 className="mx-auto mb-3 h-10 w-10 animate-spin text-primary" />
+              <CardTitle>Processing payment</CardTitle>
+              <CardDescription>Verifying your payment...</CardDescription>
+            </CardHeader>
+          </Card>
+        </div>
+      }
+    >
+      <PaymentCompleteContent />
+    </Suspense>
   );
 }

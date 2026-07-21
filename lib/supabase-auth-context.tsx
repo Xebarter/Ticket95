@@ -10,6 +10,7 @@ interface AuthContextType {
   loading: boolean;
   signup: (email: string, password: string, role: 'customer' | 'organizer' | 'admin') => Promise<User>;
   login: (email: string, password: string) => Promise<User>;
+  loginWithGoogle: (redirectTo?: string) => Promise<void>;
   logout: () => Promise<void>;
   updateProfile: (profile: { profile_name?: string; profile_description?: string; profile_logo_url?: string }) => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
@@ -31,6 +32,9 @@ const fallbackAuthContext: AuthContextType = {
     throw missingProviderError();
   },
   login: async () => {
+    throw missingProviderError();
+  },
+  loginWithGoogle: async () => {
     throw missingProviderError();
   },
   logout: async () => {
@@ -236,6 +240,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [claimGuestPurchases]);
 
+  const loginWithGoogle = useCallback(async (redirectTo = '/profile') => {
+    const safeRedirect = redirectTo.startsWith('/') ? redirectTo : '/profile';
+    const callbackUrl = new URL('/auth/callback', window.location.origin);
+    callbackUrl.searchParams.set('next', safeRedirect);
+
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: callbackUrl.toString(),
+        queryParams: {
+          access_type: 'offline',
+          prompt: 'select_account',
+        },
+      },
+    });
+
+    if (error) throw error;
+  }, []);
+
   const logout = useCallback(async () => {
     try {
       await supabase.auth.signOut();
@@ -308,7 +331,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading, signup, login, logout, updateProfile, resetPassword, updatePassword, resendVerificationEmail }}>
+    <AuthContext.Provider value={{ user, loading, signup, login, loginWithGoogle, logout, updateProfile, resetPassword, updatePassword, resendVerificationEmail }}>
       {children}
     </AuthContext.Provider>
   );

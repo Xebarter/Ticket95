@@ -1,14 +1,14 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useAuth } from '@/lib/supabase-auth-context';
+import { AuthPageShell, authInputClassName, authPrimaryButtonClassName } from '@/components/auth/auth-page-shell';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertCircle, CheckCircle2, Loader2, ArrowLeft } from 'lucide-react';
-import Link from 'next/link';
 
 export default function ForgotPasswordPage() {
   const { resetPassword } = useAuth();
@@ -22,7 +22,6 @@ export default function ForgotPasswordPage() {
     setError('');
     setLoading(true);
 
-    // Validate email
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
       setError('Please enter a valid email address');
@@ -41,86 +40,79 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <CardTitle className="text-2xl font-bold">Reset Password</CardTitle>
-          <CardDescription>
-            Enter your email and we'll send you a reset link
-          </CardDescription>
-        </CardHeader>
-
-        <CardContent>
-          {success ? (
-            <Alert className="border-green-500 bg-green-50 dark:bg-green-950">
-              <CheckCircle2 className="h-4 w-4 text-green-600" />
-              <AlertDescription className="text-green-800 dark:text-green-200">
-                <strong>Check your email!</strong>
-                <br />
-                We've sent a password reset link to <strong>{email}</strong>. 
-                Click the link in the email to reset your password.
-              </AlertDescription>
+    <AuthPageShell
+      title="Reset your password"
+      description="Enter the email linked to your account and we'll send you a secure reset link."
+      footer={
+        <Link
+          href="/login"
+          className="inline-flex items-center gap-2 font-medium text-slate-700 transition-colors hover:text-slate-900"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back to sign in
+        </Link>
+      }
+    >
+      {success ? (
+        <Alert className="border-emerald-200 bg-emerald-50 text-emerald-900">
+          <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+          <AlertDescription>
+            <strong>Check your email.</strong> We sent a reset link to <strong>{email}</strong>.
+            Open the link in that message to choose a new password.
+          </AlertDescription>
+        </Alert>
+      ) : (
+        <form onSubmit={handleSubmit} className="space-y-5">
+          {error ? (
+            <Alert variant="destructive" className="border-red-200 bg-red-50 text-red-800">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{error}</AlertDescription>
             </Alert>
-          ) : (
-            <form onSubmit={handleSubmit} className="space-y-4">
-              {error && (
-                <Alert variant="destructive">
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>{error}</AlertDescription>
-                </Alert>
-              )}
+          ) : null}
 
-              <div className="space-y-2">
-                <Label htmlFor="email">Email Address</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="you@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  disabled={loading}
-                  autoComplete="email"
-                  autoFocus
-                />
-              </div>
+          <div className="space-y-2">
+            <Label htmlFor="email" className="text-sm font-medium text-slate-700">
+              Email address
+            </Label>
+            <Input
+              id="email"
+              type="email"
+              placeholder="you@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              disabled={loading}
+              autoComplete="email"
+              autoFocus
+              className={authInputClassName}
+            />
+          </div>
 
-              <Button type="submit" className="w-full" disabled={loading}>
-                {loading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Sending reset link...
-                  </>
-                ) : (
-                  'Send Reset Link'
-                )}
-              </Button>
-            </form>
-          )}
-        </CardContent>
+          <Button type="submit" className={authPrimaryButtonClassName} disabled={loading}>
+            {loading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Sending reset link...
+              </>
+            ) : (
+              'Send reset link'
+            )}
+          </Button>
+        </form>
+      )}
 
-        <CardFooter className="flex flex-col space-y-3">
-          <Link 
-            href="/login" 
-            className="flex items-center text-sm text-muted-foreground hover:text-primary transition-colors"
+      {success ? (
+        <p className="mt-4 text-center text-sm text-slate-500">
+          Didn&apos;t receive the email?{' '}
+          <button
+            type="button"
+            onClick={() => setSuccess(false)}
+            className="font-medium text-slate-900 hover:underline"
           >
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to login
-          </Link>
-          
-          {success && (
-            <div className="text-center text-sm text-muted-foreground">
-              Didn't receive the email?{' '}
-              <button 
-                onClick={() => setSuccess(false)} 
-                className="text-primary hover:underline"
-              >
-                Try again
-              </button>
-            </div>
-          )}
-        </CardFooter>
-      </Card>
-    </div>
+            Try again
+          </button>
+        </p>
+      ) : null}
+    </AuthPageShell>
   );
 }

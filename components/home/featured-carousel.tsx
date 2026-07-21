@@ -1,280 +1,404 @@
-'use client';
+'use client'
 
-import { useState, useEffect, useCallback } from 'react';
-import Image from 'next/image';
-import { Card, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { ChevronLeft, ChevronRight, Calendar, Clock3, MapPin, Star, Ticket } from 'lucide-react';
-import type { Event } from '@/lib/supabase-client';
-import dynamic from 'next/dynamic';
+import { useState, useEffect, useCallback, useRef } from 'react'
+import Image from 'next/image'
+import { Button } from '@/components/ui/button'
+import {
+  ChevronLeft,
+  ChevronRight,
+  Calendar,
+  Clock3,
+  MapPin,
+  Ticket,
+} from 'lucide-react'
+import type { Event } from '@/lib/supabase-client'
+import { getEventCategoryLabel } from '@/lib/event-categories'
+import dynamic from 'next/dynamic'
+import { cn } from '@/lib/utils'
 
 const TicketPurchaseDialog = dynamic(
-  () => import('@/components/events/ticket-purchase-dialog').then(mod => mod.TicketPurchaseDialog),
+  () =>
+    import('@/components/events/ticket-purchase-dialog').then(
+      (mod) => mod.TicketPurchaseDialog
+    ),
   { ssr: false }
-);
+)
 
 interface FeaturedCarouselProps {
-  events: Event[];
+  events: Event[]
 }
 
-// Format date consistently
 function formatEventDate(dateString: string): string {
-  const date = new Date(dateString);
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  const month = months[date.getMonth()];
-  const day = date.getDate();
-  const year = date.getFullYear();
-
-  return `${month} ${day}, ${year}`;
+  const date = new Date(dateString)
+  const months = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ]
+  return `${months[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`
 }
 
 function formatEventTime(dateString: string): string {
-  const date = new Date(dateString);
-  return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  const date = new Date(dateString)
+  return date.toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+  })
 }
 
 function formatCurrencyAmount(currency: string | undefined, amount: number) {
-  const safeCurrency = currency || 'USD';
+  const safeCurrency = currency || 'USD'
   try {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: safeCurrency,
       maximumFractionDigits: 0,
-    }).format(amount);
+    }).format(amount)
   } catch {
-    return `${safeCurrency} ${Math.floor(amount).toLocaleString()}`;
+    return `${safeCurrency} ${Math.floor(amount).toLocaleString()}`
   }
 }
 
+function startingPrice(event: Event) {
+  if (event.ticket_types && event.ticket_types.length > 0) {
+    return Math.min(...event.ticket_types.map((t) => t.price || 0))
+  }
+  return event.ticket_price || 0
+}
+
+const AUTOPLAY_MS = 6000
+
 export function FeaturedCarousel({ events }: FeaturedCarouselProps) {
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [isAutoPlaying, setIsAutoPlaying] = useState(true);
-  const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
+  const [currentIndex, setCurrentIndex] = useState(0)
+  const [isAutoPlaying, setIsAutoPlaying] = useState(true)
+  const [progress, setProgress] = useState(0)
+  const [selectedEvent, setSelectedEvent] = useState<Event | null>(null)
+  const pauseReasons = useRef({ hover: false, focus: false, dialog: false })
+
+  const syncAutoplay = useCallback(() => {
+    const { hover, focus, dialog } = pauseReasons.current
+    setIsAutoPlaying(!(hover || focus || dialog) && events.length > 1)
+  }, [events.length])
 
   const nextSlide = useCallback(() => {
-    setCurrentIndex((prev) => (prev + 1) % events.length);
-  }, [events.length]);
+    setCurrentIndex((prev) => (prev + 1) % events.length)
+    setProgress(0)
+  }, [events.length])
 
-  const prevSlide = () => {
-    setCurrentIndex((prev) => (prev - 1 + events.length) % events.length);
-  };
+  const prevSlide = useCallback(() => {
+    setCurrentIndex((prev) => (prev - 1 + events.length) % events.length)
+    setProgress(0)
+  }, [events.length])
 
   const goToSlide = (index: number) => {
-    setCurrentIndex(index);
-  };
+    setCurrentIndex(index)
+    setProgress(0)
+  }
 
-  // Auto-play functionality
   useEffect(() => {
-    if (!isAutoPlaying || events.length <= 1) return;
+    pauseReasons.current.dialog = !!selectedEvent
+    syncAutoplay()
+  }, [selectedEvent, syncAutoplay])
 
-    const interval = setInterval(nextSlide, 5000); // Change slide every 5 seconds
-    return () => clearInterval(interval);
-  }, [isAutoPlaying, events.length, nextSlide]);
+  useEffect(() => {
+    if (!isAutoPlaying || events.length <= 1) {
+      setProgress(0)
+      return
+    }
 
-  if (events.length === 0) return null;
+    const started = Date.now()
+    const tick = window.setInterval(() => {
+      const elapsed = Date.now() - started
+      setProgress(Math.min(100, (elapsed / AUTOPLAY_MS) * 100))
+    }, 50)
+
+    const advance = window.setTimeout(nextSlide, AUTOPLAY_MS)
+
+    return () => {
+      window.clearInterval(tick)
+      window.clearTimeout(advance)
+    }
+  }, [isAutoPlaying, currentIndex, events.length, nextSlide])
+
+  useEffect(() => {
+    if (events.length <= 1) return
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (selectedEvent) return
+      if (event.key === 'ArrowRight') {
+        event.preventDefault()
+        nextSlide()
+      } else if (event.key === 'ArrowLeft') {
+        event.preventDefault()
+        prevSlide()
+      }
+    }
+
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [events.length, nextSlide, prevSlide, selectedEvent])
+
+  if (events.length === 0) return null
+
+  const event = events[currentIndex]
+  const price = startingPrice(event)
+  const available = Math.max(event.tickets_available || 0, 0)
+  const total = event.total_tickets || 0
+  const lowStock = available > 0 && available <= 50
 
   return (
     <>
-      <div
-        className="relative w-full overflow-hidden"
-        onMouseEnter={() => setIsAutoPlaying(false)}
-        onMouseLeave={() => setIsAutoPlaying(true)}
-      >
-        {/* Carousel Track */}
-        <div
-          className="flex transition-transform duration-700 ease-in-out"
-          style={{ transform: `translateX(-${currentIndex * 100}%)` }}
-        >
-          {events.map((event, index) => (
-            <div key={event.id} className="w-full shrink-0">
-              <Card
-                className="overflow-hidden rounded-3xl border border-border/70 bg-card/95 shadow-xl transition-shadow duration-300 hover:shadow-2xl"
-              >
-                <CardContent className="p-0">
-                  <div className="grid gap-0 lg:grid-cols-[1.05fr_0.95fr]">
-                    {/* Event Image */}
-                    <div className="relative h-[320px] overflow-hidden lg:h-[520px]">
-                      {event.image_url ? (
-                        <Image
-                          src={event.image_url}
-                          alt={event.name}
-                          fill
-                          priority={index === 0}
-                          sizes="(max-width: 1024px) 100vw, 50vw"
-                          className="object-cover transition-transform duration-700 hover:scale-[1.03]"
-                        />
-                      ) : (
-                        <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-primary/20 via-background to-muted/40">
-                          <Star className="w-24 h-24 text-muted-foreground opacity-30" />
-                        </div>
-                      )}
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
-
-                      {/* Featured Badge */}
-                      <div className="absolute left-4 top-4">
-                        <div className="inline-flex items-center gap-2 rounded-full border border-yellow-300/30 bg-yellow-500/95 px-4 py-2 text-sm font-semibold text-white shadow-lg backdrop-blur-sm">
-                          <Star className="w-4 h-4 fill-current" />
-                          Featured Event
-                        </div>
-                      </div>
-
-                      <div className="absolute inset-x-0 bottom-0 p-5 sm:p-6">
-                        <div className="inline-flex items-center gap-2 rounded-full border border-white/25 bg-black/45 px-3 py-1 text-xs text-white/90 backdrop-blur-sm">
-                          <Ticket className="h-3.5 w-3.5" />
-                          {event.ticket_types && event.ticket_types.length > 0
-                            ? `${event.ticket_types.length} ticket type${event.ticket_types.length === 1 ? '' : 's'}`
-                            : 'General admission'}
-                        </div>
-                        <h3 className="mt-3 line-clamp-2 text-2xl font-bold tracking-tight text-white sm:text-3xl">
-                          {event.name}
-                        </h3>
-                      </div>
-                    </div>
-
-                    {/* Event Details */}
-                    <div className="flex flex-col justify-between p-6 lg:p-10">
-                      <div>
-                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary/80">Hero pick</p>
-                        <p className="mt-2 text-sm text-muted-foreground line-clamp-3">
-                          {event.description || 'An amazing event you won\'t want to miss!'}
-                        </p>
-
-                        <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                          <div className="rounded-xl border border-border/70 bg-muted/25 p-3">
-                            <p className="inline-flex items-center gap-2 text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                              <Calendar className="h-3.5 w-3.5" />
-                              Date
-                            </p>
-                            <p className="mt-1 text-sm font-semibold">{formatEventDate(event.date)}</p>
-                          </div>
-                          <div className="rounded-xl border border-border/70 bg-muted/25 p-3">
-                            <p className="inline-flex items-center gap-2 text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                              <Clock3 className="h-3.5 w-3.5" />
-                              Time
-                            </p>
-                            <p className="mt-1 text-sm font-semibold">{formatEventTime(event.date)}</p>
-                          </div>
-                          <div className="rounded-xl border border-border/70 bg-muted/25 p-3 sm:col-span-2">
-                            <p className="inline-flex items-center gap-2 text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                              <MapPin className="h-3.5 w-3.5" />
-                              Venue
-                            </p>
-                            <p className="mt-1 line-clamp-1 text-sm font-semibold">{event.venue}</p>
-                          </div>
-                        </div>
-
-                        <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-border/70 bg-muted/25 px-3 py-1.5 text-xs text-muted-foreground">
-                          <span className="font-medium">Hosted by</span>
-                          <span className="font-semibold text-foreground">{event.organizer_name}</span>
-                        </div>
-                      </div>
-
-                      <div className="mt-6 rounded-2xl border border-primary/20 bg-primary/5 p-4">
-                        <div className="flex flex-wrap items-end justify-between gap-3">
-                          <div>
-                            <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">Starts from</p>
-                            <p className="mt-1 text-2xl font-bold text-primary">
-                              {formatCurrencyAmount(
-                                event.currency,
-                                event.ticket_types && event.ticket_types.length > 0
-                                  ? Math.min(...event.ticket_types.map((ticketType) => ticketType.price || 0))
-                                  : event.ticket_price || 0
-                              )}
-                            </p>
-                          </div>
-                          <div className="text-right">
-                            <p className="text-xs text-muted-foreground">Availability</p>
-                            <p className="text-sm font-semibold">
-                              {Math.max(event.tickets_available || 0, 0).toLocaleString()} / {(event.total_tickets || 0).toLocaleString()} left
-                            </p>
-                          </div>
-                        </div>
-
-                        {event.tickets_available > 0 && event.tickets_available <= 50 ? (
-                          <div className="mt-2 inline-flex items-center rounded-full border border-amber-500/25 bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-700">
-                            Limited seats remaining
-                          </div>
-                        ) : null}
-
-                        <div className="mt-4">
-                          <Button
-                            onClick={() => setSelectedEvent(event)}
-                            className="h-11 w-full rounded-xl text-sm font-semibold shadow-sm sm:text-base"
-                            size="lg"
-                          >
-                            <Ticket className="mr-2 h-4 w-4" />
-                            View Tickets
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          ))}
+      <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#9A7B2F]">
+            Featured
+          </p>
+          <h2 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+            Happening soon
+          </h2>
         </div>
-
-        {/* Navigation Arrows */}
-        {events.length > 1 && (
-          <>
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={(e) => {
-                e.stopPropagation();
-                prevSlide();
-              }}
-              className="absolute left-3 top-1/2 z-10 h-10 w-10 -translate-y-1/2 rounded-full border-border/70 bg-background/90 shadow-md backdrop-blur-sm hover:bg-background"
-              aria-label="Previous slide"
-            >
-              <ChevronLeft className="w-5 h-5" />
-            </Button>
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={(e) => {
-                e.stopPropagation();
-                nextSlide();
-              }}
-              className="absolute right-3 top-1/2 z-10 h-10 w-10 -translate-y-1/2 rounded-full border-border/70 bg-background/90 shadow-md backdrop-blur-sm hover:bg-background"
-              aria-label="Next slide"
-            >
-              <ChevronRight className="w-5 h-5" />
-            </Button>
-          </>
-        )}
-
-        {/* Dots Indicator */}
-        {events.length > 1 && (
-          <div className="absolute bottom-3 left-1/2 z-10 flex -translate-x-1/2 gap-2 rounded-full border border-border/60 bg-background/85 px-2 py-1 shadow-sm backdrop-blur-sm">
-            {events.map((_, index) => (
-              <button
-                key={index}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  goToSlide(index);
-                }}
-                className={`h-2.5 rounded-full transition-all ${index === currentIndex
-                  ? 'w-7 bg-primary'
-                  : 'w-2.5 bg-muted-foreground/35 hover:bg-muted-foreground/60'
-                  }`}
-                aria-label={`Go to slide ${index + 1}`}
-              />
-            ))}
-          </div>
-        )}
+        {events.length > 1 ? (
+          <p className="text-sm text-slate-500">
+            {currentIndex + 1} of {events.length}
+          </p>
+        ) : null}
       </div>
 
-      {/* Ticket Purchase Dialog */}
-      {selectedEvent && (
+      <div
+        className="relative"
+        onMouseEnter={() => {
+          pauseReasons.current.hover = true
+          syncAutoplay()
+        }}
+        onMouseLeave={() => {
+          pauseReasons.current.hover = false
+          syncAutoplay()
+        }}
+        onFocusCapture={() => {
+          pauseReasons.current.focus = true
+          syncAutoplay()
+        }}
+        onBlurCapture={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+            pauseReasons.current.focus = false
+            syncAutoplay()
+          }
+        }}
+      >
+        <article className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_rgba(15,23,42,0.06)]">
+          <div className="grid lg:grid-cols-[1.15fr_0.85fr]">
+            {/* Media */}
+            <div className="relative aspect-[16/10] overflow-hidden bg-slate-100 lg:aspect-auto lg:min-h-[420px]">
+              {event.image_url ? (
+                <Image
+                  key={event.id}
+                  src={event.image_url}
+                  alt={event.name}
+                  fill
+                  priority
+                  sizes="(max-width: 1024px) 100vw, 58vw"
+                  className="object-cover transition-transform duration-[1.2s] ease-out motion-safe:hover:scale-[1.02]"
+                />
+              ) : (
+                <div className="flex h-full min-h-[280px] w-full items-center justify-center bg-slate-100 lg:min-h-[420px]">
+                  <Ticket className="h-16 w-16 text-slate-300" />
+                </div>
+              )}
+
+              <div className="absolute inset-0 bg-gradient-to-t from-slate-950/70 via-slate-950/15 to-transparent lg:bg-gradient-to-r lg:from-transparent lg:via-transparent lg:to-slate-950/10" />
+
+              <div className="absolute left-4 top-4 sm:left-5 sm:top-5">
+                <span className="inline-flex items-center rounded-md border border-[#9A7B2F]/25 bg-white/95 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#7a6224] shadow-sm backdrop-blur-sm">
+                  Featured
+                </span>
+              </div>
+
+              {event.category ? (
+                <div className="absolute bottom-4 left-4 sm:bottom-5 sm:left-5 lg:hidden">
+                  <span className="rounded-md bg-black/45 px-2.5 py-1 text-xs font-medium text-white backdrop-blur-sm">
+                    {getEventCategoryLabel(event.category)}
+                  </span>
+                </div>
+              ) : null}
+            </div>
+
+            {/* Details */}
+            <div className="flex flex-col justify-between p-6 sm:p-8 lg:p-9">
+              <div>
+                {event.category ? (
+                  <p className="mb-3 hidden text-xs font-semibold uppercase tracking-[0.14em] text-slate-400 lg:block">
+                    {getEventCategoryLabel(event.category)}
+                  </p>
+                ) : null}
+
+                <h3 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-[1.75rem] sm:leading-tight">
+                  {event.name}
+                </h3>
+
+                <p className="mt-3 line-clamp-3 text-sm leading-relaxed text-slate-500 sm:text-[0.9375rem]">
+                  {event.description ||
+                    'An unforgettable experience worth securing your seat for.'}
+                </p>
+
+                <dl className="mt-6 space-y-3 border-t border-slate-100 pt-5">
+                  <div className="flex items-start gap-3">
+                    <Calendar className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
+                    <div>
+                      <dt className="sr-only">Date</dt>
+                      <dd className="text-sm font-medium text-slate-800">
+                        {formatEventDate(event.date)}
+                      </dd>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <Clock3 className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
+                    <div>
+                      <dt className="sr-only">Time</dt>
+                      <dd className="text-sm font-medium text-slate-800">
+                        {formatEventTime(event.date)}
+                      </dd>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
+                    <div>
+                      <dt className="sr-only">Venue</dt>
+                      <dd className="line-clamp-2 text-sm font-medium text-slate-800">
+                        {event.venue}
+                      </dd>
+                    </div>
+                  </div>
+                </dl>
+
+                <p className="mt-5 text-sm text-slate-500">
+                  Hosted by{' '}
+                  <span className="font-semibold text-slate-800">
+                    {event.organizer_name}
+                  </span>
+                </p>
+              </div>
+
+              <div className="mt-8 border-t border-slate-100 pt-6">
+                <div className="flex flex-wrap items-end justify-between gap-3">
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+                      From
+                    </p>
+                    <p className="mt-1 text-2xl font-bold tracking-tight text-slate-900">
+                      {formatCurrencyAmount(event.currency, price)}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+                      Available
+                    </p>
+                    <p className="mt-1 text-sm font-semibold text-slate-800">
+                      {available.toLocaleString()}
+                      {total > 0 ? (
+                        <span className="font-normal text-slate-400">
+                          {' '}
+                          / {total.toLocaleString()}
+                        </span>
+                      ) : null}
+                    </p>
+                  </div>
+                </div>
+
+                {lowStock ? (
+                  <p className="mt-3 text-xs font-medium text-amber-700">
+                    Limited tickets remaining
+                  </p>
+                ) : null}
+
+                <Button
+                  onClick={() => setSelectedEvent(event)}
+                  className="mt-5 h-11 w-full rounded-lg bg-slate-900 text-sm font-semibold text-white shadow-none hover:bg-slate-800"
+                  size="lg"
+                >
+                  <Ticket className="mr-2 h-4 w-4" />
+                  View tickets
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {/* Autoplay progress */}
+          {events.length > 1 ? (
+            <div className="h-0.5 w-full bg-slate-100">
+              <div
+                className="h-full bg-[#9A7B2F]/70 transition-[width] duration-75 ease-linear"
+                style={{ width: `${isAutoPlaying ? progress : 0}%` }}
+              />
+            </div>
+          ) : null}
+        </article>
+
+        {/* Controls */}
+        {events.length > 1 ? (
+          <div className="mt-4 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={prevSlide}
+                className="h-9 w-9 rounded-lg border-slate-200 bg-white text-slate-700 shadow-none hover:bg-slate-50"
+                aria-label="Previous featured event"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={nextSlide}
+                className="h-9 w-9 rounded-lg border-slate-200 bg-white text-slate-700 shadow-none hover:bg-slate-50"
+                aria-label="Next featured event"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+
+            <div className="flex items-center gap-1.5" role="tablist" aria-label="Featured slides">
+              {events.map((item, index) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={index === currentIndex}
+                  aria-label={`Show ${item.name}`}
+                  onClick={() => goToSlide(index)}
+                  className={cn(
+                    'h-1.5 rounded-full transition-all duration-300',
+                    index === currentIndex
+                      ? 'w-6 bg-slate-900'
+                      : 'w-1.5 bg-slate-300 hover:bg-slate-400'
+                  )}
+                />
+              ))}
+            </div>
+          </div>
+        ) : null}
+      </div>
+
+      {selectedEvent ? (
         <TicketPurchaseDialog
+          key={selectedEvent.id}
           event={selectedEvent}
           onDialogClose={() => setSelectedEvent(null)}
           onPurchaseComplete={() => setSelectedEvent(null)}
           trigger={null}
         />
-      )}
+      ) : null}
     </>
-  );
+  )
 }

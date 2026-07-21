@@ -35,23 +35,28 @@ export function HomeClient({ events, featuredEvents }: HomeClientProps) {
       </section>
 
       {!trimmedQuery && featuredEvents.length > 0 && (
-        <section className="bg-background py-8 sm:py-12">
+        <section className="border-b border-slate-100 bg-white py-10 sm:py-14">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <FeaturedCarousel events={featuredEvents} />
           </div>
         </section>
       )}
 
-      <section id="event-search-results" className="flex-1 scroll-mt-24 bg-muted/30 py-12 sm:py-16">
+      <section id="event-search-results" className="flex-1 scroll-mt-24 bg-slate-50 py-12 sm:py-16">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="mb-8 flex flex-wrap items-end justify-between gap-3">
-            <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">
-              {trimmedQuery
-                ? `Results for "${trimmedQuery}"`
-                : 'All Available Events'}
-            </h2>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#9A7B2F]">
+                Browse
+              </p>
+              <h2 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+                {trimmedQuery
+                  ? `Results for "${trimmedQuery}"`
+                  : 'Available events'}
+              </h2>
+            </div>
             {trimmedQuery && (
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm text-slate-500">
                 {filteredEvents.length} event{filteredEvents.length !== 1 ? 's' : ''} found
               </p>
             )}
@@ -61,7 +66,7 @@ export function HomeClient({ events, featuredEvents }: HomeClientProps) {
 
           {filteredEvents.length === 0 && (
             <div className="py-12 text-center">
-              <p className="text-muted-foreground">
+              <p className="text-slate-500">
                 {trimmedQuery
                   ? `No events found matching "${trimmedQuery}"`
                   : 'No events available at the moment.'}

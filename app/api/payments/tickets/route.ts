@@ -31,7 +31,11 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const orderId = (searchParams.get('orderId') || '').trim();
-    const orderTrackingId = (searchParams.get('orderTrackingId') || '').trim();
+    const orderTrackingId = (
+      searchParams.get('orderTrackingId') ||
+      searchParams.get('purchaseId') ||
+      ''
+    ).trim();
     const freeCheckoutParam = (searchParams.get('freeCheckout') || '').toLowerCase();
     const isFreeCheckout = freeCheckoutParam === '1' || freeCheckoutParam === 'true';
 

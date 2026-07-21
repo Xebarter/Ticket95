@@ -32,8 +32,8 @@ function HeaderSearchFallback({ compact = false }: { compact?: boolean }) {
     <div
       className={
         compact
-          ? 'h-10 w-full animate-pulse rounded-md bg-muted/60'
-          : 'h-10 w-full animate-pulse rounded-md bg-muted/60 sm:h-11'
+          ? 'h-10 w-full animate-pulse rounded-md bg-slate-100'
+          : 'h-10 w-full animate-pulse rounded-md bg-slate-100 sm:h-11'
       }
       aria-hidden
     />
@@ -67,9 +67,7 @@ function CategoryNavLinks({
             onClick={onNavigate}
             className={cn(
               'whitespace-nowrap text-sm font-medium transition-colors',
-              active
-                ? 'text-slate-900'
-                : 'text-slate-500 hover:text-slate-900',
+              active ? 'text-slate-900' : 'text-slate-500 hover:text-slate-900',
               linkClassName
             )}
           >
@@ -205,19 +203,81 @@ function MobileCategoryMenu() {
             Categories
           </SheetTitle>
         </SheetHeader>
-        <Suspense fallback={null}>
-          <CategoryNavLinks
-            className="flex flex-col gap-1 p-3"
-            linkClassName="rounded-lg px-3 py-3 hover:bg-slate-50"
-            onNavigate={() => setOpen(false)}
-          />
-        </Suspense>
+        <CategoryNavLinks
+          className="flex flex-col gap-1 p-3"
+          linkClassName="rounded-lg px-3 py-3 hover:bg-slate-50"
+          onNavigate={() => setOpen(false)}
+        />
       </SheetContent>
     </Sheet>
   )
 }
 
-export function HeaderClient() {
+function HeaderShell({
+  search,
+  categories,
+  profileControl,
+  createEvent,
+}: {
+  search: React.ReactNode
+  categories: React.ReactNode
+  profileControl: React.ReactNode
+  createEvent?: React.ReactNode
+}) {
+  return (
+    <>
+      <header className="relative z-40 border-b border-border/40 bg-card/95 shadow-sm backdrop-blur-xl lg:sticky lg:top-0 lg:z-50">
+        <div className="absolute inset-0 bg-gradient-to-r from-primary/5 via-transparent to-primary/5" />
+        <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center gap-3 py-3 sm:py-4 lg:gap-4 lg:py-4">
+            <BrandLogo
+              size="md"
+              priority
+              className="[&_img]:transition-transform [&_img]:hover:scale-105"
+            />
+
+            <div className="mx-2 hidden min-w-0 flex-1 lg:mx-4 lg:block lg:max-w-md xl:max-w-xl">
+              {search}
+            </div>
+
+            <div className="ml-auto hidden shrink-0 items-center gap-4 lg:flex xl:gap-5">
+              {categories}
+              {createEvent}
+              {profileControl}
+            </div>
+
+            <div className="ml-auto shrink-0 lg:hidden">{profileControl}</div>
+          </div>
+        </div>
+      </header>
+
+      <div className="sticky top-0 z-50 border-b border-border/40 bg-card/95 shadow-sm backdrop-blur-xl lg:hidden">
+        <div className="mx-auto flex max-w-7xl items-center gap-2.5 px-4 py-2.5 sm:px-6">
+          <div className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white">
+            <Menu className="h-5 w-5 text-slate-400" aria-hidden />
+          </div>
+          <div className="min-w-0 flex-1">{search}</div>
+        </div>
+      </div>
+    </>
+  )
+}
+
+function HeaderFallback() {
+  return (
+    <HeaderShell
+      search={<HeaderSearchFallback />}
+      categories={
+        <div className="hidden h-5 w-64 animate-pulse rounded bg-slate-100 lg:block" aria-hidden />
+      }
+      profileControl={
+        <div className="h-9 w-9 animate-pulse rounded-full bg-slate-100" aria-hidden />
+      }
+    />
+  )
+}
+
+function HeaderClientInner() {
   const router = useRouter()
   const { user, logout } = useAuth()
 
@@ -245,7 +305,6 @@ export function HeaderClient() {
 
   return (
     <>
-      {/* Brand bar: scrolls away on small screens; sticky with search on large screens */}
       <header className="relative z-40 border-b border-border/40 bg-card/95 shadow-sm backdrop-blur-xl lg:sticky lg:top-0 lg:z-50">
         <div className="absolute inset-0 bg-gradient-to-r from-primary/5 via-transparent to-primary/5" />
         <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -256,17 +315,12 @@ export function HeaderClient() {
               className="[&_img]:transition-transform [&_img]:hover:scale-105"
             />
 
-            {/* Desktop: logo → search → rest */}
             <div className="mx-2 hidden min-w-0 flex-1 lg:mx-4 lg:block lg:max-w-md xl:max-w-xl">
-              <Suspense fallback={<HeaderSearchFallback />}>
-                <HeaderSearch />
-              </Suspense>
+              <HeaderSearch />
             </div>
 
             <div className="ml-auto hidden shrink-0 items-center gap-4 lg:flex xl:gap-5">
-              <Suspense fallback={null}>
-                <CategoryNavLinks className="flex items-center gap-4 xl:gap-5" />
-              </Suspense>
+              <CategoryNavLinks className="flex items-center gap-4 xl:gap-5" />
 
               {user ? (
                 <Link href="/organizer/dashboard/create">
@@ -280,23 +334,27 @@ export function HeaderClient() {
               {profileControl}
             </div>
 
-            {/* Mobile: profile icon only */}
             <div className="ml-auto shrink-0 lg:hidden">{profileControl}</div>
           </div>
         </div>
       </header>
 
-      {/* Mobile sticky search bar with hamburger */}
       <div className="sticky top-0 z-50 border-b border-border/40 bg-card/95 shadow-sm backdrop-blur-xl lg:hidden">
         <div className="mx-auto flex max-w-7xl items-center gap-2.5 px-4 py-2.5 sm:px-6">
           <MobileCategoryMenu />
           <div className="min-w-0 flex-1">
-            <Suspense fallback={<HeaderSearchFallback compact />}>
-              <HeaderSearch compact />
-            </Suspense>
+            <HeaderSearch compact />
           </div>
         </div>
       </div>
     </>
+  )
+}
+
+export function HeaderClient() {
+  return (
+    <Suspense fallback={<HeaderFallback />}>
+      <HeaderClientInner />
+    </Suspense>
   )
 }

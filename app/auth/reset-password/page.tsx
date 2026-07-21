@@ -3,16 +3,24 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/supabase-auth-context';
+import { AuthPageShell, authInputClassName, authPrimaryButtonClassName } from '@/components/auth/auth-page-shell';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertCircle, CheckCircle2, Loader2, Check, Eye, EyeOff } from 'lucide-react';
+import Link from 'next/link';
+import { cn } from '@/lib/utils';
 
 export default function ResetPasswordPage() {
   return (
-    <Suspense fallback={<div className="flex min-h-screen items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>}>
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center bg-slate-50">
+          <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
+        </div>
+      }
+    >
       <ResetPasswordPageInner />
     </Suspense>
   );
@@ -32,7 +40,6 @@ function ResetPasswordPageInner() {
     confirmPassword: '',
   });
 
-  // Check if we have the reset token
   useEffect(() => {
     const accessToken = searchParams.get('access_token');
     if (!accessToken) {
@@ -40,7 +47,6 @@ function ResetPasswordPageInner() {
     }
   }, [searchParams]);
 
-  // Password validation
   const passwordValidations = {
     length: formData.password.length >= 8,
     uppercase: /[A-Z]/.test(formData.password),
@@ -49,7 +55,8 @@ function ResetPasswordPageInner() {
   };
 
   const isPasswordValid = Object.values(passwordValidations).every(Boolean);
-  const passwordsMatch = formData.password === formData.confirmPassword && formData.confirmPassword !== '';
+  const passwordsMatch =
+    formData.password === formData.confirmPassword && formData.confirmPassword !== '';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -82,140 +89,133 @@ function ResetPasswordPageInner() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <CardTitle className="text-2xl font-bold">Set New Password</CardTitle>
-          <CardDescription>
-            Choose a strong password for your account
-          </CardDescription>
-        </CardHeader>
-
-        <CardContent>
-          {success ? (
-            <Alert className="border-green-500 bg-green-50 dark:bg-green-950">
-              <CheckCircle2 className="h-4 w-4 text-green-600" />
-              <AlertDescription className="text-green-800 dark:text-green-200">
-                <strong>Password reset successful!</strong>
-                <br />
-                Redirecting to login page...
-              </AlertDescription>
+    <AuthPageShell
+      title="Set a new password"
+      description="Choose a strong password to secure your Ticket95 account."
+      footer={
+        <Link href="/login" className="font-medium text-slate-900 hover:underline">
+          Return to sign in
+        </Link>
+      }
+    >
+      {success ? (
+        <Alert className="border-emerald-200 bg-emerald-50 text-emerald-900">
+          <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+          <AlertDescription>
+            Password updated successfully. Redirecting you to sign in...
+          </AlertDescription>
+        </Alert>
+      ) : (
+        <form onSubmit={handleSubmit} className="space-y-5">
+          {error ? (
+            <Alert variant="destructive" className="border-red-200 bg-red-50 text-red-800">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{error}</AlertDescription>
             </Alert>
-          ) : (
-            <form onSubmit={handleSubmit} className="space-y-4">
-              {error && (
-                <Alert variant="destructive">
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>{error}</AlertDescription>
-                </Alert>
-              )}
+          ) : null}
 
-              <div className="space-y-2">
-                <Label htmlFor="password">New Password</Label>
-                <div className="relative">
-                  <Input
-                    id="password"
-                    type={showPassword ? 'text' : 'password'}
-                    placeholder="••••••••"
-                    value={formData.password}
-                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                    required
-                    disabled={loading}
-                    autoComplete="new-password"
-                    autoFocus
-                    className="pr-10"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                    disabled={loading}
-                    aria-label={showPassword ? 'Hide password' : 'Show password'}
-                  >
-                    {showPassword ? (
-                      <EyeOff className="h-4 w-4" />
-                    ) : (
-                      <Eye className="h-4 w-4" />
-                    )}
-                  </button>
-                </div>
-                
-                {/* Password requirements */}
-                {formData.password && (
-                  <div className="text-xs space-y-1 mt-2">
-                    <p className={passwordValidations.length ? 'text-green-600' : 'text-muted-foreground'}>
-                      {passwordValidations.length ? <Check className="inline h-3 w-3 mr-1" /> : '○'} At least 8 characters
-                    </p>
-                    <p className={passwordValidations.uppercase ? 'text-green-600' : 'text-muted-foreground'}>
-                      {passwordValidations.uppercase ? <Check className="inline h-3 w-3 mr-1" /> : '○'} One uppercase letter
-                    </p>
-                    <p className={passwordValidations.lowercase ? 'text-green-600' : 'text-muted-foreground'}>
-                      {passwordValidations.lowercase ? <Check className="inline h-3 w-3 mr-1" /> : '○'} One lowercase letter
-                    </p>
-                    <p className={passwordValidations.number ? 'text-green-600' : 'text-muted-foreground'}>
-                      {passwordValidations.number ? <Check className="inline h-3 w-3 mr-1" /> : '○'} One number
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="confirmPassword">Confirm New Password</Label>
-                <div className="relative">
-                  <Input
-                    id="confirmPassword"
-                    type={showConfirmPassword ? 'text' : 'password'}
-                    placeholder="••••••••"
-                    value={formData.confirmPassword}
-                    onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-                    required
-                    disabled={loading}
-                    autoComplete="new-password"
-                    className="pr-10"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                    disabled={loading}
-                    aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
-                  >
-                    {showConfirmPassword ? (
-                      <EyeOff className="h-4 w-4" />
-                    ) : (
-                      <Eye className="h-4 w-4" />
-                    )}
-                  </button>
-                </div>
-                {formData.confirmPassword && (
-                  <p className={passwordsMatch ? 'text-green-600 text-xs' : 'text-destructive text-xs'}>
-                    {passwordsMatch ? (
-                      <><Check className="inline h-3 w-3 mr-1" /> Passwords match</>
-                    ) : (
-                      '✗ Passwords do not match'
-                    )}
-                  </p>
-                )}
-              </div>
-
-              <Button 
-                type="submit" 
-                className="w-full" 
-                disabled={loading || !isPasswordValid || !passwordsMatch}
+          <div className="space-y-2">
+            <Label htmlFor="password" className="text-sm font-medium text-slate-700">
+              New password
+            </Label>
+            <div className="relative">
+              <Input
+                id="password"
+                type={showPassword ? 'text' : 'password'}
+                placeholder="Enter a new password"
+                value={formData.password}
+                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                required
+                disabled={loading}
+                autoComplete="new-password"
+                autoFocus
+                className={cn(authInputClassName, 'pr-11')}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 transition-colors hover:text-slate-700"
+                disabled={loading}
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
               >
-                {loading ? (
+                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+
+            {formData.password ? (
+              <div className="mt-2 space-y-1 text-xs">
+                <p className={passwordValidations.length ? 'text-emerald-600' : 'text-slate-400'}>
+                  {passwordValidations.length ? <Check className="mr-1 inline h-3 w-3" /> : '○'} At least 8 characters
+                </p>
+                <p className={passwordValidations.uppercase ? 'text-emerald-600' : 'text-slate-400'}>
+                  {passwordValidations.uppercase ? <Check className="mr-1 inline h-3 w-3" /> : '○'} One uppercase letter
+                </p>
+                <p className={passwordValidations.lowercase ? 'text-emerald-600' : 'text-slate-400'}>
+                  {passwordValidations.lowercase ? <Check className="mr-1 inline h-3 w-3" /> : '○'} One lowercase letter
+                </p>
+                <p className={passwordValidations.number ? 'text-emerald-600' : 'text-slate-400'}>
+                  {passwordValidations.number ? <Check className="mr-1 inline h-3 w-3" /> : '○'} One number
+                </p>
+              </div>
+            ) : null}
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="confirmPassword" className="text-sm font-medium text-slate-700">
+              Confirm new password
+            </Label>
+            <div className="relative">
+              <Input
+                id="confirmPassword"
+                type={showConfirmPassword ? 'text' : 'password'}
+                placeholder="Re-enter your new password"
+                value={formData.confirmPassword}
+                onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+                required
+                disabled={loading}
+                autoComplete="new-password"
+                className={cn(authInputClassName, 'pr-11')}
+              />
+              <button
+                type="button"
+                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 transition-colors hover:text-slate-700"
+                disabled={loading}
+                aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+              >
+                {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+            {formData.confirmPassword ? (
+              <p className={passwordsMatch ? 'text-xs text-emerald-600' : 'text-xs text-red-600'}>
+                {passwordsMatch ? (
                   <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Resetting password...
+                    <Check className="mr-1 inline h-3 w-3" />
+                    Passwords match
                   </>
                 ) : (
-                  'Reset Password'
+                  'Passwords do not match'
                 )}
-              </Button>
-            </form>
-          )}
-        </CardContent>
-      </Card>
-    </div>
+              </p>
+            ) : null}
+          </div>
+
+          <Button
+            type="submit"
+            className={authPrimaryButtonClassName}
+            disabled={loading || !isPasswordValid || !passwordsMatch}
+          >
+            {loading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Updating password...
+              </>
+            ) : (
+              'Update password'
+            )}
+          </Button>
+        </form>
+      )}
+    </AuthPageShell>
   );
 }

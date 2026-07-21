@@ -1,5 +1,6 @@
 import { SignupForm } from '@/components/auth/signup-form';
-import { BrandLogo } from '@/components/brand/brand-logo';
+import { AuthPageShell } from '@/components/auth/auth-page-shell';
+import Link from 'next/link';
 
 export const metadata = {
   title: 'Sign Up - Ticket95.com',
@@ -8,14 +9,19 @@ export const metadata = {
 
 export default function SignupPage() {
   return (
-    <main className="min-h-screen bg-background flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        <div className="mb-8 flex flex-col items-center text-center">
-          <BrandLogo size="xl" href="/" stacked priority />
-          <p className="text-muted-foreground mt-3 text-sm">Create your Ticket95.com account</p>
-        </div>
-        <SignupForm />
-      </div>
-    </main>
+    <AuthPageShell
+      title="Create your account"
+      description="Join Ticket95 to buy tickets, track orders, and discover events."
+      footer={
+        <>
+          Already have an account?{' '}
+          <Link href="/login" className="font-medium text-slate-900 hover:underline">
+            Sign in
+          </Link>
+        </>
+      }
+    >
+      <SignupForm />
+    </AuthPageShell>
   );
 }

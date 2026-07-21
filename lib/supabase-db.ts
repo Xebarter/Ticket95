@@ -207,6 +207,7 @@ export async function getFeaturedEvents(limit: number = 5) {
     image_url,
     organizer_name,
     currency,
+    category,
     ticket_price,
     total_tickets,
     tickets_available
@@ -301,8 +302,12 @@ export async function getApprovedEventsForLanding(limit: number = 12) {
         status,
         currency,
         category,
+        ticket_price,
+        total_tickets,
+        tickets_available,
         ticket_types (
-          id
+          id,
+          price
         )
       `)
       .eq('status', 'approved')
@@ -336,7 +341,10 @@ export async function getApprovedEventsForLanding(limit: number = 12) {
         organizer_name,
         status,
         currency,
-        category
+        category,
+        ticket_price,
+        total_tickets,
+        tickets_available
       `)
       .eq('status', 'approved')
       .gt('date', nowIso)
