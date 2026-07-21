@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { updateEventStatus, getEventById } from '@/lib/supabase-db';
 import { requireAdmin } from '@/lib/session';
+import { notifyUsersOfNewEvent } from '@/lib/notifications';
 
 export async function PATCH(
   request: NextRequest,
@@ -20,7 +21,6 @@ export async function PATCH(
       );
     }
 
-    // Check if event exists
     const event = await getEventById(id);
     if (!event) {
       return NextResponse.json(
@@ -29,14 +29,32 @@ export async function PATCH(
       );
     }
 
-    // Update event status
-    const updatedEvent = await updateEventStatus(id, approved ? 'approved' : 'rejected', note || undefined);
+    const wasAlreadyApproved = event.status === 'approved';
+
+    const updatedEvent = await updateEventStatus(
+      id,
+      approved ? 'approved' : 'rejected',
+      note || undefined
+    );
 
     if (!updatedEvent) {
       return NextResponse.json(
         { error: 'Failed to update event status' },
         { status: 500 }
       );
+    }
+
+    if (approved && !wasAlreadyApproved) {
+      void notifyUsersOfNewEvent({
+        id: updatedEvent.id,
+        name: updatedEvent.name,
+        venue: updatedEvent.venue,
+        date: updatedEvent.date,
+        organizer_name: updatedEvent.organizer_name,
+        image_url: updatedEvent.image_url,
+      }).catch((err) => {
+        console.error('Failed to fan-out new event notifications:', err);
+      });
     }
 
     return NextResponse.json(
@@ -46,7 +64,6 @@ export async function PATCH(
   } catch (error) {
     console.error('Approval error:', error);
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    console.error('Error details:', errorMessage);
     return NextResponse.json(
       { error: 'Internal server error', details: errorMessage },
       { status: 500 }

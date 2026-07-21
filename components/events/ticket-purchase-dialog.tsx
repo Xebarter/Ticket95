@@ -29,6 +29,7 @@ import {
   Loader2,
 } from 'lucide-react'
 import { getEventCategoryLabel } from '@/lib/event-categories'
+import { getStoredAffiliateCode } from '@/components/affiliates/affiliate-ref-capture'
 import { cn } from '@/lib/utils'
 
 interface TicketPurchaseDialogProps {
@@ -243,6 +244,7 @@ export function TicketPurchaseDialog({
           selectedQuantities,
           customerEmail: user?.email || guestEmail.trim(),
           customerName: guestName.trim() || undefined,
+          affiliateCode: event.affiliates_enabled ? getStoredAffiliateCode() || undefined : undefined,
         }),
       })
 

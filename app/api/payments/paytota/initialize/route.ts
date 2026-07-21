@@ -3,6 +3,7 @@ import { getSession } from '@/lib/session';
 import { createPaytotaPurchase } from '@/lib/paytota';
 import { completePaidOrder } from '@/lib/complete-paid-order';
 import { supabaseAdmin } from '@/lib/supabase-admin';
+import { getAffiliateByReferralCode, getAffiliateSettings } from '@/lib/affiliates';
 
 function getAppUrl() {
   return (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').replace(/\/$/, '');
@@ -67,6 +68,8 @@ export async function POST(request: NextRequest) {
     const rawCustomerEmail = typeof body?.customerEmail === 'string' ? body.customerEmail.trim() : '';
     const rawCustomerName = typeof body?.customerName === 'string' ? body.customerName.trim() : '';
     const rawCustomerPhone = typeof body?.customerPhone === 'string' ? body.customerPhone.trim() : '';
+    const rawAffiliateCode =
+      typeof body?.affiliateCode === 'string' ? body.affiliateCode.trim().toUpperCase() : '';
 
     if (!eventId || !selectedQuantities || typeof selectedQuantities !== 'object') {
       return NextResponse.json({ error: 'Invalid checkout payload' }, { status: 400 });
@@ -120,6 +123,19 @@ export async function POST(request: NextRequest) {
       0
     );
 
+    let affiliateId: string | null = null;
+    let affiliateReferralCode: string | null = null;
+    if (rawAffiliateCode && event.affiliates_enabled) {
+      const settings = await getAffiliateSettings();
+      if (settings.programEnabled) {
+        const affiliate = await getAffiliateByReferralCode(rawAffiliateCode);
+        if (affiliate && affiliate.user_id !== session?.userId) {
+          affiliateId = affiliate.id;
+          affiliateReferralCode = affiliate.referral_code;
+        }
+      }
+    }
+
     const order = await createOrderAdmin({
       event_id: eventId,
       user_id: session?.userId || null,
@@ -128,6 +144,8 @@ export async function POST(request: NextRequest) {
       currency: event.currency || 'USD',
       status: 'pending',
       payment_provider: totalPrice <= 0 ? 'free' : 'paytota',
+      affiliate_id: affiliateId,
+      affiliate_referral_code: affiliateReferralCode,
       payment_metadata: {
         ticketSelections: normalizedSelections,
         customer: {
@@ -136,6 +154,9 @@ export async function POST(request: NextRequest) {
           phone: rawCustomerPhone || null,
           userId: session?.userId || null,
         },
+        ...(affiliateReferralCode
+          ? { affiliateCode: affiliateReferralCode, affiliateId }
+          : {}),
       },
     });
 
@@ -145,6 +166,10 @@ export async function POST(request: NextRequest) {
         status: order.status,
         event_id: order.event_id,
         user_id: order.user_id,
+        total_price: order.total_price,
+        currency: order.currency,
+        affiliate_id: order.affiliate_id,
+        affiliate_referral_code: order.affiliate_referral_code,
         payment_metadata: order.payment_metadata,
       });
 

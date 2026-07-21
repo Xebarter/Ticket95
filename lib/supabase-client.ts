@@ -48,6 +48,8 @@ export interface Event {
   currency?: string; // Currency code (USD, EUR, GBP, etc.)
   /** sports | concert | movies | other */
   category?: 'sports' | 'concert' | 'movies' | 'other';
+  /** When true, account holders can share referral links and earn commission */
+  affiliates_enabled?: boolean;
   status: 'pending' | 'approved' | 'rejected';
   rejection_reason?: string;
   is_featured?: boolean;
@@ -95,8 +97,44 @@ export interface Order {
   payment_tracking_id?: string;
   payment_merchant_reference?: string;
   payment_metadata?: Record<string, any>;
+  affiliate_id?: string | null;
+  affiliate_referral_code?: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface Affiliate {
+  id: string;
+  user_id: string;
+  referral_code: string;
+  status: 'active' | 'suspended';
+  payout_notes?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AffiliateCommission {
+  id: string;
+  affiliate_id: string;
+  order_id: string;
+  event_id: string;
+  buyer_user_id: string | null;
+  order_amount: number;
+  commission_percent: number;
+  commission_amount: number;
+  currency: string;
+  status: 'pending' | 'approved' | 'paid' | 'cancelled';
+  paid_at: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PlatformSetting {
+  key: string;
+  value: unknown;
+  updated_at: string;
+  updated_by?: string | null;
 }
 
 export interface Ticket {
@@ -115,6 +153,18 @@ export interface Ticket {
   qr_code: string;
   created_at: string;
   updated_at: string;
+}
+
+export interface AppNotification {
+  id: string;
+  user_id: string;
+  type: string;
+  title: string;
+  body: string | null;
+  href: string | null;
+  data: Record<string, unknown>;
+  read_at: string | null;
+  created_at: string;
 }
 
 export type Database = {

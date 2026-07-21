@@ -24,6 +24,7 @@ import { Settings, LogOut, LogIn, Plus, User, UserPlus, Menu } from 'lucide-reac
 import Link from 'next/link'
 import { BrandLogo } from '@/components/brand/brand-logo'
 import { HeaderSearch } from '@/components/layout/header-search'
+import { NotificationBell } from '@/components/notifications/notification-bell'
 import { EVENT_CATEGORIES } from '@/lib/event-categories'
 import { cn } from '@/lib/utils'
 
@@ -291,13 +292,16 @@ function HeaderClientInner() {
   };
 
   const profileControl = user ? (
-    <UserProfileMenu
-      name={user.profile_name}
-      logoUrl={user.profile_logo_url}
-      role={user.role}
-      onLogout={handleLogout}
-      onAdmin={() => router.push('/admin')}
-    />
+    <div className="flex items-center gap-1.5">
+      <NotificationBell />
+      <UserProfileMenu
+        name={user.profile_name}
+        logoUrl={user.profile_logo_url}
+        role={user.role}
+        onLogout={handleLogout}
+        onAdmin={() => router.push('/admin')}
+      />
+    </div>
   ) : (
     <GuestProfileMenu />
   )

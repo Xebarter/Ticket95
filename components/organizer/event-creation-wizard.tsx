@@ -11,6 +11,8 @@ import { createEvent, createSponsor, createTicketTypes, updateEvent, replaceEven
 import { getSupabaseBrowserClient } from '@/lib/supabase/browser';
 import { isEventDatePast } from '@/lib/event-status';
 import { EVENT_CATEGORIES, normalizeEventCategory, type EventCategoryId } from '@/lib/event-categories';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 
 const supabase = getSupabaseBrowserClient();
 
@@ -51,6 +53,7 @@ type InitialEventData = {
   category?: EventCategoryId;
   status?: 'pending' | 'approved' | 'rejected';
   rejection_reason?: string | null;
+  affiliates_enabled?: boolean;
 };
 
 type InitialTicketTypeData = {
@@ -312,6 +315,9 @@ export function EventCreationWizard({
   });
   const [editingTicketType, setEditingTicketType] = useState<WizardTicketType | null>(null);
   const [ticketTypeError, setTicketTypeError] = useState('');
+  const [affiliatesEnabled, setAffiliatesEnabled] = useState(
+    Boolean(initialEvent?.affiliates_enabled)
+  );
   const selectedDateTimePreview = useMemo(() => {
     if (!formData.date) return '';
     const dt = new Date(formData.date);
@@ -822,6 +828,7 @@ export function EventCreationWizard({
           organizer_logo_url: organizerLogoUrl,
           image_url: primaryImageUrl || undefined,
           image_urls: allUrls,
+          affiliates_enabled: affiliatesEnabled,
           status: 'pending',
         });
 
@@ -899,6 +906,7 @@ export function EventCreationWizard({
           organizer_logo_url: organizerLogoUrl,
           image_url: primaryImageUrl || undefined,
           image_urls: allUrls,
+          affiliates_enabled: affiliatesEnabled,
           ...(shouldResubmitForApproval ? { status: 'pending', rejection_reason: null } : {}),
         });
 
@@ -1808,6 +1816,23 @@ export function EventCreationWizard({
                     ))}
                   </div>
                 ) : null}
+
+                <div className="flex items-start justify-between gap-3 rounded-xl border border-border/70 px-3 py-3">
+                  <div className="space-y-1">
+                    <Label htmlFor="affiliates-enabled" className="text-sm font-medium">
+                      Allow affiliates
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      Let Ticket95 account holders share your event and earn a platform commission
+                      on sales they refer.
+                    </p>
+                  </div>
+                  <Switch
+                    id="affiliates-enabled"
+                    checked={affiliatesEnabled}
+                    onCheckedChange={setAffiliatesEnabled}
+                  />
+                </div>
 
                 {!isAdminContext ? (
                   <p className="rounded-xl bg-muted/40 px-3 py-2 text-xs text-muted-foreground">

@@ -1,31 +1,33 @@
+import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
 import { getEventById, getTicketTypesForEvent } from '@/lib/supabase-db';
 import { TicketPurchaseDialog } from '@/components/events/ticket-purchase-dialog';
+import { AffiliateRefCapture } from '@/components/affiliates/affiliate-ref-capture';
 import { HeaderClient } from '@/components/layout/header-client';
 import { Footer } from '@/components/layout/footer';
 import Image from 'next/image';
 import { Calendar, MapPin, ShieldCheck } from 'lucide-react';
-import Link from 'next/link';
 
 interface EventPageProps {
-  params: {
-    id: string;
-  };
+  params: Promise<{ id: string }> | { id: string };
 }
 
 export default async function EventPage({ params }: EventPageProps) {
-  const event = await getEventById(params.id);
+  const resolved = await Promise.resolve(params);
+  const event = await getEventById(resolved.id);
   if (!event) {
     notFound();
   }
 
-  const ticketTypes = await getTicketTypesForEvent(params.id);
+  const ticketTypes = await getTicketTypesForEvent(resolved.id);
 
   return (
     <main className="min-h-screen bg-background flex flex-col">
-      {/* we load the full client header here since the user may want to sign in or
-          access their profile from this page */}
       <HeaderClient />
+
+      <Suspense fallback={null}>
+        <AffiliateRefCapture />
+      </Suspense>
 
       <div className="py-12 sm:py-16 flex-1">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">

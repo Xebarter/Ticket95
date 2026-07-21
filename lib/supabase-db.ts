@@ -74,7 +74,11 @@ export async function createUser(
 
 export async function updateEvent(
   eventId: string,
-  eventData: Partial<Omit<Event, 'id' | 'organizer_id' | 'created_at' | 'updated_at'>>
+  eventData: Partial<
+    Omit<Event, 'id' | 'organizer_id' | 'created_at' | 'updated_at'> & {
+      rejection_reason?: string | null;
+    }
+  >
 ): Promise<Event> {
   const { data, error } = await supabase
     .from('events')

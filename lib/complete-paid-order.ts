@@ -1,10 +1,19 @@
 import { supabaseAdmin } from '@/lib/supabase-admin';
+import {
+  createAffiliateCommissionForOrder,
+  getAffiliateByReferralCode,
+  getAffiliateSettings,
+} from '@/lib/affiliates';
 
 type OrderRow = {
   id: string;
   status: string;
   event_id: string;
   user_id: string | null;
+  total_price?: number;
+  currency?: string | null;
+  affiliate_id?: string | null;
+  affiliate_referral_code?: string | null;
   payment_metadata: Record<string, unknown> | null;
 };
 
@@ -172,5 +181,65 @@ export async function completePaidOrder(order: OrderRow) {
 
   if (updateOrderError) throw updateOrderError;
 
+  await maybeAwardAffiliateCommission(order, event);
+
   return { alreadyCompleted: false };
+}
+
+async function maybeAwardAffiliateCommission(
+  order: OrderRow,
+  event: { affiliates_enabled?: boolean | null; currency?: string | null }
+) {
+  try {
+    const settings = await getAffiliateSettings();
+    if (!settings.programEnabled || !event.affiliates_enabled) return;
+
+    const metadata = (order.payment_metadata || {}) as {
+      affiliateCode?: string;
+      affiliateId?: string;
+    };
+
+    const referralCode =
+      order.affiliate_referral_code ||
+      (typeof metadata.affiliateCode === 'string' ? metadata.affiliateCode : '') ||
+      '';
+
+    let affiliateId = order.affiliate_id || metadata.affiliateId || null;
+    let affiliate = affiliateId
+      ? (
+          await supabaseAdmin.from('affiliates').select('*').eq('id', affiliateId).maybeSingle()
+        ).data
+      : null;
+
+    if (!affiliate && referralCode) {
+      affiliate = await getAffiliateByReferralCode(referralCode);
+      affiliateId = affiliate?.id || null;
+    }
+
+    if (!affiliate || affiliate.status !== 'active') return;
+
+    // No self-referral commissions
+    if (order.user_id && affiliate.user_id === order.user_id) return;
+
+    const { data: orderRow } = await supabaseAdmin
+      .from('orders')
+      .select('total_price, currency')
+      .eq('id', order.id)
+      .maybeSingle();
+
+    const orderAmount = Number(order.total_price ?? orderRow?.total_price ?? 0);
+    const currency = order.currency || orderRow?.currency || event.currency || 'USD';
+
+    await createAffiliateCommissionForOrder({
+      orderId: order.id,
+      eventId: order.event_id,
+      buyerUserId: order.user_id,
+      orderAmount,
+      currency,
+      affiliateId: affiliate.id,
+      commissionPercent: settings.commissionPercent,
+    });
+  } catch (error) {
+    console.error('Affiliate commission award failed:', error);
+  }
 }

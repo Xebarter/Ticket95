@@ -12,11 +12,13 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { BrandLogo } from '@/components/brand/brand-logo';
+import { NotificationBell } from '@/components/notifications/notification-bell';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/supabase-auth-context';
 import {
   BarChart3,
   Calendar,
+  Handshake,
   Home,
   LayoutGrid,
   LogOut,
@@ -40,6 +42,12 @@ type NavItem = {
 const primaryNav: NavItem[] = [
   { href: '/profile', label: 'Overview', icon: Home, match: ['/profile'], exact: true },
   { href: '/profile/tickets', label: 'Tickets', icon: Ticket, match: ['/profile/tickets'] },
+  {
+    href: '/profile/affiliate',
+    label: 'Affiliate',
+    icon: Handshake,
+    match: ['/profile/affiliate'],
+  },
   {
     href: '/profile/events',
     label: 'Events',
@@ -98,18 +106,21 @@ export function ProfileSidebar({
     <div className="flex h-full flex-col">
       <div className="flex items-center justify-between gap-2 border-b border-border/60 px-4 py-4">
         <BrandLogo href="/" size="sm" subtitle="Profile" />
-        {variant === 'mobile' && onClose ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 rounded-lg"
-            onClick={onClose}
-            aria-label="Close menu"
-          >
-            <X className="h-4 w-4" />
-          </Button>
-        ) : null}
+        <div className="flex items-center gap-0.5">
+          {variant === 'desktop' ? <NotificationBell /> : null}
+          {variant === 'mobile' && onClose ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 rounded-lg"
+              onClick={onClose}
+              aria-label="Close menu"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          ) : null}
+        </div>
       </div>
 
       <div className="border-b border-border/60 px-4 py-3">
@@ -260,16 +271,19 @@ export function ProfileMobileHeader({ onMenuClick }: ProfileMobileHeaderProps) {
   return (
     <header className="mb-4 flex items-center justify-between gap-3 rounded-2xl border border-border/70 bg-card/95 px-3 py-2.5 shadow-sm md:hidden">
       <BrandLogo href="/" size="sm" />
-      <Button
-        type="button"
-        variant="outline"
-        size="icon"
-        className="h-9 w-9 shrink-0 rounded-xl"
-        onClick={onMenuClick}
-        aria-label="Open menu"
-      >
-        <Menu className="h-4 w-4" />
-      </Button>
+      <div className="flex items-center gap-1">
+        <NotificationBell />
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          className="h-9 w-9 shrink-0 rounded-xl"
+          onClick={onMenuClick}
+          aria-label="Open menu"
+        >
+          <Menu className="h-4 w-4" />
+        </Button>
+      </div>
     </header>
   );
 }

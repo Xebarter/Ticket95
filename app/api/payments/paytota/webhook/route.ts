@@ -36,7 +36,9 @@ export async function POST(request: NextRequest) {
 
     const { data: order, error: orderError } = await supabaseAdmin
       .from('orders')
-      .select('id, status, event_id, user_id, payment_tracking_id, payment_metadata')
+      .select(
+        'id, status, event_id, user_id, total_price, currency, affiliate_id, affiliate_referral_code, payment_tracking_id, payment_metadata'
+      )
       .eq('id', reference)
       .single();
 
