@@ -59,13 +59,12 @@ export default function ProfileEventsPage() {
       {myEvents.length === 0 ? (
         <Card className="border-dashed">
           <CardContent className="py-10 text-center">
-            <Calendar className="mx-auto mb-3 h-8 w-8 text-primary" />
-            <h3 className="font-semibold">No events created</h3>
-            <p className="mt-1 text-sm text-muted-foreground">Create your first event to start selling tickets.</p>
-            <Button asChild size="sm" className="mt-4 rounded-full">
+            <Calendar className="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
+            <p className="text-sm text-muted-foreground">No events</p>
+            <Button asChild size="sm" className="mt-4 rounded-xl">
               <Link href="/organizer/dashboard/create">
                 <Plus className="mr-1.5 h-4 w-4" />
-                New event
+                Create
               </Link>
             </Button>
           </CardContent>
@@ -73,32 +72,15 @@ export default function ProfileEventsPage() {
       ) : (
         <div className="space-y-3">
           {loadingManagement ? (
-            <Card className="border-border/70">
-              <CardContent className="py-8 text-center text-sm text-muted-foreground">
-                Loading event analytics and ticket management data...
-              </CardContent>
-            </Card>
+            <div className="flex justify-center py-10">
+              <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+            </div>
           ) : error ? (
             <Card className="border-destructive/40">
               <CardContent className="py-6 text-sm text-destructive">{error}</CardContent>
             </Card>
           ) : data ? (
-            <>
-              <EventOverviewCards metrics={data.metrics} currency={data.event.currency || 'USD'} />
-              <Card className="border-border/70">
-                <CardContent className="py-4 text-sm text-muted-foreground">
-                  Ticket operations and purchaser activity are now on{' '}
-                  <Link href="/profile/tickets" className="font-medium text-primary hover:underline">
-                    /profile/tickets
-                  </Link>
-                  . Ticket scanning and verification links are on{' '}
-                  <Link href="/profile/verify" className="font-medium text-primary hover:underline">
-                    /profile/verify
-                  </Link>
-                  .
-                </CardContent>
-              </Card>
-            </>
+            <EventOverviewCards metrics={data.metrics} currency={data.event.currency || 'USD'} />
           ) : null}
         </div>
       )}

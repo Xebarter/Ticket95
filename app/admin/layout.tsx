@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
-import { getSession } from '@/lib/session';
+import { getOrRestoreSession } from '@/lib/session-restore';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import AdminLayoutClient from './AdminLayoutClient';
 
@@ -8,7 +8,7 @@ export default async function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const session = await getSession();
+  const session = await getOrRestoreSession();
 
   if (!session) {
     redirect('/login?redirect=/admin');

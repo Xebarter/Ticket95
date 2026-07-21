@@ -104,11 +104,8 @@ export default function EditEventPage() {
   if (loading) {
     return (
       <ProfileLayoutShell>
-        <div className="flex min-h-[320px] items-center justify-center">
-          <div className="text-center">
-            <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
-            <p className="text-muted-foreground">Loading event...</p>
-          </div>
+        <div className="flex min-h-[280px] items-center justify-center">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
         </div>
       </ProfileLayoutShell>
     );
@@ -116,14 +113,17 @@ export default function EditEventPage() {
 
   return (
     <ProfileLayoutShell>
-      <EventCreationWizard
-        mode="edit"
-        eventId={params.id}
-        initialEvent={initialEvent}
-        initialSponsors={initialSponsors}
-        initialTicketTypes={initialTicketTypes}
-        onDone={() => router.push('/profile')}
-      />
+      <div className="space-y-5">
+        <h1 className="text-2xl font-semibold tracking-tight">Edit</h1>
+        <EventCreationWizard
+          mode="edit"
+          eventId={params.id}
+          initialEvent={initialEvent}
+          initialSponsors={initialSponsors}
+          initialTicketTypes={initialTicketTypes}
+          onDone={() => router.push('/profile/events')}
+        />
+      </div>
     </ProfileLayoutShell>
   );
 }

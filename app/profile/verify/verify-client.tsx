@@ -4,7 +4,6 @@ import Link from 'next/link';
 import { FormEvent, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSearchParams } from 'next/navigation';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -408,24 +407,25 @@ export default function VerifyClient() {
       <Card className="w-full border-border/70">
         <CardContent className="space-y-4 py-6">
           <div>
-            <h1 className="text-xl font-semibold tracking-tight">Ticket verifier</h1>
-            <p className="mt-1 text-sm text-muted-foreground">Select an event to start ticket scanning.</p>
+            <h1 className="text-2xl font-semibold tracking-tight">Verify</h1>
           </div>
 
           {loadingProfile ? (
-            <p className="text-sm text-muted-foreground">Loading your events...</p>
+            <div className="flex justify-center py-8">
+              <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+            </div>
           ) : myEvents.length === 0 ? (
-            <div className="rounded-lg border border-border/70 p-4 text-sm">
-              <p className="text-muted-foreground">You do not have any events yet.</p>
-              <Button asChild size="sm" className="mt-3">
-                <Link href="/organizer/dashboard/create">Create event</Link>
+            <div className="rounded-xl border border-dashed p-6 text-center">
+              <p className="text-sm text-muted-foreground">No events</p>
+              <Button asChild size="sm" className="mt-3 rounded-xl">
+                <Link href="/organizer/dashboard/create">Create</Link>
               </Button>
             </div>
           ) : (
             <div className="space-y-3">
               <Select value={selectedEventId} onValueChange={setSelectedEventId}>
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Choose event to verify" />
+                  <SelectValue placeholder="Select event" />
                 </SelectTrigger>
                 <SelectContent>
                   {myEvents.map((event) => (
@@ -436,12 +436,13 @@ export default function VerifyClient() {
                 </SelectContent>
               </Select>
               <div className="flex flex-col gap-2 sm:flex-row">
-                <Button onClick={openVerifier} disabled={!selectedEventId}>
-                  Open verifier
+                <Button onClick={openVerifier} disabled={!selectedEventId} className="rounded-xl">
+                  Open
                 </Button>
                 <Button
                   type="button"
                   variant="outline"
+                  className="rounded-xl"
                   onClick={() => void copyVerifyLink(selectedEventId)}
                   disabled={!selectedEventId}
                 >
@@ -450,23 +451,28 @@ export default function VerifyClient() {
                 </Button>
               </div>
 
-              <div className="space-y-2 rounded-lg border border-border/70 p-3">
-                <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">All event verifier links</p>
+              <div className="space-y-2">
                 {myEvents.map((event) => (
-                  <div key={event.id} className="rounded-md border border-border/70 p-2">
-                    <div className="mb-2 flex items-center justify-between gap-2">
-                      <p className="truncate text-sm font-medium">{event.name}</p>
-                      <Button asChild size="sm" variant="outline">
+                  <div
+                    key={event.id}
+                    className="flex flex-col gap-2 rounded-xl border border-border/70 p-3 sm:flex-row sm:items-center"
+                  >
+                    <p className="min-w-0 flex-1 truncate text-sm font-medium">{event.name}</p>
+                    <div className="flex shrink-0 gap-2">
+                      <Button asChild size="sm" variant="outline" className="rounded-xl">
                         <Link href={`/profile/verify?event=${event.id}`}>
                           <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
                           Open
                         </Link>
                       </Button>
-                    </div>
-                    <div className="flex flex-col gap-2 sm:flex-row">
-                      <Input readOnly value={getVerifyLink(event.id)} />
-                      <Button type="button" variant="outline" onClick={() => void copyVerifyLink(event.id)}>
-                        <Copy className="mr-1.5 h-4 w-4" />
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        className="rounded-xl"
+                        onClick={() => void copyVerifyLink(event.id)}
+                      >
+                        <Copy className="mr-1.5 h-3.5 w-3.5" />
                         {copiedEventId === event.id ? 'Copied' : 'Copy'}
                       </Button>
                     </div>
@@ -482,18 +488,16 @@ export default function VerifyClient() {
 
   return (
     <div className="space-y-4">
-      <header>
+      <header className="flex items-center justify-between gap-3">
         <h1 className="inline-flex items-center gap-2 text-2xl font-semibold tracking-tight">
           <ScanLine className="h-5 w-5 text-primary" />
-          Ticket verifier
+          Verify
         </h1>
-        <p className="mt-1 text-sm text-muted-foreground">Scan event tickets and confirm entry status quickly.</p>
       </header>
 
       <div className="mx-auto flex w-full max-w-2xl flex-col gap-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Scanner</h2>
-          <Badge variant="outline">Event verifier</Badge>
+          <h2 className="text-sm font-medium text-muted-foreground">Scanner</h2>
         </div>
 
         <div className="overflow-hidden rounded-xl border border-border/80 bg-black/90">

@@ -224,18 +224,21 @@ export async function getFeaturedEvents(limit: number = 5) {
       .limit(limit);
 
     if (error) {
+      const err = error as any;
       // Column missing — migration 012 not applied yet
-      if (error.code === '42703' || error.message?.includes('is_featured')) {
+      if (err?.code === '42703' || err?.message?.includes('is_featured')) {
         console.warn(
           'is_featured column missing; run scripts/sql/012_add_featured_events.sql'
         );
         return [] as Event[];
       }
-      console.error('Supabase featured events query error:', {
-        message: error.message,
-        code: error.code,
-        details: error.details,
-        hint: error.hint,
+      // This select sometimes fails (e.g. relationship/RLS); we have a fallback query below.
+      console.warn('Supabase featured events query failed; falling back:', {
+        message: err?.message,
+        code: err?.code,
+        details: err?.details,
+        hint: err?.hint,
+        rawError: err,
       });
       throw error;
     }
@@ -253,9 +256,10 @@ export async function getFeaturedEvents(limit: number = 5) {
         .limit(limit);
 
       if (fallbackError) {
+        const err = fallbackError as any;
         if (
-          fallbackError.code === '42703' ||
-          fallbackError.message?.includes('is_featured')
+          err?.code === '42703' ||
+          err?.message?.includes('is_featured')
         ) {
           console.warn(
             'is_featured column missing; run scripts/sql/012_add_featured_events.sql'
@@ -263,10 +267,10 @@ export async function getFeaturedEvents(limit: number = 5) {
           return [] as Event[];
         }
         console.error('Failed to fetch featured events:', {
-          message: fallbackError.message,
-          code: fallbackError.code,
-          details: fallbackError.details,
-          hint: fallbackError.hint,
+          message: err?.message,
+          code: err?.code,
+          details: err?.details,
+          hint: err?.hint,
         });
         return [] as Event[];
       }
@@ -316,13 +320,64 @@ export async function getApprovedEventsForLanding(limit: number = 12) {
       .limit(limit);
 
     if (error) {
-      console.error('Supabase landing query error:', {
-        message: error.message,
-        code: error.code,
-        details: error.details,
-        hint: error.hint,
-      });
-      throw new Error(`Failed to fetch events: ${error.message}`);
+      const err = error as any;
+      console.warn(
+        'Supabase landing query failed (ticket_types embed); falling back',
+        {
+          message: err?.message,
+          code: err?.code,
+          details: err?.details,
+          hint: err?.hint,
+          // Some Supabase error objects end up with non-enumerable fields,
+          // so also include the raw value + its keys.
+          keys: Object.keys(err || {}),
+          errorString: String(err),
+          rawError: err,
+        }
+      );
+
+      // Use the existing fallback query and return results directly,
+      // to avoid a throw -> catch cycle.
+      const { data: fallbackData, error: fallbackError } = await supabase
+        .from('events')
+        .select(`
+          id,
+          name,
+          date,
+          venue,
+          image_url,
+          organizer_name,
+          status,
+          currency,
+          category,
+          ticket_price,
+          total_tickets,
+          tickets_available
+        `)
+        .eq('status', 'approved')
+        .gt('date', nowIso)
+        .order('date', { ascending: true })
+        .limit(limit);
+
+      if (fallbackError) {
+        const fbErr = fallbackError as any;
+        console.warn('Supabase landing fallback also failed', {
+          message: fbErr?.message,
+          code: fbErr?.code,
+          details: fbErr?.details,
+          hint: fbErr?.hint,
+          keys: Object.keys(fbErr || {}),
+          errorString: String(fbErr),
+          rawError: fbErr,
+        });
+        return [] as Event[];
+      }
+
+      return (fallbackData || []).map((event) => ({
+        ...event,
+        ticket_types: [],
+        sponsors: [],
+      })) as any as Event[];
     }
     return (data || []).map((event) => ({
       ...event,
@@ -352,13 +407,17 @@ export async function getApprovedEventsForLanding(limit: number = 12) {
       .limit(limit);
 
     if (fallbackError) {
-      console.error('Supabase fallback query error:', {
-        message: fallbackError.message,
-        code: fallbackError.code,
-        details: fallbackError.details,
-        hint: fallbackError.hint,
+      const fbErr = fallbackError as any;
+      console.warn('Supabase landing fallback also failed', {
+        message: fbErr?.message,
+        code: fbErr?.code,
+        details: fbErr?.details,
+        hint: fbErr?.hint,
+        keys: Object.keys(fbErr || {}),
+        errorString: String(fbErr),
+        rawError: fbErr,
       });
-      throw new Error(`Failed to fetch events: ${fallbackError.message}`);
+      return [] as Event[];
     }
 
     return (data || []).map((event) => ({

@@ -1,86 +1,83 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { Clock, Mail, MessageSquare } from 'lucide-react';
 import { StaticPageLayout } from '@/components/layout/static-page-layout';
+import { ContactForm } from '@/components/contact/contact-form';
 
 export const metadata: Metadata = {
   title: 'Contact Us | Ticket95.com',
   description: 'Contact Ticket95.com support for account, ticket, organizer, and payment help.',
 };
 
+const SUPPORT_EMAIL = 'support@ticket95.com';
+
 export default function ContactPage() {
   return (
     <StaticPageLayout
       title="Contact Us"
-      description="Our team is here to help with ticket access, payment confirmation, event management, and account recovery."
-      lastUpdated="March 16, 2026"
+      description="Send us a message and we will get back to you as soon as possible."
+      lastUpdated="July 21, 2026"
     >
-      <div className="space-y-10">
-        <section className="grid gap-4 sm:grid-cols-2">
-          <div className="rounded-xl border border-border/70 p-5">
-            <h2 className="text-lg font-semibold">General support</h2>
-            <p className="mt-2 text-sm text-muted-foreground">For account access, checkout issues, and ticket retrieval.</p>
-            <p className="mt-4 text-sm">
-              Email:
-              {' '}
-              <a className="text-primary hover:underline" href="mailto:support@ticket95.com">
-                support@ticket95.com
-              </a>
-            </p>
-            <p className="mt-1 text-sm">
-              Phone:
-              {' '}
-              <a className="text-primary hover:underline" href="tel:+1234567890">
-                +1 (234) 567-890
-              </a>
-            </p>
-          </div>
-          <div className="rounded-xl border border-border/70 p-5">
-            <h2 className="text-lg font-semibold">Organizer support</h2>
-            <p className="mt-2 text-sm text-muted-foreground">For event approval, payout, and ticket verification workflows.</p>
-            <p className="mt-4 text-sm">
-              Email:
-              {' '}
-              <a className="text-primary hover:underline" href="mailto:organizers@ticket95.com">
-                organizers@ticket95.com
-              </a>
-            </p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Include your organizer account email and event name so we can respond faster.
-            </p>
-          </div>
-        </section>
+      <div className="mx-auto max-w-5xl space-y-8">
+        <p className="text-center text-sm text-muted-foreground">
+          Looking for quick answers? Visit the{' '}
+          <Link href="/help" className="font-medium text-primary hover:underline">
+            Help Center
+          </Link>{' '}
+          or browse the{' '}
+          <Link href="/faq" className="font-medium text-primary hover:underline">
+            FAQ
+          </Link>
+          .
+        </p>
 
-        <section>
-          <h2 className="text-xl font-semibold">Support hours</h2>
-          <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
-            <li>Monday to Friday: 8:00 AM - 8:00 PM (UTC)</li>
-            <li>Saturday: 9:00 AM - 4:00 PM (UTC)</li>
-            <li>Sunday and holidays: Emergency event-day support only</li>
-          </ul>
-        </section>
+        <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_280px] lg:items-start">
+          <ContactForm />
 
-        <section>
-          <h2 className="text-xl font-semibold">Before contacting support</h2>
-          <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
-            <li>Provide your account email and order or ticket ID.</li>
-            <li>Include the event name, date, and a clear description of the issue.</li>
-            <li>For payment issues, attach your transaction reference and payment timestamp.</li>
-          </ul>
-        </section>
+          <aside className="space-y-4 lg:sticky lg:top-24">
+            <div className="rounded-2xl border border-border/70 bg-muted/20 p-5">
+              <h2 className="text-sm font-semibold tracking-tight">Direct contact</h2>
+              <ul className="mt-4 space-y-4 text-sm">
+                <li className="flex gap-3">
+                  <Mail className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                  <div>
+                    <p className="font-medium text-foreground">Email</p>
+                    <a
+                      href={`mailto:${SUPPORT_EMAIL}`}
+                      className="mt-0.5 block text-muted-foreground hover:text-primary hover:underline"
+                    >
+                      {SUPPORT_EMAIL}
+                    </a>
+                  </div>
+                </li>
+                <li className="flex gap-3">
+                  <Clock className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                  <div>
+                    <p className="font-medium text-foreground">Response time</p>
+                    <p className="mt-0.5 text-muted-foreground">Mon–Fri, 8:00 AM – 8:00 PM UTC</p>
+                    <p className="text-muted-foreground">Sat, 9:00 AM – 4:00 PM UTC</p>
+                  </div>
+                </li>
+                <li className="flex gap-3">
+                  <MessageSquare className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                  <div>
+                    <p className="font-medium text-foreground">Organizers</p>
+                    <a
+                      href="mailto:organizers@ticket95.com"
+                      className="mt-0.5 block text-muted-foreground hover:text-primary hover:underline"
+                    >
+                      organizers@ticket95.com
+                    </a>
+                  </div>
+                </li>
+              </ul>
+            </div>
 
-        <section>
-          <h2 className="text-xl font-semibold">Helpful links</h2>
-          <p className="mt-3 text-sm text-muted-foreground">
-            You may find immediate answers in the
-            {' '}
-            <Link href="/help" className="text-primary hover:underline">Help Center</Link>
-            {' '}
-            or
-            {' '}
-            <Link href="/faq" className="text-primary hover:underline">FAQ</Link>
-            .
-          </p>
-        </section>
+            <p className="rounded-2xl border border-dashed border-border/70 px-5 py-4 text-sm text-muted-foreground">
+              Include your order or ticket ID when writing about a purchase so we can help faster.
+            </p>
+          </aside>
+        </div>
       </div>
     </StaticPageLayout>
   );

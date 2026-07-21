@@ -181,7 +181,7 @@ After running migrations, verify:
 
 - [ ] All 5 tables exist
 - [ ] RLS is enabled on all tables
-- [ ] Can sign up through Supabase Auth
+- [ ] Can register through Supabase Auth
 - [ ] User record is auto-created on signup
 - [ ] Can promote user to organizer/admin role
 - [ ] Organizers can create events

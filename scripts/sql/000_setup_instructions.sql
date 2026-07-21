@@ -36,13 +36,13 @@
 
 -- 2. AUTHENTICATION:
 --    - Users are automatically created in the 'users' table when they
---      sign up through Supabase Auth
+--      register through Supabase Auth
 --    - Password management is handled by Supabase Auth
 --    - The password_hash field in users table is not used but kept for compatibility
 
 -- 3. ADMIN USER SETUP:
 --    To create an admin user:
---    a) Sign up normally through your app
+--    a) Register normally through your app
 --    b) Run this SQL to promote them to admin:
 --       UPDATE users SET role = 'admin' WHERE email = 'your-email@example.com';
 --    
@@ -53,7 +53,7 @@
 
 -- 4. TRIGGERS AND FUNCTIONS:
 --    - Auto-update timestamps on record changes
---    - Auto-create user records when auth users sign up
+--    - Auto-create user records when auth users register
 --    - Auto-populate ticket details from events
 --    - Auto-manage ticket inventory on orders
 --    - Auto-handle refunds

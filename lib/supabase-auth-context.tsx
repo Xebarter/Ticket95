@@ -1,9 +1,12 @@
 'use client';
 
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
-import { supabase } from './supabase-client';
-import { getUserByEmail, createUser, updateUserProfile } from './supabase-db';
+import { getSupabaseBrowserClient } from './supabase/browser';
+import { getUserByEmail, updateUserProfile } from './supabase-db';
+import { setOAuthRedirectCookie } from './auth-redirect';
 import type { User } from './supabase-client';
+
+const supabase = getSupabaseBrowserClient();
 
 interface AuthContextType {
   user: User | null;
@@ -12,7 +15,11 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<User>;
   loginWithGoogle: (redirectTo?: string) => Promise<void>;
   logout: () => Promise<void>;
-  updateProfile: (profile: { profile_name?: string; profile_description?: string; profile_logo_url?: string }) => Promise<void>;
+  updateProfile: (profile: {
+    profile_name?: string;
+    profile_description?: string;
+    profile_logo_url?: string;
+  }) => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   updatePassword: (newPassword: string) => Promise<void>;
   resendVerificationEmail: () => Promise<void>;
@@ -57,8 +64,13 @@ const fallbackAuthContext: AuthContextType = {
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isInitialized, setIsInitialized] = useState(false);
   const claimedGuestPurchaseUserIdsRef = useRef<Set<string>>(new Set());
+  const userRef = useRef<User | null>(null);
+  const signingOutRef = useRef(false);
+
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
 
   const claimGuestPurchases = useCallback(async (authUserId: string, accessToken?: string | null) => {
     if (!authUserId || !accessToken) return;
@@ -83,172 +95,262 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  // Check if user is logged in on mount
+  const syncSessionUser = useCallback(async (accessToken?: string | null) => {
+    if (!accessToken) return null;
+
+    try {
+      const response = await fetch('/api/auth/session', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
+
+      if (!response.ok) return null;
+      const payload = await response.json().catch(() => null);
+      return (payload?.user as User | undefined) || null;
+    } catch (error) {
+      console.error('Session sync failed:', error);
+      return null;
+    }
+  }, []);
+
+  const resolveAppUser = useCallback(
+    async (email: string | null | undefined, accessToken?: string | null) => {
+      // Always refresh the httpOnly app cookie while Supabase session is valid.
+      const synced = await syncSessionUser(accessToken);
+      if (synced) return synced;
+
+      if (email) {
+        try {
+          return await getUserByEmail(email);
+        } catch {
+          // Fall through
+        }
+      }
+
+      return null;
+    },
+    [syncSessionUser]
+  );
+
+  const applyAuthenticatedSession = useCallback(
+    async (session: { user: { id: string; email?: string | null }; access_token: string }) => {
+      await claimGuestPurchases(session.user.id, session.access_token);
+      const userData = await resolveAppUser(session.user.email, session.access_token);
+      if (userData) {
+        setUser(userData);
+        return userData;
+      }
+      // Keep existing user if sync briefly fails — do not force sign-out.
+      return userRef.current;
+    },
+    [claimGuestPurchases, resolveAppUser]
+  );
+
   useEffect(() => {
-    if (isInitialized) return; // Prevent multiple initializations
-    
+    let mounted = true;
+
     const checkAuth = async () => {
       try {
         const {
           data: { session },
         } = await supabase.auth.getSession();
 
+        if (!mounted) return;
+
         if (session?.user) {
-          await claimGuestPurchases(session.user.id, session.access_token);
-          // Fetch full user data from our users table
-          const userData = await getUserByEmail(session.user.email!);
-          if (userData) {
-            setUser(userData);
-          }
+          await applyAuthenticatedSession(session);
         }
       } catch (error) {
         console.error('Auth check failed:', error);
-        // Handle NavigatorLockAcquireTimeoutError gracefully
         if (error instanceof Error && error.message.includes('NavigatorLockAcquireTimeoutError')) {
           console.warn('Auth lock timeout - retrying in 2 seconds...');
-          setTimeout(() => {
-            // Retry auth check once after timeout
-            checkAuth();
+          window.setTimeout(() => {
+            void checkAuth();
           }, 2000);
+          return;
         }
       } finally {
-        setLoading(false);
-        setIsInitialized(true);
+        if (mounted) setLoading(false);
       }
     };
 
-    checkAuth();
+    void checkAuth();
 
-    // Subscribe to auth changes
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
-      // Only process auth state changes after initial initialization
-      if (!isInitialized) return;
-      
-      try {
-        if (session?.user) {
-          await claimGuestPurchases(session.user.id, session.access_token);
-          const userData = await getUserByEmail(session.user.email!);
-          setUser(userData || null);
-        } else {
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      // Avoid clearing UI auth on transient events / token refresh noise.
+      void (async () => {
+        if (!mounted) return;
+
+        if (event === 'SIGNED_OUT') {
+          if (signingOutRef.current) {
+            setUser(null);
+            return;
+          }
+
+          // Unexpected sign-out (e.g. another tab). Try to recover first.
+          try {
+            const {
+              data: { session: recovered },
+            } = await supabase.auth.getSession();
+            if (recovered?.user) {
+              await applyAuthenticatedSession(recovered);
+              return;
+            }
+          } catch {
+            // fall through
+          }
+
           setUser(null);
+          await fetch('/api/auth/logout', { method: 'POST' }).catch(() => null);
+          return;
         }
-      } catch (error) {
-        console.error('Auth state change failed:', error);
-        // Handle NavigatorLockAcquireTimeoutError gracefully
-        if (error instanceof Error && error.message.includes('NavigatorLockAcquireTimeoutError')) {
-          console.warn('Auth state change lock timeout - ignoring to prevent conflicts');
-          return; // Don't update state on lock timeout to prevent conflicts
+
+        if (
+          (event === 'SIGNED_IN' ||
+            event === 'TOKEN_REFRESHED' ||
+            event === 'USER_UPDATED' ||
+            event === 'INITIAL_SESSION') &&
+          session?.user
+        ) {
+          try {
+            await applyAuthenticatedSession(session);
+          } catch (error) {
+            console.error('Auth state change failed:', error);
+          }
         }
-        setUser(null);
-      }
-      setLoading(false);
+      })();
     });
 
-    return () => {
-      subscription?.unsubscribe();
+    const refreshWhileActive = () => {
+      void (async () => {
+        if (document.visibilityState !== 'visible') return;
+        if (signingOutRef.current) return;
+        try {
+          const {
+            data: { session },
+          } = await supabase.auth.getSession();
+          if (session?.user) {
+            await applyAuthenticatedSession(session);
+          }
+        } catch (error) {
+          console.error('Session keep-alive failed:', error);
+        }
+      })();
     };
-  }, [claimGuestPurchases, isInitialized]);
+
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') refreshWhileActive();
+    };
+
+    window.addEventListener('focus', refreshWhileActive);
+    document.addEventListener('visibilitychange', onVisibility);
+    const keepAliveId = window.setInterval(refreshWhileActive, 1000 * 60 * 30);
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+      window.removeEventListener('focus', refreshWhileActive);
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.clearInterval(keepAliveId);
+    };
+  }, [applyAuthenticatedSession]);
 
   const signup = useCallback(
     async (email: string, password: string, role: 'customer' | 'organizer' | 'admin'): Promise<User> => {
       try {
-        // Sign up with Supabase Auth
         const { data: authData, error: authError } = await supabase.auth.signUp({
           email,
           password,
           options: {
             data: {
-              role: role, // Store role in user metadata
+              role,
             },
           },
         });
 
         if (authError) {
           console.error('Supabase auth error:', authError);
-          throw new Error(authError.message || 'Failed to create account');
+          throw new Error('Unable to continue. Please try again.');
         }
-        
+
         if (!authData.user) {
-          throw new Error('Sign up failed - no user returned');
+          throw new Error('Unable to continue. Please try again.');
         }
 
-        await claimGuestPurchases(authData.user.id, authData.session?.access_token);
-
-        // Check if email confirmation is required
         if (authData.session === null) {
-          // Email confirmation is enabled, user needs to verify email
-          throw new Error('Account created! Please check your email to verify your account before signing in.');
+          throw new Error('Email verification is required. Please check your email and then continue.');
         }
 
-        // If we have a session, the user is automatically logged in
-        // Wait for the trigger to create the user record
-        // Retry fetching the user record for up to 5 seconds
-        let user: User | null = null;
-        let attempts = 0;
-        const maxAttempts = 10;
-        
-        while (!user && attempts < maxAttempts) {
-          await new Promise(resolve => setTimeout(resolve, 500)); // Wait 500ms
-          try {
-            user = await getUserByEmail(email);
-          } catch (error) {
-            // Ignore errors during retry, will try again
-            console.log('Retrying user fetch...', attempts + 1);
-          }
-          attempts++;
+        const userData = await applyAuthenticatedSession(authData.session);
+        if (!userData) {
+          throw new Error('Your profile is not ready yet. Please try again in a moment.');
         }
 
-        if (!user) {
-          // If trigger didn't create user yet, ask the user to check email and retry later
-          throw new Error('Account created. Please verify your email, then try signing in.');
-        }
-
-        setUser(user);
-        return user;
+        return userData;
       } catch (error) {
         console.error('Signup failed:', error);
         if (error instanceof Error) {
           throw error;
         }
-        throw new Error('Failed to create account. Please try again.');
+        throw new Error('Unable to continue. Please try again.');
       }
     },
-    [claimGuestPurchases]
+    [applyAuthenticatedSession]
   );
 
-  const login = useCallback(async (email: string, password: string): Promise<User> => {
-    try {
-      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+  const login = useCallback(
+    async (email: string, password: string): Promise<User> => {
+      try {
+        const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
 
-      if (authError) throw authError;
+        if (authError) {
+          const msg = (authError.message || '').toLowerCase();
+          const looksLikeMissingUser =
+            authError.code === 'invalid_grant' ||
+            msg.includes('invalid login credentials') ||
+            msg.includes('user not found') ||
+            msg.includes('no user');
 
-      await claimGuestPurchases(authData.user.id, authData.session?.access_token);
+          if (looksLikeMissingUser) {
+            return await signup(email, password, 'customer');
+          }
 
-      const userData = await getUserByEmail(email);
-      if (!userData) throw new Error('User not found');
+          throw authError;
+        }
 
-      setUser(userData);
-      return userData;
-    } catch (error) {
-      console.error('Login failed:', error);
-      throw error;
-    }
-  }, [claimGuestPurchases]);
+        if (!authData.session) {
+          throw new Error('Unable to sign you in right now. Please try again.');
+        }
+
+        const userData = await applyAuthenticatedSession(authData.session);
+        if (!userData) {
+          throw new Error('Unable to sign you in right now. Please try again.');
+        }
+
+        return userData;
+      } catch (error) {
+        console.error('Login failed:', error);
+        throw error;
+      }
+    },
+    [applyAuthenticatedSession, signup]
+  );
 
   const loginWithGoogle = useCallback(async (redirectTo = '/profile') => {
     const safeRedirect = redirectTo.startsWith('/') ? redirectTo : '/profile';
-    const callbackUrl = new URL('/auth/callback', window.location.origin);
-    callbackUrl.searchParams.set('next', safeRedirect);
+    setOAuthRedirectCookie(safeRedirect);
 
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: callbackUrl.toString(),
+        redirectTo: `${window.location.origin}/auth/callback`,
         queryParams: {
           access_type: 'offline',
           prompt: 'select_account',
@@ -260,17 +362,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const logout = useCallback(async () => {
+    signingOutRef.current = true;
     try {
       await supabase.auth.signOut();
+      await fetch('/api/auth/logout', { method: 'POST' }).catch(() => null);
       setUser(null);
     } catch (error) {
       console.error('Logout failed:', error);
       throw error;
+    } finally {
+      signingOutRef.current = false;
     }
   }, []);
 
   const updateProfile = useCallback(
-    async (profile: { profile_name?: string; profile_description?: string; profile_logo_url?: string }) => {
+    async (profile: {
+      profile_name?: string;
+      profile_description?: string;
+      profile_logo_url?: string;
+    }) => {
       if (!user) throw new Error('Not authenticated');
 
       try {
@@ -312,8 +422,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const resendVerificationEmail = useCallback(async () => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
       if (!session?.user?.email) {
         throw new Error('No user session found');
       }
@@ -331,7 +443,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading, signup, login, loginWithGoogle, logout, updateProfile, resetPassword, updatePassword, resendVerificationEmail }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        loading,
+        signup,
+        login,
+        loginWithGoogle,
+        logout,
+        updateProfile,
+        resetPassword,
+        updatePassword,
+        resendVerificationEmail,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

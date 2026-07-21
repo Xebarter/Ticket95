@@ -4,7 +4,7 @@ This guide walks you through setting up TicketRevolution with Supabase as the da
 
 ## Prerequisites
 
-- A Supabase account (sign up at https://supabase.com)
+- A Supabase account (register at https://supabase.com)
 - Node.js 18+ installed
 - This TicketRevolution project cloned locally
 
@@ -127,7 +127,7 @@ WHERE email = 'admin@ticketrevolution.com';
 
 ### Method 2: Through Your Application
 
-1. Sign up through your app at `/signup`
+1. Register through your app
 2. Go to Supabase **SQL Editor** and promote the user to admin:
 
 ```sql
@@ -158,7 +158,7 @@ Visit `http://localhost:3000` in your browser.
 
 ## Step 8: Test the Setup
 
-1. **Sign up** as a new customer
+1. **Register** as a new customer
 2. **Go to admin dashboard** at `/admin` (login with admin credentials)
 3. **Browse events** on the home page
 4. **Create an organizer account** and create an event

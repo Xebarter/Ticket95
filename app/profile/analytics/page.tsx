@@ -17,7 +17,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart';
-import { AlertTriangle, BarChart3, CalendarClock, CheckCircle2, Ticket, TrendingUp } from 'lucide-react';
+import { AlertTriangle, CalendarClock } from 'lucide-react';
 import { getEventLifecycleStatus } from '@/lib/event-status';
 
 const formatMoney = (amount: number, currency = 'USD') =>
@@ -139,75 +139,50 @@ export default function ProfileAnalyticsPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-[320px] items-center justify-center">
-        <div className="text-center">
-          <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-          <p className="text-sm text-muted-foreground">Loading analytics...</p>
-        </div>
+      <div className="flex min-h-[280px] items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
       </div>
     );
   }
 
   return (
     <div className="space-y-5">
-      <header className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Analytics</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Revenue, order quality, and ticket usage performance across your events.
-          </p>
-        </div>
-        <Badge variant="outline" className="w-fit rounded-full">
-          {myEvents.length} event{myEvents.length === 1 ? '' : 's'} tracked
-        </Badge>
+      <header className="flex items-center justify-between gap-3">
+        <h1 className="text-2xl font-semibold tracking-tight">Analytics</h1>
+        <span className="text-sm tabular-nums text-muted-foreground">{myEvents.length}</span>
       </header>
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Card className="border-border/70">
           <CardContent className="p-4">
-            <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Net revenue</p>
-            <p className="mt-1 inline-flex items-center text-2xl font-semibold">
-              <TrendingUp className="mr-1.5 h-5 w-5 text-emerald-600" />
+            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Net revenue</p>
+            <p className="mt-1.5 text-2xl font-semibold tracking-tight">
               {formatMoney(analytics.netRevenue, analytics.currency)}
             </p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Gross {formatMoney(analytics.grossRevenue, analytics.currency)} less refunds
-            </p>
           </CardContent>
         </Card>
 
         <Card className="border-border/70">
           <CardContent className="p-4">
-            <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Average order value</p>
-            <p className="mt-1 inline-flex items-center text-2xl font-semibold">
-              <BarChart3 className="mr-1.5 h-5 w-5 text-primary" />
+            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Avg order</p>
+            <p className="mt-1.5 text-2xl font-semibold tracking-tight">
               {formatMoney(analytics.averageOrderValue, analytics.currency)}
             </p>
-            <p className="mt-1 text-xs text-muted-foreground">Completed orders only</p>
           </CardContent>
         </Card>
 
         <Card className="border-border/70">
           <CardContent className="p-4">
-            <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Tickets sold</p>
-            <p className="mt-1 inline-flex items-center text-2xl font-semibold">
-              <Ticket className="mr-1.5 h-5 w-5 text-primary" />
-              {analytics.totalTicketsSold}
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Capacity {analytics.totalEventCapacity} across all listed events
-            </p>
+            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Sold</p>
+            <p className="mt-1.5 text-2xl font-semibold tracking-tight">{analytics.totalTicketsSold}</p>
           </CardContent>
         </Card>
 
         <Card className="border-border/70">
           <CardContent className="p-4">
-            <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Sell-through</p>
-            <p className="mt-1 inline-flex items-center text-2xl font-semibold">
-              <CheckCircle2 className="mr-1.5 h-5 w-5 text-primary" />
-              {analytics.sellThrough.toFixed(1)}%
-            </p>
-            <Progress value={analytics.sellThrough} className="mt-3 h-2.5" />
+            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Sell-through</p>
+            <p className="mt-1.5 text-2xl font-semibold tracking-tight">{analytics.sellThrough.toFixed(1)}%</p>
+            <Progress value={analytics.sellThrough} className="mt-3 h-2" />
           </CardContent>
         </Card>
       </div>
@@ -215,11 +190,11 @@ export default function ProfileAnalyticsPage() {
       <div className="grid gap-3 xl:grid-cols-3">
         <Card className="border-border/70 xl:col-span-2">
           <CardHeader>
-            <CardTitle className="text-base">Revenue trend (last 6 months)</CardTitle>
+            <CardTitle className="text-base">Revenue</CardTitle>
           </CardHeader>
           <CardContent>
             {analytics.monthlyTrend.length === 0 ? (
-              <p className="py-8 text-center text-sm text-muted-foreground">No completed orders yet.</p>
+              <p className="py-8 text-center text-sm text-muted-foreground">None</p>
             ) : (
               <ChartContainer config={revenueChartConfig} className="h-[280px] w-full">
                 <BarChart data={analytics.monthlyTrend}>
@@ -236,11 +211,11 @@ export default function ProfileAnalyticsPage() {
 
         <Card className="border-border/70">
           <CardHeader>
-            <CardTitle className="text-base">Order status mix</CardTitle>
+            <CardTitle className="text-base">Orders</CardTitle>
           </CardHeader>
           <CardContent>
             {analytics.orderStatusData.length === 0 ? (
-              <p className="py-8 text-center text-sm text-muted-foreground">No orders yet.</p>
+              <p className="py-8 text-center text-sm text-muted-foreground">None</p>
             ) : (
               <div className="space-y-4">
                 <div className="h-[180px]">
@@ -283,7 +258,7 @@ export default function ProfileAnalyticsPage() {
       <div className="grid gap-3 xl:grid-cols-2">
         <Card className="border-border/70">
           <CardHeader>
-            <CardTitle className="text-base">Event approval pipeline</CardTitle>
+            <CardTitle className="text-base">Pipeline</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="rounded-xl border border-border/70 p-3">
@@ -331,23 +306,23 @@ export default function ProfileAnalyticsPage() {
 
         <Card className="border-border/70">
           <CardHeader>
-            <CardTitle className="text-base">Ticket lifecycle health</CardTitle>
+            <CardTitle className="text-base">Tickets</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="flex items-center justify-between rounded-xl border border-border/70 p-3">
-              <p className="text-sm">Valid tickets</p>
+              <p className="text-sm">Valid</p>
               <p className="text-lg font-semibold">{analytics.ticketsByStatus.valid}</p>
             </div>
             <div className="flex items-center justify-between rounded-xl border border-border/70 p-3">
-              <p className="text-sm">Used tickets</p>
+              <p className="text-sm">Used</p>
               <p className="text-lg font-semibold">{analytics.ticketsByStatus.used}</p>
             </div>
             <div className="flex items-center justify-between rounded-xl border border-border/70 p-3">
-              <p className="text-sm">Expired tickets</p>
+              <p className="text-sm">Expired</p>
               <p className="text-lg font-semibold">{analytics.ticketsByStatus.expired}</p>
             </div>
             <div className="flex items-center justify-between rounded-xl border border-border/70 p-3">
-              <p className="text-sm">Refunded tickets</p>
+              <p className="text-sm">Refunded</p>
               <p className="text-lg font-semibold">{analytics.ticketsByStatus.refunded}</p>
             </div>
           </CardContent>
@@ -356,11 +331,11 @@ export default function ProfileAnalyticsPage() {
 
       <Card className="border-border/70">
         <CardHeader>
-          <CardTitle className="text-base">Top performing events</CardTitle>
+          <CardTitle className="text-base">Top events</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           {analytics.topEvents.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Create events to unlock performance rankings.</p>
+            <p className="text-sm text-muted-foreground">None</p>
           ) : (
             analytics.topEvents.map((event) => (
               <div key={event.id} className="rounded-xl border border-border/70 p-3">
@@ -388,11 +363,11 @@ export default function ProfileAnalyticsPage() {
 
       <Card className="border-border/70">
         <CardHeader>
-          <CardTitle className="text-base">Recent order activity</CardTitle>
+          <CardTitle className="text-base">Recent orders</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2">
           {analytics.recentOrders.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No order activity yet.</p>
+            <p className="text-sm text-muted-foreground">None</p>
           ) : (
             analytics.recentOrders.map((order) => (
               <div key={order.id} className="flex flex-col gap-2 rounded-xl border border-border/70 p-3 sm:flex-row sm:items-center sm:justify-between">
@@ -430,11 +405,9 @@ export default function ProfileAnalyticsPage() {
 
       {analytics.refundedRevenue > 0 ? (
         <Card className="border-amber-500/40">
-          <CardContent className="flex items-start gap-2 p-4 text-sm">
-            <AlertTriangle className="mt-0.5 h-4 w-4 text-amber-500" />
-            <p className="text-muted-foreground">
-              Refunded revenue totals {formatMoney(analytics.refundedRevenue, analytics.currency)}. Net revenue already excludes refunds.
-            </p>
+          <CardContent className="flex items-center gap-2 p-4 text-sm text-muted-foreground">
+            <AlertTriangle className="h-4 w-4 shrink-0 text-amber-500" />
+            Refunds {formatMoney(analytics.refundedRevenue, analytics.currency)}
           </CardContent>
         </Card>
       ) : null}

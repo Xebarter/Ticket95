@@ -4,7 +4,7 @@ A modern, full-stack event ticketing platform built with Next.js and Supabase, e
 
 ## Features
 
-- **User Authentication**: Sign up and login with email/password, role-based access control (customer, organizer, admin)
+- **User Authentication**: Register and login with email/password, role-based access control (customer, organizer, admin)
 - **Event Management**: Organizers can create and manage events with detailed information
 - **Ticket Sales**: Customers can browse approved events and purchase tickets with real-time availability
 - **Admin Approval System**: Admin dashboard to review, approve, or reject user-created events
@@ -144,7 +144,7 @@ All tables include Row Level Security (RLS) policies for security.
 
 ### For Customers
 
-1. **Sign Up**: Create account at `/signup` selecting "Customer" role
+1. **Register**: Create profile at `/signup` selecting "Customer" role
 2. **Browse Events**: View all approved events on the home page
 3. **Purchase Tickets**: Click "Purchase" on an event and select quantity
 4. **View Tickets**: Go to `/dashboard` to see your tickets and orders
@@ -152,7 +152,7 @@ All tables include Row Level Security (RLS) policies for security.
 
 ### For Organizers
 
-1. **Sign Up**: Create account at `/signup` selecting "Organizer" role
+1. **Register**: Create profile at `/signup` selecting "Organizer" role
 2. **Create Events**: Go to `/organizer/dashboard` and click "Create Event"
 3. **Fill Event Details**: Use the 4-step wizard to enter event information
 4. **Add Sponsors**: Optionally add sponsors with logos

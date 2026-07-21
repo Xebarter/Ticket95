@@ -128,7 +128,7 @@ export function EventApprovalCard({ event, onApprove }: EventApprovalCardProps) 
             <div className="min-w-0">
               <CardTitle className="line-clamp-2 text-base sm:text-lg">{event.name}</CardTitle>
               <CardDescription className="text-xs sm:text-sm">
-                Submitted by <span className="font-medium text-foreground">{event.organizer_name}</span>
+                {event.organizer_name}
               </CardDescription>
               {event.organizer_phone ? (
                 <p className="mt-1 inline-flex items-center gap-1 text-[11px] text-muted-foreground">
@@ -136,9 +136,6 @@ export function EventApprovalCard({ event, onApprove }: EventApprovalCardProps) 
                   {event.organizer_phone}
                 </p>
               ) : null}
-              <p className="mt-1 text-[11px] text-muted-foreground">
-                Created on {new Date(event.created_at).toLocaleDateString()}
-              </p>
             </div>
           </div>
           <Badge variant="outline" className="w-fit rounded-full border-amber-500/40 bg-amber-500/10 text-[10px] uppercase tracking-wide text-amber-800">
@@ -176,25 +173,18 @@ export function EventApprovalCard({ event, onApprove }: EventApprovalCardProps) 
         )}
 
         <div className="space-y-2 border-t border-border/70 pt-4">
-          <label className="text-xs font-medium text-foreground sm:text-sm">
-            Internal note to organizer (optional)
-          </label>
           <Textarea
-            placeholder="Share quick context on why this event was approved or rejected..."
+            placeholder="Note (optional)"
             value={note}
             onChange={(e) => setNote(e.target.value)}
             disabled={loading}
-            rows={3}
+            rows={2}
           />
         </div>
 
         <div className="flex flex-col gap-2 pt-1 sm:flex-row">
-          <Button
-            onClick={handleApprove}
-            disabled={loading}
-            className="flex-1 rounded-xl"
-          >
-            {loading ? 'Processing...' : 'Approve event'}
+          <Button onClick={handleApprove} disabled={loading} className="flex-1 rounded-xl">
+            {loading ? '…' : 'Approve'}
           </Button>
           <Button
             onClick={handleReject}
@@ -202,7 +192,7 @@ export function EventApprovalCard({ event, onApprove }: EventApprovalCardProps) 
             variant="destructive"
             className="flex-1 rounded-xl"
           >
-            {loading ? 'Processing...' : 'Reject event'}
+            {loading ? '…' : 'Reject'}
           </Button>
         </div>
       </CardContent>

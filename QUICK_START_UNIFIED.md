@@ -99,7 +99,7 @@ Row Level Security ensures:
 
 ### Test as Regular User:
 ```
-1. Sign up new account
+1. Register new profile
 2. Browse events and purchase a ticket
 3. Click "Create Event" and create an event
 4. Go to dashboard - see both tabs working

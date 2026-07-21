@@ -283,13 +283,12 @@ function HeaderClientInner() {
 
   const handleLogout = async () => {
     try {
-      await logout()
-      await fetch('/api/auth/logout', { method: 'POST' })
+      await logout();
     } finally {
-      router.push('/')
-      router.refresh()
+      router.push('/');
+      router.refresh();
     }
-  }
+  };
 
   const profileControl = user ? (
     <UserProfileMenu

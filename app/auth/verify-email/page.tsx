@@ -82,7 +82,7 @@ function VerifyEmailPageInner() {
           </Alert>
           <div className="grid gap-3">
             <Button asChild className={authPrimaryButtonClassName}>
-              <Link href="/signup">Create a new account</Link>
+              <Link href="/signup">Sign up</Link>
             </Button>
             <Button asChild variant="outline" className="h-11 border-slate-200">
               <Link href="/login">Go to sign in</Link>

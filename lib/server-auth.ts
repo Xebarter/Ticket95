@@ -25,8 +25,37 @@ export async function getServerAuthUser(request: NextRequest): Promise<ServerAut
       .eq('id', authUserData.user.id)
       .single();
 
-    if (userError || !userRow) {
-      return null;
+    if (!userRow) {
+      // If the public `users` row doesn't exist yet (or trigger hasn't
+      // materialized it), create it so the rest of the app can treat the
+      // user like they already had a profile.
+      const roleFromMeta = (authUserData.user.user_metadata as any)?.role;
+      const role =
+        roleFromMeta === 'admin' || roleFromMeta === 'organizer' || roleFromMeta === 'customer'
+          ? roleFromMeta
+          : 'customer';
+
+      const { data: ensuredUserRow, error: ensureError } = await supabaseAdmin
+        .from('users')
+        .upsert(
+          {
+            id: authUserData.user.id,
+            email: authUserData.user.email || '',
+            password_hash: '',
+            role,
+          },
+          { onConflict: 'id' }
+        )
+        .select('id, email, role')
+        .single();
+
+      if (ensureError || !ensuredUserRow) return null;
+
+      return {
+        userId: ensuredUserRow.id,
+        email: ensuredUserRow.email,
+        role: ensuredUserRow.role as 'admin' | 'organizer' | 'customer',
+      };
     }
 
     return {

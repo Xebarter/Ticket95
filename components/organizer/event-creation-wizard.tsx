@@ -6,7 +6,6 @@ import { useAuth } from '@/lib/supabase-auth-context';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { AlertCircle, CheckCircle2, ChevronLeft, ChevronRight, Trash2, Plus, Image as ImageIcon, Star, ArrowLeft } from 'lucide-react';
 import { createEvent, createSponsor, createTicketTypes, updateEvent, replaceEventSponsors, replaceEventTicketTypes } from '@/lib/supabase-db';
 import { supabase } from '@/lib/supabase-client';
@@ -263,12 +262,12 @@ export function EventCreationWizard({
     });
   }, [formData.date]);
 
-  const steps: Array<{ key: WizardStep; title: string; description: string }> = [
-    { key: 'basic', title: 'Basic Info', description: 'Event name, date, and venue' },
-    { key: 'pricing', title: 'Pricing', description: 'Ticket price and quantity' },
-    { key: 'organizer', title: 'Organizer', description: 'Your branding' },
-    { key: 'sponsors', title: 'Sponsors', description: 'Add sponsors (optional)' },
-    { key: 'review', title: 'Review', description: 'Confirm everything' },
+  const steps: Array<{ key: WizardStep; title: string }> = [
+    { key: 'basic', title: 'Basics' },
+    { key: 'pricing', title: 'Tickets' },
+    { key: 'organizer', title: 'Organizer' },
+    { key: 'sponsors', title: 'Sponsors' },
+    { key: 'review', title: 'Review' },
   ];
 
   const currentStepIndex = steps.findIndex((s) => s.key === step);
@@ -807,125 +806,110 @@ export function EventCreationWizard({
   };
 
   return (
-    <div className={isAdminContext ? 'p-0' : 'min-h-screen bg-gradient-to-br from-primary/5 via-background to-background p-4 sm:p-6'}>
-      <div className="max-w-3xl mx-auto">
-        <div className="mb-6">
-          {isAdminContext && onCancel && (
-            <Button variant="ghost" size="sm" className="mb-3 px-0" onClick={onCancel}>
-              <ArrowLeft className="w-4 h-4 mr-1" />
-              Back to events
+    <div className="space-y-5">
+      {isAdminContext ? (
+        <div>
+          {onCancel ? (
+            <Button variant="ghost" size="sm" className="mb-3 h-8 px-0" onClick={onCancel}>
+              <ArrowLeft className="mr-1 h-4 w-4" />
+              Back
             </Button>
-          )}
-          <h1 className="text-3xl font-bold tracking-tight">
-            {mode === 'edit' ? 'Edit event' : isAdminContext ? 'Create event (Admin)' : 'Create an event'}
+          ) : null}
+          <h1 className="text-2xl font-semibold tracking-tight">
+            {mode === 'edit' ? 'Edit' : 'Create'}
           </h1>
-          <p className="text-muted-foreground mt-1">
-            {isAdminContext
-              ? 'Create and publish a complete event listing from the admin dashboard.'
-              : 'A guided setup that helps you publish a polished event in minutes.'}
-          </p>
         </div>
+      ) : null}
 
-        {/* Progress indicator */}
-        <div className="mb-6">
-          <div className="flex justify-between mb-3 gap-2">
-            {steps.map((s, idx) => (
+      <div className="space-y-3">
+        <div className="flex gap-1.5 sm:gap-2">
+          {steps.map((s, idx) => {
+            const active = step === s.key;
+            const done = idx < currentStepIndex;
+            return (
               <button
                 type="button"
                 key={s.key}
                 onClick={() => goToStep(s.key)}
                 disabled={loading}
-                className={`flex-1 text-center rounded-lg p-1 transition-colors ${
-                  idx <= currentStepIndex ? 'opacity-100' : 'opacity-60'
-                } ${step === s.key ? 'bg-primary/10' : 'hover:bg-muted/50'} ${
-                  loading ? 'cursor-not-allowed' : 'cursor-pointer'
-                }`}
-                aria-current={step === s.key ? 'step' : undefined}
-                aria-label={`Go to ${s.title} step`}
+                className={`flex min-w-0 flex-1 flex-col items-center gap-1.5 rounded-xl px-1 py-2 transition-colors ${
+                  active ? 'bg-primary/10' : 'hover:bg-muted/50'
+                } ${loading ? 'cursor-not-allowed opacity-60' : ''}`}
+                aria-current={active ? 'step' : undefined}
+                aria-label={s.title}
               >
-                <div
-                  className={`w-10 h-10 rounded-full flex items-center justify-center mx-auto mb-2 font-semibold ${
-                    step === s.key
-                      ? 'bg-primary text-primary-foreground'
-                      : idx <= currentStepIndex
+                <span
+                  className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold ${
+                    active || done
                       ? 'bg-primary text-primary-foreground'
                       : 'bg-muted text-muted-foreground'
                   }`}
                 >
-                  {idx < currentStepIndex ? <CheckCircle2 className="w-5 h-5" /> : idx + 1}
-                </div>
-                <div className="text-xs font-medium hidden sm:block">{s.title}</div>
-                <div className="text-[11px] text-muted-foreground hidden lg:block">{s.description}</div>
+                  {done ? <CheckCircle2 className="h-4 w-4" /> : idx + 1}
+                </span>
+                <span className="hidden truncate text-[11px] font-medium sm:block">{s.title}</span>
               </button>
-            ))}
-          </div>
-          <div className="w-full bg-muted h-1 rounded-full">
-            <div
-              className="bg-primary h-1 rounded-full transition-all"
-              style={{ width: `${((currentStepIndex + 1) / steps.length) * 100}%` }}
-            />
-          </div>
+            );
+          })}
         </div>
+        <div className="h-1 w-full overflow-hidden rounded-full bg-muted">
+          <div
+            className="h-full rounded-full bg-primary transition-all"
+            style={{ width: `${((currentStepIndex + 1) / steps.length) * 100}%` }}
+          />
+        </div>
+      </div>
 
         <div className="relative">
-          {loading && (
-            <div className="absolute inset-0 z-10 rounded-xl bg-background/70 backdrop-blur-sm flex items-center justify-center p-6">
-              <div className="text-center max-w-sm">
-                {uploadComplete ? (
-                  <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border-2 border-emerald-500/40 bg-emerald-500/10">
-                    <CheckCircle2 className="h-8 w-8 text-emerald-500" />
-                  </div>
-                ) : (
-                  <div className="w-14 h-14 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto" />
-                )}
-                <p className="mt-4 text-sm font-semibold">{loadingMessage || (mode === 'edit' ? 'Saving...' : 'Creating...')}</p>
-                <p className="mt-1 text-xs font-medium text-emerald-600">{uploadProgress}% uploaded</p>
-                <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-emerald-500/20">
-                  <div
-                    className="h-full rounded-full bg-emerald-500 transition-all duration-300"
-                    style={{ width: `${uploadProgress}%` }}
-                  />
+        {loading && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-background/80 p-6 backdrop-blur-sm">
+            <div className="w-full max-w-xs text-center">
+              {uploadComplete ? (
+                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/10">
+                  <CheckCircle2 className="h-6 w-6 text-emerald-500" />
                 </div>
-                {uploadComplete && (
-                  <p className="mt-2 text-xs font-medium text-emerald-600">Upload complete</p>
-                )}
-                <p className="mt-1 text-xs text-muted-foreground">Please don’t close this window.</p>
+              ) : (
+                <div className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+              )}
+              <p className="mt-3 text-sm font-medium">
+                {loadingMessage || (mode === 'edit' ? 'Saving…' : 'Creating…')}
+              </p>
+              <p className="mt-1 text-xs tabular-nums text-muted-foreground">{uploadProgress}%</p>
+              <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                <div
+                  className="h-full rounded-full bg-primary transition-all duration-300"
+                  style={{ width: `${uploadProgress}%` }}
+                />
               </div>
             </div>
-          )}
+          </div>
+        )}
 
-          <Card className="border-border/60 bg-card/70 backdrop-blur">
-            <CardHeader>
-              <CardTitle className="text-2xl">{steps[currentStepIndex].title}</CardTitle>
-              <CardDescription>{steps[currentStepIndex].description}</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {error && (
-                <div className="flex items-center gap-2 p-3 bg-destructive/10 text-destructive rounded-lg text-sm mb-6">
-                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                  {error}
-                </div>
-              )}
+        <div>
+          {error ? (
+            <div className="mb-5 flex items-center gap-2 rounded-xl bg-destructive/10 px-3 py-2.5 text-sm text-destructive">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              {error}
+            </div>
+          ) : null}
 
-            {/* Step: Basic Info */}
             {step === 'basic' && (
               <div className="space-y-5">
                 <div>
-                  <label className="text-sm font-semibold">Event Name *</label>
+                  <label className="text-sm font-medium">Name *</label>
                   <Input
                     type="text"
                     name="name"
-                    placeholder="e.g., Summer Music Festival 2024"
+                    placeholder="Event name"
                     value={formData.name}
                     onChange={handleChange}
-                    className="mt-1"
+                    className="mt-1.5"
                   />
-                  <p className="text-xs text-muted-foreground mt-1">Use a clear title people will recognize instantly.</p>
                 </div>
 
                 <div>
-                  <label className="text-sm font-semibold">Category *</label>
-                  <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  <label className="text-sm font-medium">Category *</label>
+                  <div className="mt-1.5 grid grid-cols-2 gap-2 sm:grid-cols-4">
                     {EVENT_CATEGORIES.map((category) => {
                       const selected = formData.category === category.id;
                       return (
@@ -935,10 +919,10 @@ export function EventCreationWizard({
                           onClick={() =>
                             setFormData((prev) => ({ ...prev, category: category.id }))
                           }
-                          className={`rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors ${
+                          className={`rounded-xl border px-3 py-2.5 text-sm font-medium transition-colors ${
                             selected
-                              ? 'border-slate-900 bg-slate-900 text-white'
-                              : 'border-border bg-background text-foreground hover:border-slate-400 hover:bg-muted/40'
+                              ? 'border-primary bg-primary text-primary-foreground'
+                              : 'border-border bg-background hover:bg-muted/40'
                           }`}
                         >
                           {category.label}
@@ -946,26 +930,23 @@ export function EventCreationWizard({
                       );
                     })}
                   </div>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Choose the category that best matches your event.
-                  </p>
                 </div>
 
                 <div>
-                  <label className="text-sm font-semibold">Description</label>
+                  <label className="text-sm font-medium">Description</label>
                   <Textarea
                     name="description"
-                    placeholder="Tell attendees about your event..."
+                    placeholder="Optional"
                     value={formData.description}
                     onChange={handleChange}
-                    className="mt-1 resize-none"
+                    className="mt-1.5 resize-none"
                     rows={3}
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-sm font-semibold">Date & Time *</label>
-                  <div className="grid gap-3 sm:grid-cols-[1fr_110px_110px_90px]">
+                  <label className="text-sm font-medium">Date & time *</label>
+                  <div className="grid gap-2 sm:grid-cols-[1fr_90px_90px_80px]">
                     <Input
                       type="date"
                       value={eventDate}
@@ -1013,7 +994,7 @@ export function EventCreationWizard({
                       type="button"
                       variant="outline"
                       size="sm"
-                      className="h-8 text-xs"
+                      className="h-8 rounded-xl text-xs"
                       onClick={() => setEventDate(toDateInputValue(new Date()))}
                     >
                       Today
@@ -1022,7 +1003,7 @@ export function EventCreationWizard({
                       type="button"
                       variant="outline"
                       size="sm"
-                      className="h-8 text-xs"
+                      className="h-8 rounded-xl text-xs"
                       onClick={() => {
                         const tomorrow = new Date();
                         tomorrow.setDate(tomorrow.getDate() + 1);
@@ -1032,53 +1013,47 @@ export function EventCreationWizard({
                       Tomorrow
                     </Button>
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    Use a 12-hour clock for attendee-friendly scheduling.
-                    {selectedDateTimePreview ? ` Scheduled for ${selectedDateTimePreview}.` : ''}
-                  </p>
+                  {selectedDateTimePreview ? (
+                    <p className="text-xs text-muted-foreground">{selectedDateTimePreview}</p>
+                  ) : null}
                 </div>
 
                 <div>
-                  <label className="text-sm font-semibold">Venue *</label>
+                  <label className="text-sm font-medium">Venue *</label>
                   <Input
                     type="text"
                     name="venue"
-                    placeholder="e.g., Central Park, New York"
+                    placeholder="Venue"
                     value={formData.venue}
                     onChange={handleChange}
-                    className="mt-1"
+                    className="mt-1.5"
                   />
                 </div>
 
                 <div>
-                  <label className="text-sm font-semibold">Event Images *</label>
-                  <div className="mt-2 rounded-lg border border-dashed border-border/70 bg-muted/20 p-4">
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <label className="text-sm font-medium">Images *</label>
+                  <div className="mt-1.5 rounded-xl border border-dashed border-border/70 bg-muted/20 p-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                          <ImageIcon className="w-5 h-5 text-primary" />
+                        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
+                          <ImageIcon className="h-4 w-4 text-primary" />
                         </div>
-                        <div>
-                          <p className="text-sm font-medium">Upload your event images</p>
-                          <p className="text-xs text-muted-foreground">Add 1+ images. Pick a cover image to appear on cards.</p>
-                        </div>
+                        <p className="text-sm text-muted-foreground">1+ images</p>
                       </div>
-                      <label className="inline-flex">
-                        <Input
-                          type="file"
-                          accept="image/*"
-                          multiple
-                          onChange={handleEventImagesChange}
-                          className="w-full sm:w-[260px] cursor-pointer"
-                        />
-                      </label>
+                      <Input
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        onChange={handleEventImagesChange}
+                        className="w-full cursor-pointer sm:w-[240px]"
+                      />
                     </div>
 
                     {eventImages.length > 0 && (
-                      <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-3">
+                      <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
                         {eventImagePreviews.map((src, idx) => (
-                          <div key={src} className="relative overflow-hidden rounded-lg border bg-background">
-                            <img src={src} alt={`Event image ${idx + 1}`} className="h-24 w-full object-cover" />
+                          <div key={src} className="relative overflow-hidden rounded-xl border bg-background">
+                            <img src={src} alt="" className="h-24 w-full object-cover" />
                             <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 bg-gradient-to-t from-black/60 via-black/20 to-transparent p-2">
                               <Button
                                 type="button"
@@ -1087,8 +1062,8 @@ export function EventCreationWizard({
                                 className="h-7 px-2 text-xs text-white hover:text-white"
                                 onClick={() => setCoverImageIndex(idx)}
                               >
-                                <Star className="w-3.5 h-3.5 mr-1" />
-                                {idx === coverImageIndex ? 'Cover' : 'Set cover'}
+                                <Star className="mr-1 h-3.5 w-3.5" />
+                                {idx === coverImageIndex ? 'Cover' : 'Set'}
                               </Button>
                               <Button
                                 type="button"
@@ -1097,7 +1072,7 @@ export function EventCreationWizard({
                                 className="h-7 w-7 text-white hover:text-white"
                                 onClick={() => removeEventImage(idx)}
                               >
-                                <Trash2 className="w-4 h-4" />
+                                <Trash2 className="h-4 w-4" />
                               </Button>
                             </div>
                           </div>
@@ -1106,10 +1081,10 @@ export function EventCreationWizard({
                     )}
 
                     {existingImageUrls.length > 0 && (
-                      <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-3">
+                      <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
                         {existingImageUrls.map((src, idx) => (
-                          <div key={src} className="relative overflow-hidden rounded-lg border bg-background">
-                            <img src={src} alt={`Event image ${idx + 1}`} className="h-24 w-full object-cover" />
+                          <div key={src} className="relative overflow-hidden rounded-xl border bg-background">
+                            <img src={src} alt="" className="h-24 w-full object-cover" />
                             <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 bg-gradient-to-t from-black/60 via-black/20 to-transparent p-2">
                               <Button
                                 type="button"
@@ -1118,8 +1093,8 @@ export function EventCreationWizard({
                                 className="h-7 px-2 text-xs text-white hover:text-white"
                                 onClick={() => setCoverImageIndex(idx)}
                               >
-                                <Star className="w-3.5 h-3.5 mr-1" />
-                                {idx === coverImageIndex ? 'Cover' : 'Set cover'}
+                                <Star className="mr-1 h-3.5 w-3.5" />
+                                {idx === coverImageIndex ? 'Cover' : 'Set'}
                               </Button>
                               <Button
                                 type="button"
@@ -1128,7 +1103,7 @@ export function EventCreationWizard({
                                 className="h-7 w-7 text-white hover:text-white"
                                 onClick={() => removeEventImage(idx)}
                               >
-                                <Trash2 className="w-4 h-4" />
+                                <Trash2 className="h-4 w-4" />
                               </Button>
                             </div>
                           </div>
@@ -1140,18 +1115,17 @@ export function EventCreationWizard({
               </div>
             )}
 
-            {/* Step: Pricing */}
             {step === 'pricing' && (
               <div className="space-y-4">
                 <div>
-                  <label className="text-sm font-semibold">Currency *</label>
+                  <label className="text-sm font-medium">Currency *</label>
                   <select
                     name="currency"
                     value={formData.currency}
                     onChange={(e) =>
                       setFormData((prev) => ({ ...prev, currency: e.target.value }))
                     }
-                    className="mt-1 h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                    className="mt-1.5 h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
                   >
                     {CURRENCY_OPTIONS.map((currency) => (
                       <option key={currency} value={currency}>
@@ -1159,274 +1133,238 @@ export function EventCreationWizard({
                       </option>
                     ))}
                   </select>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Applies to all ticket types for this event.
-                  </p>
                 </div>
 
-                <>
-                    <div className="flex items-center justify-between gap-2">
-                      <div>
-                        <label className="text-sm font-semibold">Ticket Types *</label>
-                        <p className="text-xs text-muted-foreground">
-                          Add a ticket type below, then it appears in your saved list.
-                        </p>
-                      </div>
-                    </div>
+                <div className="space-y-3 rounded-xl border border-border/70 p-4">
+                  <p className="text-sm font-medium">Add type</p>
+                  <Input
+                    type="text"
+                    placeholder="Name"
+                    value={newTicketType.name}
+                    onChange={(e) =>
+                      setNewTicketType((prev) => ({ ...prev, name: e.target.value }))
+                    }
+                  />
+                  <Input
+                    type="text"
+                    placeholder="Description (optional)"
+                    value={newTicketType.description || ''}
+                    onChange={(e) =>
+                      setNewTicketType((prev) => ({ ...prev, description: e.target.value }))
+                    }
+                  />
+                  <div className="grid grid-cols-2 gap-2">
+                    <Input
+                      type="number"
+                      placeholder="Price"
+                      min="0"
+                      step="0.01"
+                      value={newTicketType.price}
+                      onChange={(e) =>
+                        setNewTicketType((prev) => ({ ...prev, price: e.target.value }))
+                      }
+                    />
+                    <Input
+                      type="number"
+                      placeholder="Qty"
+                      min="1"
+                      value={newTicketType.quantity}
+                      onChange={(e) =>
+                        setNewTicketType((prev) => ({ ...prev, quantity: e.target.value }))
+                      }
+                    />
+                  </div>
+                  <Button type="button" size="sm" className="rounded-xl" onClick={addTicketType}>
+                    <Plus className="mr-1 h-4 w-4" />
+                    Add
+                  </Button>
+                </div>
 
-                    <div className="rounded-xl border border-dashed border-primary/35 bg-primary/5 p-4 space-y-3">
-                      <div>
-                        <p className="text-sm font-semibold">Creating new ticket type</p>
-                        <p className="text-xs text-muted-foreground">
-                          Fill this card, then click "Add ticket type".
-                        </p>
-                      </div>
-                      <Input
-                        type="text"
-                        placeholder="Type name (e.g., VIP)"
-                        value={newTicketType.name}
-                        onChange={(e) =>
-                          setNewTicketType((prev) => ({ ...prev, name: e.target.value }))
-                        }
-                      />
-                      <Input
-                        type="text"
-                        placeholder="Short description (optional)"
-                        value={newTicketType.description || ''}
-                        onChange={(e) =>
-                          setNewTicketType((prev) => ({ ...prev, description: e.target.value }))
-                        }
-                      />
-                      <div className="grid grid-cols-2 gap-2">
-                        <Input
-                          type="number"
-                          placeholder="Price"
-                          min="0"
-                          step="0.01"
-                          value={newTicketType.price}
-                          onChange={(e) =>
-                            setNewTicketType((prev) => ({ ...prev, price: e.target.value }))
-                          }
-                        />
-                        <Input
-                          type="number"
-                          placeholder="Quantity"
-                          min="1"
-                          value={newTicketType.quantity}
-                          onChange={(e) =>
-                            setNewTicketType((prev) => ({ ...prev, quantity: e.target.value }))
-                          }
-                        />
-                      </div>
-                      <Button type="button" variant="default" size="sm" onClick={addTicketType}>
-                        <Plus className="w-4 h-4 mr-1" />
-                        Add ticket type
-                      </Button>
-                    </div>
+                {ticketTypeError ? (
+                  <div className="rounded-xl border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+                    {ticketTypeError}
+                  </div>
+                ) : null}
 
-                    {ticketTypeError && (
-                      <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
-                        {ticketTypeError}
-                      </div>
-                    )}
-
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <p className="text-sm font-semibold">Added ticket types</p>
-                        <p className="text-xs text-muted-foreground">{ticketTypes.length} saved</p>
-                      </div>
-                      {ticketTypes.map((ticketType, index) => (
-                        <div key={ticketType.id} className="rounded-xl border border-emerald-500/25 bg-emerald-500/5 p-3 space-y-3">
-                          {editingTicketType?.id === ticketType.id ? (
-                            <>
-                              <div className="flex items-center justify-between">
-                                <p className="text-sm font-medium">Editing type #{index + 1}</p>
-                                <div className="flex items-center gap-1">
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    className="h-8"
-                                    onClick={() => setEditingTicketType(null)}
-                                  >
-                                    Cancel
-                                  </Button>
-                                  <Button
-                                    type="button"
-                                    size="sm"
-                                    className="h-8"
-                                    onClick={saveEditedTicketType}
-                                  >
-                                    Save
-                                  </Button>
-                                </div>
-                              </div>
+                {ticketTypes.length > 0 ? (
+                  <div className="space-y-2">
+                    {ticketTypes.map((ticketType) => (
+                      <div
+                        key={ticketType.id}
+                        className="space-y-3 rounded-xl border border-border/70 p-3"
+                      >
+                        {editingTicketType?.id === ticketType.id ? (
+                          <>
+                            <div className="flex items-center justify-end gap-1">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="h-8 rounded-xl"
+                                onClick={() => setEditingTicketType(null)}
+                              >
+                                Cancel
+                              </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                className="h-8 rounded-xl"
+                                onClick={saveEditedTicketType}
+                              >
+                                Save
+                              </Button>
+                            </div>
+                            <Input
+                              type="text"
+                              value={editingTicketType.name}
+                              onChange={(e) =>
+                                setEditingTicketType((prev) =>
+                                  prev ? { ...prev, name: e.target.value } : prev
+                                )
+                              }
+                            />
+                            <Input
+                              type="text"
+                              value={editingTicketType.description || ''}
+                              onChange={(e) =>
+                                setEditingTicketType((prev) =>
+                                  prev ? { ...prev, description: e.target.value } : prev
+                                )
+                              }
+                            />
+                            <div className="grid grid-cols-2 gap-2">
                               <Input
-                                type="text"
-                                value={editingTicketType.name}
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                value={editingTicketType.price}
                                 onChange={(e) =>
-                                  setEditingTicketType((prev) => (prev ? { ...prev, name: e.target.value } : prev))
+                                  setEditingTicketType((prev) =>
+                                    prev ? { ...prev, price: e.target.value } : prev
+                                  )
                                 }
                               />
                               <Input
-                                type="text"
-                                value={editingTicketType.description || ''}
+                                type="number"
+                                min="1"
+                                value={editingTicketType.quantity}
                                 onChange={(e) =>
-                                  setEditingTicketType((prev) => (prev ? { ...prev, description: e.target.value } : prev))
+                                  setEditingTicketType((prev) =>
+                                    prev ? { ...prev, quantity: e.target.value } : prev
+                                  )
                                 }
                               />
-                              <div className="grid grid-cols-2 gap-2">
-                                <Input
-                                  type="number"
-                                  min="0"
-                                  step="0.01"
-                                  value={editingTicketType.price}
-                                  onChange={(e) =>
-                                    setEditingTicketType((prev) => (prev ? { ...prev, price: e.target.value } : prev))
-                                  }
-                                />
-                                <Input
-                                  type="number"
-                                  min="1"
-                                  value={editingTicketType.quantity}
-                                  onChange={(e) =>
-                                    setEditingTicketType((prev) => (prev ? { ...prev, quantity: e.target.value } : prev))
-                                  }
-                                />
-                              </div>
-                            </>
-                          ) : (
-                            <>
-                              <div className="flex items-center justify-between">
-                                <div>
-                                  <p className="text-sm font-semibold">{ticketType.name}</p>
-                                  <p className="text-xs text-muted-foreground">
-                                    {ticketType.description?.trim() || 'No description'}
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-medium">{ticketType.name}</p>
+                                {ticketType.description?.trim() ? (
+                                  <p className="truncate text-xs text-muted-foreground">
+                                    {ticketType.description}
                                   </p>
-                                </div>
-                                <span className="inline-flex items-center rounded-full bg-emerald-600/15 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-700">
-                                  Added
-                                </span>
+                                ) : null}
                               </div>
-                              <div className="grid grid-cols-2 gap-3 text-xs">
-                                <div className="rounded-lg border border-emerald-500/20 bg-background/70 px-3 py-2">
-                                  <p className="text-muted-foreground">Price</p>
-                                  <p className="font-semibold">
-                                    {formData.currency} {Number(ticketType.price || 0).toFixed(2)}
-                                  </p>
-                                </div>
-                                <div className="rounded-lg border border-emerald-500/20 bg-background/70 px-3 py-2">
-                                  <p className="text-muted-foreground">Quantity</p>
-                                  <p className="font-semibold">{Number(ticketType.quantity || 0)}</p>
-                                </div>
-                              </div>
-                              <div className="flex items-center justify-end gap-2">
+                              <p className="shrink-0 text-sm tabular-nums text-muted-foreground">
+                                {formData.currency} {Number(ticketType.price || 0).toFixed(2)} ·{' '}
+                                {Number(ticketType.quantity || 0)}
+                              </p>
+                            </div>
+                            <div className="flex justify-end gap-2">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="h-8 rounded-xl"
+                                onClick={() => beginEditTicketType(ticketType)}
+                              >
+                                Edit
+                              </Button>
+                              {ticketTypes.length > 1 ? (
                                 <Button
                                   type="button"
-                                  variant="outline"
+                                  variant="ghost"
                                   size="sm"
-                                  className="h-8"
-                                  onClick={() => beginEditTicketType(ticketType)}
+                                  className="h-8 rounded-xl text-destructive"
+                                  onClick={() => removeTicketType(ticketType.id)}
                                 >
-                                  Edit
+                                  <Trash2 className="h-4 w-4" />
                                 </Button>
-                                {ticketTypes.length > 1 && (
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => removeTicketType(ticketType.id)}
-                                    className="h-8 text-destructive"
-                                  >
-                                    <Trash2 className="w-4 h-4 mr-1" />
-                                    Remove
-                                  </Button>
-                                )}
-                              </div>
-                            </>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-
-                    {ticketTypes.length === 0 && (
-                      <div className="rounded-lg border border-dashed border-border/70 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
-                        Add at least one ticket type before continuing.
+                              ) : null}
+                            </div>
+                          </>
+                        )}
                       </div>
-                    )}
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Add at least one type</p>
+                )}
 
-                    <div className="p-4 bg-muted rounded-lg space-y-1">
-                      <p className="text-sm text-muted-foreground">
-                        <strong>Valid ticket types:</strong> {normalizedTicketTypes.length}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        <strong>Total tickets:</strong> {totalTicketsFromTypes}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        <strong>Starting price:</strong> {formData.currency} {minTicketPrice.toFixed(2)}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        <strong>Total potential revenue:</strong> {formData.currency}{' '}
-                        {normalizedTicketTypes
-                          .reduce((sum, ticketType) => sum + (ticketType.price * ticketType.total_quantity), 0)
-                          .toFixed(2)}
+                {normalizedTicketTypes.length > 0 ? (
+                  <div className="grid grid-cols-3 gap-2 rounded-xl bg-muted/40 p-3 text-center text-xs">
+                    <div>
+                      <p className="text-muted-foreground">Types</p>
+                      <p className="mt-0.5 font-semibold tabular-nums">{normalizedTicketTypes.length}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Qty</p>
+                      <p className="mt-0.5 font-semibold tabular-nums">{totalTicketsFromTypes}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">From</p>
+                      <p className="mt-0.5 font-semibold tabular-nums">
+                        {formData.currency} {minTicketPrice.toFixed(2)}
                       </p>
                     </div>
-                </>
+                  </div>
+                ) : null}
               </div>
             )}
 
-            {/* Step: Organizer */}
             {step === 'organizer' && (
               <div className="space-y-4">
                 <div>
-                  <label className="text-sm font-semibold">Organization Name *</label>
+                  <label className="text-sm font-medium">Name *</label>
                   <Input
                     type="text"
                     name="name"
-                    placeholder="Your organization name"
+                    placeholder="Organization"
                     value={organizer.name}
                     onChange={handleOrganizerChange}
-                    className="mt-1"
+                    className="mt-1.5"
                   />
                 </div>
 
                 <div>
-                  <label className="text-sm font-semibold">Organizer Phone Number *</label>
+                  <label className="text-sm font-medium">Phone *</label>
                   <Input
                     type="tel"
                     name="phone"
-                    placeholder="e.g., +256 700 123456"
+                    placeholder="+256 …"
                     value={organizer.phone}
                     onChange={handleOrganizerChange}
-                    className="mt-1"
+                    className="mt-1.5"
                   />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Visible to admins on moderation dashboard for follow-up.
-                  </p>
                 </div>
 
                 <div>
-                  <label className="text-sm font-semibold">Organizer Logo</label>
+                  <label className="text-sm font-medium">Logo</label>
                   <Input
                     type="file"
                     accept="image/*"
                     onChange={handleOrganizerLogoFileChange}
-                    className="mt-1"
+                    className="mt-1.5"
                   />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Upload a logo image (PNG, JPG, WebP). URL input has been removed.
-                  </p>
                 </div>
 
                 {(organizerLogoPreview || organizer.logo) && (
-                  <div className="p-4 bg-muted rounded-lg">
-                    <p className="text-xs text-muted-foreground mb-2">
-                      {organizerLogoPreview ? 'New logo preview:' : 'Current logo:'}
-                    </p>
+                  <div className="rounded-xl bg-muted/40 p-3">
                     <img
                       src={organizerLogoPreview || organizer.logo}
-                      alt="Logo preview"
+                      alt=""
                       className="h-12 object-contain"
                       onError={() => {}}
                     />
@@ -1435,72 +1373,68 @@ export function EventCreationWizard({
               </div>
             )}
 
-            {/* Step: Sponsors */}
             {step === 'sponsors' && (
               <div className="space-y-4">
-                <div className="rounded-lg border border-dashed border-border/70 bg-muted/20 p-3">
-                  <p className="text-xs text-muted-foreground">
-                    Sponsors are optional. You can publish now and add them later from the edit page.
-                  </p>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm text-muted-foreground">Optional</p>
                   <Button
                     type="button"
                     size="sm"
                     variant="ghost"
-                    className="mt-2 h-8 rounded-full px-3 text-xs"
+                    className="h-8 rounded-xl px-3 text-xs"
                     onClick={() => setStep('review')}
                   >
-                    Skip sponsors
+                    Skip
                   </Button>
                 </div>
-                <div>
-                  <label className="text-sm font-semibold">Add Sponsors (Optional)</label>
-                  <div className="mt-2 space-y-2">
-                    <Input
-                      type="text"
-                      placeholder="Sponsor name"
-                      value={newSponsor.name}
-                      onChange={(e) => setNewSponsor((prev) => ({ ...prev, name: e.target.value }))}
-                    />
-                    <Input
-                      id="new-sponsor-logo-file"
-                      type="file"
-                      accept="image/*"
-                      onChange={handleNewSponsorLogoFileChange}
-                    />
-                    {newSponsor.logo && (
-                      <div className="rounded-md border border-border/70 bg-background p-2">
-                        <p className="text-xs text-muted-foreground mb-1">Sponsor logo preview:</p>
-                        <img src={newSponsor.logo} alt="Sponsor preview" className="h-10 object-contain" />
-                      </div>
-                    )}
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="w-full"
-                      onClick={handleAddSponsor}
-                      disabled={!newSponsor.name.trim()}
-                    >
-                      <Plus className="w-4 h-4 mr-1" />
-                      Add Sponsor
-                    </Button>
-                  </div>
+
+                <div className="space-y-2">
+                  <Input
+                    type="text"
+                    placeholder="Sponsor name"
+                    value={newSponsor.name}
+                    onChange={(e) => setNewSponsor((prev) => ({ ...prev, name: e.target.value }))}
+                  />
+                  <Input
+                    id="new-sponsor-logo-file"
+                    type="file"
+                    accept="image/*"
+                    onChange={handleNewSponsorLogoFileChange}
+                  />
+                  {newSponsor.logo ? (
+                    <div className="rounded-xl border border-border/70 p-2">
+                      <img src={newSponsor.logo} alt="" className="h-10 object-contain" />
+                    </div>
+                  ) : null}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full rounded-xl"
+                    onClick={handleAddSponsor}
+                    disabled={!newSponsor.name.trim()}
+                  >
+                    <Plus className="mr-1 h-4 w-4" />
+                    Add
+                  </Button>
                 </div>
 
-                {sponsors.length > 0 && (
+                {sponsors.length > 0 ? (
                   <div className="space-y-2">
-                    <label className="text-sm font-semibold">Sponsors ({sponsors.length})</label>
                     {sponsors.map((sponsor) => (
-                      <div key={sponsor.id} className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                        <div>
-                          <div className="font-medium">{sponsor.name}</div>
-                          {sponsor.logo && (
+                      <div
+                        key={sponsor.id}
+                        className="flex items-center justify-between rounded-xl bg-muted/40 p-3"
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate font-medium">{sponsor.name}</p>
+                          {sponsor.logo ? (
                             <img
                               src={sponsor.logo}
-                              alt={sponsor.name}
-                              className="h-6 object-contain mt-1"
+                              alt=""
+                              className="mt-1 h-6 object-contain"
                               onError={() => {}}
                             />
-                          )}
+                          ) : null}
                         </div>
                         <Button
                           type="button"
@@ -1508,131 +1442,117 @@ export function EventCreationWizard({
                           size="sm"
                           onClick={() => handleRemoveSponsor(sponsor.id)}
                         >
-                          <Trash2 className="w-4 h-4 text-destructive" />
+                          <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>
                       </div>
                     ))}
                   </div>
-                )}
+                ) : null}
               </div>
             )}
 
-            {/* Step: Review */}
             {step === 'review' && (
-              <div className="space-y-6">
-                <div className="grid md:grid-cols-2 gap-4">
-                  <div className="p-4 bg-muted rounded-lg">
-                    <p className="text-xs text-muted-foreground">Event Name</p>
-                    <p className="font-semibold">{formData.name}</p>
-                  </div>
-
-                  <div className="p-4 bg-muted rounded-lg">
-                    <p className="text-xs text-muted-foreground">Category</p>
-                    <p className="font-semibold">
-                      {EVENT_CATEGORIES.find((c) => c.id === formData.category)?.label || 'Other Events'}
-                    </p>
-                  </div>
-
-                  <div className="p-4 bg-muted rounded-lg">
-                    <p className="text-xs text-muted-foreground">Date</p>
-                    <p className="font-semibold">{selectedDateTimePreview || 'Not set'}</p>
-                  </div>
-
-                  <div className="p-4 bg-muted rounded-lg">
-                    <p className="text-xs text-muted-foreground">Ticket Price</p>
-                    <p className="font-semibold">
-                      {formData.currency} {minTicketPrice.toFixed(2)}
-                    </p>
-                  </div>
-
-                  <div className="p-4 bg-muted rounded-lg">
-                    <p className="text-xs text-muted-foreground">Total Tickets</p>
-                    <p className="font-semibold">{totalTicketsFromTypes}</p>
-                  </div>
-
-                  <div className="md:col-span-2 p-4 bg-muted rounded-lg">
-                    <p className="text-xs text-muted-foreground">Organizer</p>
-                    <p className="font-semibold">{organizer.name}</p>
-                    <p className="text-xs text-muted-foreground mt-1">Phone: {organizer.phone || 'Not provided'}</p>
-                  </div>
+              <div className="space-y-3">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <ReviewItem label="Name" value={formData.name} />
+                  <ReviewItem
+                    label="Category"
+                    value={
+                      EVENT_CATEGORIES.find((c) => c.id === formData.category)?.label || 'Other'
+                    }
+                  />
+                  <ReviewItem label="Date" value={selectedDateTimePreview || '—'} />
+                  <ReviewItem
+                    label="From"
+                    value={`${formData.currency} ${minTicketPrice.toFixed(2)}`}
+                  />
+                  <ReviewItem label="Tickets" value={String(totalTicketsFromTypes)} />
+                  <ReviewItem label="Organizer" value={organizer.name || '—'} />
                 </div>
 
-                {sponsors.length > 0 && (
-                  <div className="p-4 bg-muted rounded-lg">
-                    <p className="text-xs text-muted-foreground mb-2">Sponsors ({sponsors.length})</p>
-                    <div className="flex flex-wrap gap-2">
-                      {sponsors.map((sponsor) => (
-                        <span key={sponsor.id} className="px-3 py-1 bg-primary/10 text-primary rounded-full text-sm">
-                          {sponsor.name}
+                {organizer.phone ? (
+                  <p className="text-xs text-muted-foreground">{organizer.phone}</p>
+                ) : null}
+
+                {sponsors.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {sponsors.map((sponsor) => (
+                      <span
+                        key={sponsor.id}
+                        className="rounded-full bg-muted px-3 py-1 text-sm"
+                      >
+                        {sponsor.name}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+
+                {normalizedTicketTypes.length > 0 ? (
+                  <div className="space-y-1.5 rounded-xl border border-border/70 p-3">
+                    {normalizedTicketTypes.map((ticketType) => (
+                      <div
+                        key={ticketType.order_index}
+                        className="flex items-center justify-between text-sm"
+                      >
+                        <span>{ticketType.name}</span>
+                        <span className="tabular-nums text-muted-foreground">
+                          {formData.currency} {ticketType.price.toFixed(2)} ·{' '}
+                          {ticketType.total_quantity}
                         </span>
-                      ))}
-                    </div>
+                      </div>
+                    ))}
                   </div>
-                )}
+                ) : null}
 
-                {normalizedTicketTypes.length > 0 && (
-                  <div className="p-4 bg-muted rounded-lg">
-                    <p className="text-xs text-muted-foreground mb-2">Ticket Types ({normalizedTicketTypes.length})</p>
-                    <div className="space-y-1.5">
-                      {normalizedTicketTypes.map((ticketType) => (
-                        <div key={ticketType.order_index} className="text-sm flex items-center justify-between">
-                          <span>{ticketType.name}</span>
-                          <span className="text-muted-foreground">
-                            {formData.currency} {ticketType.price.toFixed(2)} × {ticketType.total_quantity}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                <div className="p-4 bg-primary/10 text-primary rounded-lg">
-                  <p className="text-sm font-medium">
-                    {isAdminContext
-                      ? 'After creation, the event appears in Admin > Manage Events where you can review and manage it.'
-                      : 'Your event will be created in "pending" status and requires admin approval before it goes live.'}
-                  </p>
-                </div>
+                {!isAdminContext ? (
+                  <p className="text-xs text-muted-foreground">Pending approval after submit</p>
+                ) : null}
               </div>
             )}
 
-            {/* Navigation */}
-            <div className="flex gap-3 mt-8 pt-6 border-t">
+            <div className="mt-8 flex gap-3 border-t border-border/70 pt-5">
               <Button
                 variant="outline"
                 onClick={goToPreviousStep}
                 disabled={!canGoBack || loading}
-                className="flex-1"
+                className="flex-1 rounded-xl"
               >
-                <ChevronLeft className="w-4 h-4 mr-1" />
+                <ChevronLeft className="mr-1 h-4 w-4" />
                 Back
               </Button>
 
               {step === 'review' ? (
-                <Button onClick={handleSubmit} disabled={loading} className="flex-1">
+                <Button onClick={handleSubmit} disabled={loading} className="flex-1 rounded-xl">
                   {loading
-                    ? (mode === 'edit' ? 'Saving...' : 'Creating...')
-                    : (mode === 'edit'
-                      ? 'Save Changes'
-                      : isAdminContext
-                        ? 'Create Event & Return'
-                        : 'Create Event')}
+                    ? mode === 'edit'
+                      ? 'Saving…'
+                      : 'Creating…'
+                    : mode === 'edit'
+                      ? 'Save'
+                      : 'Create'}
                 </Button>
               ) : (
                 <Button
                   onClick={goToNextStep}
                   disabled={!canGoForward || loading}
-                  className="flex-1"
+                  className="flex-1 rounded-xl"
                 >
                   Next
-                  <ChevronRight className="w-4 h-4 ml-1" />
+                  <ChevronRight className="ml-1 h-4 w-4" />
                 </Button>
               )}
             </div>
-            </CardContent>
-          </Card>
         </div>
       </div>
+    </div>
+  );
+}
+
+function ReviewItem({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl bg-muted/40 p-3">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="mt-0.5 font-medium leading-snug">{value}</p>
     </div>
   );
 }

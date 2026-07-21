@@ -5,13 +5,7 @@ import type { NextRequest } from 'next/server';
 import { createSession } from '@/lib/session';
 import { claimGuestPurchasesForUser } from '@/lib/guest-purchase-linking';
 import { supabaseAdmin } from '@/lib/supabase-admin';
-
-function getSafeRedirectPath(next: string | null) {
-  if (!next || !next.startsWith('/') || next.startsWith('//')) {
-    return '/profile';
-  }
-  return next;
-}
+import { getSafeRedirectPath, OAUTH_REDIRECT_COOKIE } from '@/lib/auth-redirect';
 
 async function getUserRow(userId: string) {
   for (let attempt = 0; attempt < 10; attempt += 1) {
@@ -35,7 +29,10 @@ export async function GET(request: NextRequest) {
   const code = requestUrl.searchParams.get('code');
   const error = requestUrl.searchParams.get('error');
   const errorDescription = requestUrl.searchParams.get('error_description');
-  const next = getSafeRedirectPath(requestUrl.searchParams.get('next'));
+  const redirectCookie = request.cookies.get(OAUTH_REDIRECT_COOKIE)?.value;
+  const next = getSafeRedirectPath(
+    redirectCookie ? decodeURIComponent(redirectCookie) : requestUrl.searchParams.get('next')
+  );
 
   if (error) {
     console.error('Auth callback error:', error, errorDescription);
@@ -45,12 +42,19 @@ export async function GET(request: NextRequest) {
   }
 
   if (!code) {
+    console.error('Auth callback missing code. URL:', requestUrl.toString());
     return NextResponse.redirect(
-      new URL('/login?error=Invalid callback request', requestUrl.origin)
+      new URL(
+        '/login?error=Google sign in could not be completed. Please try again.',
+        requestUrl.origin
+      )
     );
   }
 
   const cookieStore = await cookies();
+  let response = NextResponse.redirect(new URL(next, requestUrl.origin));
+  response.cookies.delete(OAUTH_REDIRECT_COOKIE);
+
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -62,6 +66,11 @@ export async function GET(request: NextRequest) {
         setAll(cookiesToSet) {
           cookiesToSet.forEach(({ name, value, options }) => {
             cookieStore.set(name, value, options);
+          });
+          response = NextResponse.redirect(new URL(next, requestUrl.origin));
+          response.cookies.delete(OAUTH_REDIRECT_COOKIE);
+          cookiesToSet.forEach(({ name, value, options }) => {
+            response.cookies.set(name, value, options);
           });
         },
       },
@@ -89,11 +98,68 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const userRow = await getUserRow(user.id);
+    let userRow = await getUserRow(user.id);
     if (!userRow) {
-      return NextResponse.redirect(
-        new URL('/login?error=Account setup is still in progress. Please try again.', requestUrl.origin)
-      );
+      const meta = (user.user_metadata || {}) as Record<string, unknown>;
+      const roleFromMeta = meta.role;
+      const role =
+        roleFromMeta === 'admin' || roleFromMeta === 'organizer' || roleFromMeta === 'customer'
+          ? roleFromMeta
+          : 'customer';
+      const profileName =
+        (typeof meta.full_name === 'string' && meta.full_name.trim()) ||
+        (typeof meta.name === 'string' && meta.name.trim()) ||
+        user.email.split('@')[0];
+      const avatarUrl =
+        (typeof meta.avatar_url === 'string' && meta.avatar_url) ||
+        (typeof meta.picture === 'string' && meta.picture) ||
+        null;
+
+      const { data: ensuredUserRow, error: ensureError } = await supabaseAdmin
+        .from('users')
+        .upsert(
+          {
+            id: user.id,
+            email: user.email,
+            password_hash: '',
+            role,
+            profile_name: profileName,
+            profile_logo_url: avatarUrl,
+          },
+          { onConflict: 'id' }
+        )
+        .select('id, email, role')
+        .maybeSingle();
+
+      if (ensureError || !ensuredUserRow) {
+        return NextResponse.redirect(
+          new URL(
+            '/login?error=Profile setup is still in progress. Please try again.',
+            requestUrl.origin
+          )
+        );
+      }
+
+      userRow = ensuredUserRow;
+    } else {
+      // Backfill display name for existing Google users who only have email.
+      const { data: fullRow } = await supabaseAdmin
+        .from('users')
+        .select('id, email, role, profile_name')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      if (fullRow && !fullRow.profile_name) {
+        const meta = (user.user_metadata || {}) as Record<string, unknown>;
+        const profileName =
+          (typeof meta.full_name === 'string' && meta.full_name.trim()) ||
+          (typeof meta.name === 'string' && meta.name.trim()) ||
+          user.email.split('@')[0];
+        await supabaseAdmin
+          .from('users')
+          .update({ profile_name: profileName })
+          .eq('id', user.id);
+      }
     }
 
     await createSession({
@@ -109,10 +175,10 @@ export async function GET(request: NextRequest) {
     }
 
     if (next === '/auth/reset-password') {
-      return NextResponse.redirect(new URL('/auth/reset-password', requestUrl.origin));
+      response = NextResponse.redirect(new URL('/auth/reset-password', requestUrl.origin));
     }
 
-    return NextResponse.redirect(new URL(next, requestUrl.origin));
+    return response;
   } catch (err) {
     console.error('Unexpected error in auth callback:', err);
     return NextResponse.redirect(

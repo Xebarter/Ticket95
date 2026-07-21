@@ -88,29 +88,20 @@ export default function ProfileTicketsPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-[300px] items-center justify-center">
-        <p className="text-sm text-muted-foreground">Loading tickets...</p>
+      <div className="flex min-h-[280px] items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
       </div>
     );
   }
 
   return (
     <div className="space-y-4">
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <h1 className="text-2xl font-semibold tracking-tight">My Tickets</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            View every purchased ticket, open QR codes, and re-download valid tickets as PDFs.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="outline" className="rounded-full">
-            {myTickets.length} total
-          </Badge>
-          <Badge variant="outline" className="rounded-full">
-            {uniqueEventsCount} event{uniqueEventsCount === 1 ? '' : 's'}
-          </Badge>
-        </div>
+      <header className="flex items-center justify-between gap-3">
+        <h1 className="text-2xl font-semibold tracking-tight">Tickets</h1>
+        <p className="text-sm text-muted-foreground tabular-nums">
+          {myTickets.length}
+          {uniqueEventsCount > 0 ? ` · ${uniqueEventsCount}` : ''}
+        </p>
       </header>
 
       <div className="grid gap-3 sm:grid-cols-3">
@@ -137,11 +128,10 @@ export default function ProfileTicketsPage() {
       {myTickets.length === 0 ? (
         <Card className="border-dashed">
           <CardContent className="py-10 text-center">
-            <TicketIcon className="mx-auto mb-3 h-8 w-8 text-primary" />
-            <h3 className="font-semibold">No tickets yet</h3>
-            <p className="mt-1 text-sm text-muted-foreground">Once you buy tickets they will appear here.</p>
-            <Button asChild className="mt-4 rounded-full">
-              <Link href="/">Browse events</Link>
+            <TicketIcon className="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
+            <p className="text-sm text-muted-foreground">No tickets</p>
+            <Button asChild size="sm" className="mt-4 rounded-xl">
+              <Link href="/">Browse</Link>
             </Button>
           </CardContent>
         </Card>
@@ -157,9 +147,7 @@ export default function ProfileTicketsPage() {
           <TabsContent value={activeTab} className="space-y-3">
             {visibleTickets.length === 0 ? (
               <Card className="border-dashed">
-                <CardContent className="py-8 text-center text-sm text-muted-foreground">
-                  No tickets in this category.
-                </CardContent>
+                <CardContent className="py-8 text-center text-sm text-muted-foreground">None</CardContent>
               </Card>
             ) : (
               visibleTickets.map((ticket) => (

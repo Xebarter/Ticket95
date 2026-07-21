@@ -4,8 +4,8 @@ import { User } from 'lucide-react';
 
 // A stripped‑down, non‑hydrating header used on the public landing page. It
 // avoids any client-side logic (authentication state, logout, etc.) so the
-// homepage can render as a pure server component.  Logged‑in users will still
-// see the login/sign up links; clicking "Profile" or "Logout" requires
+// homepage can render as a pure server component. Logged-in users will still
+// see the login links; clicking "Profile" or "Logout" requires
 // navigating to a page that uses the full `HeaderClient`.
 export function HeaderServer() {
   return (

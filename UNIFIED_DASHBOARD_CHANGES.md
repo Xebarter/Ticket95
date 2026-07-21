@@ -59,7 +59,7 @@ Successfully merged organizer and customer functionalities into a single, unifie
   - All new users start as 'customer' role
   - Direct signup flow - no intermediate screens
   - Redirects to unified dashboard after signup
-  - Updated description: "Sign up to buy tickets and create events"
+  - Updated description: "Register to buy tickets and create events"
 
 - ✅ **Login** `components/auth/login-form.tsx`
   - Already properly configured
@@ -90,7 +90,7 @@ Successfully merged organizer and customer functionalities into a single, unifie
 5. **No Role Barriers** - Seamless switching between buying and creating
 
 ### User Journey:
-1. Sign up with email/password
+1. Register with email/password
 2. Immediately access unified dashboard
 3. Browse events and purchase tickets
 4. Create own events from the same dashboard
@@ -115,7 +115,7 @@ Successfully merged organizer and customer functionalities into a single, unifie
 
 ## Testing Checklist
 
-- [ ] Sign up new user → Should go to unified dashboard
+- [ ] Register new user → Should go to unified dashboard
 - [ ] Purchase ticket → Should appear in "My Tickets" tab
 - [ ] Create event → Should appear in "My Events" tab
 - [ ] View purchased ticket QR code

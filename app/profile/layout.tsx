@@ -1,9 +1,9 @@
 import { redirect } from 'next/navigation';
-import { getSession } from '@/lib/session';
+import { getOrRestoreSession } from '@/lib/session-restore';
 import ProfileLayoutShell from './ProfileLayoutShell';
 
 export default async function ProfileLayout({ children }: { children: React.ReactNode }) {
-  const session = await getSession();
+  const session = await getOrRestoreSession();
 
   if (!session) {
     redirect('/login?redirect=/profile');

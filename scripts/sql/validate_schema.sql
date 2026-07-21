@@ -9,13 +9,13 @@
 SELECT 
   'Tables Check' as check_type,
   CASE 
-    WHEN COUNT(*) = 5 THEN '✓ PASS - All 5 tables exist'
-    ELSE '✗ FAIL - Expected 5 tables, found ' || COUNT(*)
+    WHEN COUNT(*) = 6 THEN '✓ PASS - All 6 tables exist'
+    ELSE '✗ FAIL - Expected 6 tables, found ' || COUNT(*)
   END as result
 FROM information_schema.tables
 WHERE table_schema = 'public'
   AND table_type = 'BASE TABLE'
-  AND table_name IN ('users', 'events', 'sponsors', 'orders', 'tickets');
+  AND table_name IN ('users', 'events', 'sponsors', 'orders', 'tickets', 'support_messages');
 
 -- List all tables with column counts
 SELECT 
@@ -39,7 +39,7 @@ SELECT
   END as rls_status
 FROM pg_tables
 WHERE schemaname = 'public'
-  AND tablename IN ('users', 'events', 'sponsors', 'orders', 'tickets')
+  AND tablename IN ('users', 'events', 'sponsors', 'orders', 'tickets', 'support_messages')
 ORDER BY tablename;
 
 -- Count RLS policies per table
@@ -59,7 +59,7 @@ SELECT
   indexname
 FROM pg_indexes
 WHERE schemaname = 'public'
-  AND tablename IN ('users', 'events', 'sponsors', 'orders', 'tickets')
+  AND tablename IN ('users', 'events', 'sponsors', 'orders', 'tickets', 'support_messages')
 ORDER BY tablename, indexname;
 
 -- Check if all triggers exist
@@ -70,7 +70,7 @@ SELECT
   event_manipulation as event_type
 FROM information_schema.triggers
 WHERE trigger_schema = 'public'
-  AND event_object_table IN ('users', 'events', 'sponsors', 'orders', 'tickets')
+  AND event_object_table IN ('users', 'events', 'sponsors', 'orders', 'tickets', 'support_messages')
 ORDER BY event_object_table, trigger_name;
 
 -- Check if all functions exist
@@ -85,6 +85,7 @@ WHERE routine_schema = 'public'
     'update_events_updated_at',
     'update_orders_updated_at',
     'update_tickets_updated_at',
+    'update_support_messages_updated_at',
     'handle_new_user',
     'check_tickets_available',
     'process_order_creation',
@@ -121,7 +122,7 @@ SELECT
   column_default
 FROM information_schema.columns
 WHERE table_schema = 'public'
-  AND table_name IN ('users', 'events', 'sponsors', 'orders', 'tickets')
+  AND table_name IN ('users', 'events', 'sponsors', 'orders', 'tickets', 'support_messages')
 ORDER BY table_name, ordinal_position;
 
 -- Verify auth.users trigger exists
@@ -139,7 +140,7 @@ SELECT
   'VALIDATION SUMMARY' as summary,
   (SELECT COUNT(*) FROM information_schema.tables 
    WHERE table_schema = 'public' AND table_type = 'BASE TABLE' 
-   AND table_name IN ('users', 'events', 'sponsors', 'orders', 'tickets')) as tables_created,
+   AND table_name IN ('users', 'events', 'sponsors', 'orders', 'tickets', 'support_messages')) as tables_created,
   (SELECT COUNT(*) FROM pg_policies WHERE schemaname = 'public') as total_policies,
   (SELECT COUNT(*) FROM information_schema.triggers 
    WHERE trigger_schema = 'public') as total_triggers,
@@ -147,10 +148,10 @@ SELECT
    WHERE routine_schema = 'public') as total_functions,
   (SELECT COUNT(*) FROM pg_indexes 
    WHERE schemaname = 'public' 
-   AND tablename IN ('users', 'events', 'sponsors', 'orders', 'tickets')) as total_indexes;
+   AND tablename IN ('users', 'events', 'sponsors', 'orders', 'tickets', 'support_messages')) as total_indexes;
 
 -- Expected values:
--- tables_created: 5
+-- tables_created: 6
 -- total_policies: Should be at least 25+ (varies based on script)
 -- total_triggers: Should be at least 8
 -- total_functions: Should be at least 9

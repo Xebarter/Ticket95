@@ -14,9 +14,9 @@ export default function LoginPage() {
       description="Sign in to access your tickets, orders, and event dashboard."
       footer={
         <>
-          Don&apos;t have an account?{' '}
+          New to Ticket95?{' '}
           <Link href="/signup" className="font-medium text-slate-900 hover:underline">
-            Create one
+            Sign up
           </Link>
         </>
       }

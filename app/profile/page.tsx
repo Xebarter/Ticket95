@@ -3,8 +3,8 @@
 import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { BarChart3, Calendar, Plus, QrCode, ScanLine, TrendingUp } from 'lucide-react';
+import { Card, CardContent } from '@/components/ui/card';
+import { Plus, QrCode, TrendingUp } from 'lucide-react';
 import { useProfileData } from './use-profile-data';
 import { getEventLifecycleStatus } from '@/lib/event-status';
 
@@ -19,160 +19,89 @@ export default function ProfileOverviewPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-[320px] items-center justify-center">
-        <div className="text-center">
-          <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-          <p className="text-sm text-muted-foreground">Loading overview...</p>
-        </div>
+      <div className="flex min-h-[280px] items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
       </div>
     );
   }
 
   return (
-    <div className="space-y-5">
-      <header>
-        <h1 className="text-2xl font-semibold tracking-tight">Profile dashboard</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Quick snapshot of your tickets, events, and purchases.
-        </p>
+    <div className="space-y-6">
+      <header className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-2xl font-semibold tracking-tight">Overview</h1>
+        <Button asChild size="sm" className="rounded-xl">
+          <Link href="/organizer/dashboard/create">
+            <Plus className="mr-1.5 h-4 w-4" />
+            New event
+          </Link>
+        </Button>
       </header>
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Card className="border-border/70">
-          <CardContent className="p-4">
-            <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Valid Tickets</p>
-            <p className="mt-1 text-2xl font-semibold">{totals.validTickets}</p>
-          </CardContent>
-        </Card>
-        <Card className="border-border/70">
-          <CardContent className="p-4">
-            <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Approved Events</p>
-            <p className="mt-1 text-2xl font-semibold">{totals.approvedEvents}</p>
-          </CardContent>
-        </Card>
-        <Card className="border-border/70">
-          <CardContent className="p-4">
-            <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Total Spent</p>
-            <p className="mt-1 text-2xl font-semibold">{formatMoney(totals.totalSpent)}</p>
-          </CardContent>
-        </Card>
-        <Card className="border-border/70">
-          <CardContent className="p-4">
-            <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Event Revenue</p>
-            <p className="mt-1 text-2xl font-semibold">{formatMoney(totals.estimatedRevenue)}</p>
-          </CardContent>
-        </Card>
+        <Metric label="Tickets" value={String(totals.validTickets)} />
+        <Metric label="Events" value={String(totals.approvedEvents)} />
+        <Metric label="Spent" value={formatMoney(totals.totalSpent)} />
+        <Metric label="Revenue" value={formatMoney(totals.estimatedRevenue)} />
       </div>
-
-      <Card className="border-border/70">
-        <CardHeader>
-          <CardTitle className="text-base">Quick actions</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-wrap gap-2">
-          <Button asChild size="sm" className="rounded-full">
-            <Link href="/organizer/dashboard/create">
-              <Plus className="mr-1.5 h-4 w-4" />
-              Create event
-            </Link>
-          </Button>
-          <Button asChild variant="outline" size="sm" className="rounded-full">
-            <Link href="/profile/tickets">
-              <QrCode className="mr-1.5 h-4 w-4" />
-              Open tickets
-            </Link>
-          </Button>
-          <Button asChild variant="outline" size="sm" className="rounded-full">
-            <Link href="/profile/verify">
-              <ScanLine className="mr-1.5 h-4 w-4" />
-              Verify tickets
-            </Link>
-          </Button>
-          <Button asChild variant="outline" size="sm" className="rounded-full">
-            <Link href="/profile/analytics">
-              <BarChart3 className="mr-1.5 h-4 w-4" />
-              Analytics
-            </Link>
-          </Button>
-          <Button asChild variant="ghost" size="sm" className="rounded-full">
-            <Link href="/">
-              <Calendar className="mr-1.5 h-4 w-4" />
-              Browse events
-            </Link>
-          </Button>
-        </CardContent>
-      </Card>
-
-      <Card className="border-border/70">
-        <CardHeader>
-          <CardTitle className="text-base">Profile workspace pages</CardTitle>
-        </CardHeader>
-        <CardContent className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <Link href="/profile/tickets" className="rounded-xl border border-border/70 p-3 transition hover:bg-muted/30">
-            <p className="font-medium">Tickets</p>
-            <p className="mt-1 text-sm text-muted-foreground">View QR codes and download ticket PDFs.</p>
-          </Link>
-          <Link href="/profile/events" className="rounded-xl border border-border/70 p-3 transition hover:bg-muted/30">
-            <p className="font-medium">Events</p>
-            <p className="mt-1 text-sm text-muted-foreground">Manage performance, buyers, and purchases.</p>
-          </Link>
-          <Link href="/profile/verify" className="rounded-xl border border-border/70 p-3 transition hover:bg-muted/30">
-            <p className="font-medium">Verify</p>
-            <p className="mt-1 text-sm text-muted-foreground">Scan entries and mark tickets as used.</p>
-          </Link>
-          <Link href="/profile/analytics" className="rounded-xl border border-border/70 p-3 transition hover:bg-muted/30">
-            <p className="font-medium">Analytics</p>
-            <p className="mt-1 text-sm text-muted-foreground">Track revenue, order quality, and ticket trends.</p>
-          </Link>
-        </CardContent>
-      </Card>
 
       <div className="grid gap-3 lg:grid-cols-2">
         <Card className="border-border/70">
-          <CardHeader>
-            <CardTitle className="text-base">Latest valid ticket</CardTitle>
-          </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-3 p-4">
+            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Ticket</p>
             {latestValidTicket ? (
-              <div className="space-y-2">
-                <p className="font-medium">{latestValidTicket.event_name}</p>
-                <p className="text-sm text-muted-foreground">{latestValidTicket.organizer_name}</p>
-                <Button asChild size="sm" className="rounded-full">
-                  <Link href="/profile/tickets">View QR code</Link>
+              <>
+                <div>
+                  <p className="font-medium leading-snug">{latestValidTicket.event_name}</p>
+                  <p className="mt-0.5 text-sm text-muted-foreground">{latestValidTicket.organizer_name}</p>
+                </div>
+                <Button asChild size="sm" variant="outline" className="rounded-xl">
+                  <Link href="/profile/tickets">
+                    <QrCode className="mr-1.5 h-4 w-4" />
+                    Open
+                  </Link>
                 </Button>
-              </div>
+              </>
             ) : (
-              <p className="text-sm text-muted-foreground">You currently have no valid tickets.</p>
+              <p className="text-sm text-muted-foreground">None</p>
             )}
           </CardContent>
         </Card>
 
         <Card className="border-border/70">
-          <CardHeader>
-            <CardTitle className="text-base">Newest event</CardTitle>
-          </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-3 p-4">
+            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Event</p>
             {newestEvent ? (
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <p className="font-medium">{newestEvent.name}</p>
-                  <Badge variant="outline" className="rounded-full text-[10px]">
+              <>
+                <div className="flex items-start gap-2">
+                  <p className="min-w-0 flex-1 font-medium leading-snug">{newestEvent.name}</p>
+                  <Badge variant="outline" className="shrink-0 rounded-full text-[10px]">
                     {newestEventStatus}
                   </Badge>
                 </div>
-                <p className="inline-flex items-center gap-1 text-sm text-muted-foreground">
-                  <TrendingUp className="h-4 w-4" />
-                  Manage performance in the Events page
-                </p>
-                <Button asChild size="sm" variant="outline" className="rounded-full">
-                  <Link href="/profile/events">Manage events</Link>
+                <Button asChild size="sm" variant="outline" className="rounded-xl">
+                  <Link href="/profile/events">
+                    <TrendingUp className="mr-1.5 h-4 w-4" />
+                    Manage
+                  </Link>
                 </Button>
-              </div>
+              </>
             ) : (
-              <p className="text-sm text-muted-foreground">No events created yet.</p>
+              <p className="text-sm text-muted-foreground">None</p>
             )}
           </CardContent>
         </Card>
       </div>
     </div>
+  );
+}
+
+function Metric({ label, value }: { label: string; value: string }) {
+  return (
+    <Card className="border-border/70">
+      <CardContent className="p-4">
+        <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{label}</p>
+        <p className="mt-1.5 text-2xl font-semibold tracking-tight">{value}</p>
+      </CardContent>
+    </Card>
   );
 }

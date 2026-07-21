@@ -1,7 +1,7 @@
 # Signup Error Fix Instructions
 
 ## Problem
-When trying to sign up, you're getting a 500 error because the Row Level Security (RLS) policies on the `users` table are blocking the signup flow from verifying that the user record was created.
+When trying to register, you're getting a 500 error because the Row Level Security (RLS) policies on the `users` table are blocking the registration flow from verifying that the user record was created.
 
 ## Root Cause
 The RLS policies only allow:
@@ -39,7 +39,7 @@ Make sure email confirmation is disabled for testing, or handle the confirmation
 3. If enabled, users will need to verify their email before they can sign in
 
 ### Step 3: Test the Signup Flow
-After applying the SQL migration, try signing up again. The flow should now work correctly.
+After applying the SQL migration, try registering again. The flow should now work correctly.
 
 ## Code Changes Made
 I've also updated the `lib/supabase-auth-context.tsx` file to:
@@ -54,6 +54,6 @@ I've also updated the `lib/supabase-auth-context.tsx` file to:
 
 ## Testing
 After applying the fix:
-1. Try signing up with a new email address
-2. If email confirmation is enabled, you should see: "Account created! Please check your email to verify your account before signing in."
-3. If email confirmation is disabled, you should be automatically logged in after signup
+1. Try registering with a new email address
+2. If email confirmation is enabled, you should see: "Profile created! Please check your email to verify before signing in."
+3. If email confirmation is disabled, you should be automatically logged in after registration

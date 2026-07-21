@@ -9,6 +9,8 @@ export interface SessionData {
 }
 
 const SESSION_COOKIE_NAME = 'ticketrevolution_session';
+/** Keep signed-in users for a long time; cookie is refreshed while they use the app. */
+const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 400; // ~13 months
 const SESSION_SECRET =
   process.env.SESSION_SECRET ||
   process.env.SUPABASE_SERVICE_ROLE_KEY ||
@@ -91,9 +93,17 @@ export async function createSession(data: SessionData): Promise<void> {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
-    maxAge: 60 * 60 * 24 * 30, // 30 days
+    maxAge: SESSION_MAX_AGE_SECONDS,
     path: '/',
   });
+}
+
+/** Re-issue the session cookie so active users do not expire mid-use. */
+export async function refreshSessionCookie(): Promise<SessionData | null> {
+  const session = await getSession();
+  if (!session) return null;
+  await createSession(session);
+  return session;
 }
 
 export async function getSession(): Promise<SessionData | null> {

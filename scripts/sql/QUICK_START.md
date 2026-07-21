@@ -20,7 +20,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 3. Paste and click **Run**
 
 ### Step 4: Create Admin User
-1. Sign up through your app at `/signup`
+1. Register through your app
 2. In Supabase **SQL Editor**, run:
 ```sql
 UPDATE users SET role = 'admin' WHERE email = 'your-email@example.com';
@@ -112,7 +112,7 @@ UPDATE orders SET status = 'refunded' WHERE id = 'order-id';
 
 ## 🎯 Quick Test Flow
 
-1. **Sign up** as customer
+1. **Register** as customer
 2. **Promote to organizer**: `UPDATE users SET role = 'organizer' WHERE email = '...'`
 3. **Create event** at `/organizer/dashboard/create`
 4. **Promote to admin**: `UPDATE users SET role = 'admin' WHERE email = '...'`

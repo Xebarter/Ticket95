@@ -28,17 +28,12 @@ export function EventManagementHeader({ events, event, selectedEventId, onSelect
   return (
     <Card className="border-border/70">
       <CardContent className="space-y-4 p-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0">
-            <h1 className="text-2xl font-semibold tracking-tight">Event management</h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Manage event setup and track ticket activity with buyer-level details.
-            </p>
-          </div>
-          <Button asChild size="sm" className="rounded-full sm:mt-1">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <h1 className="text-2xl font-semibold tracking-tight">Events</h1>
+          <Button asChild size="sm" className="rounded-xl">
             <Link href="/organizer/dashboard/create">
               <Plus className="mr-1.5 h-4 w-4" />
-              New event
+              New
             </Link>
           </Button>
         </div>
@@ -46,10 +41,9 @@ export function EventManagementHeader({ events, event, selectedEventId, onSelect
         {events.length > 0 ? (
           <div className="space-y-4">
             <div>
-              <p className="mb-2 text-sm font-medium">Select event</p>
               <Select value={selectedEventId} onValueChange={onSelectEvent}>
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Choose an event to manage" />
+                  <SelectValue placeholder="Select event" />
                 </SelectTrigger>
                 <SelectContent>
                   {events.map((listedEvent) => (
@@ -86,17 +80,17 @@ export function EventManagementHeader({ events, event, selectedEventId, onSelect
                 <p className="text-sm text-muted-foreground">{event.venue}</p>
 
                 <div className="mt-3 flex flex-wrap gap-2">
-                  <Button variant="outline" size="sm" className="rounded-full" onClick={() => setPreviewOpen(true)}>
+                  <Button variant="outline" size="sm" className="rounded-xl" onClick={() => setPreviewOpen(true)}>
                     <Eye className="mr-1.5 h-4 w-4" />
                     Preview
                   </Button>
-                  <Button asChild variant="outline" size="sm" className="rounded-full">
+                  <Button asChild variant="outline" size="sm" className="rounded-xl">
                     <Link href={`/organizer/dashboard/edit/${event.id}`}>Edit</Link>
                   </Button>
-                  <Button asChild variant="outline" size="sm" className="rounded-full">
+                  <Button asChild variant="outline" size="sm" className="rounded-xl">
                     <Link href={`/profile/verify?event=${event.id}`}>
                       <QrCode className="mr-1.5 h-4 w-4" />
-                      Verify tickets
+                      Verify
                     </Link>
                   </Button>
                 </div>

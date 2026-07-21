@@ -113,7 +113,7 @@ cp .env.local.example .env.local
 # Copy and run: scripts/sql/run_all_migrations.sql
 
 # 3. Create admin user
-# Sign up through app, then run:
+# Register through the app, then run:
 # UPDATE users SET role = 'admin' WHERE email = 'your@email.com';
 ```
 

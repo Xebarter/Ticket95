@@ -62,7 +62,7 @@ npm run dev
 ```
 
 Then test these flows:
-- ✅ Sign up a new account
+- ✅ Register a new profile
 - ✅ Log in with credentials
 - ✅ Request password reset
 - ✅ Reset password via email link
@@ -109,7 +109,7 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000
 - ✅ CSRF protection
 
 ### **Functionality**
-- ✅ Sign up with email/password
+- ✅ Register with email/password
 - ✅ Log in with email/password
 - ✅ Forgot password
 - ✅ Reset password

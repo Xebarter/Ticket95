@@ -92,7 +92,7 @@ function SignupFormInner() {
         router.push('/profile');
       }, 2000);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Signup failed. Please try again.');
+      setError(err instanceof Error ? err.message : 'Unable to continue. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -103,7 +103,7 @@ function SignupFormInner() {
       <Alert className="border-emerald-200 bg-emerald-50 text-emerald-900">
         <CheckCircle2 className="h-4 w-4 text-emerald-600" />
         <AlertDescription>
-          Account created successfully. Redirecting to your dashboard...
+          Registration complete. Redirecting to your dashboard...
         </AlertDescription>
       </Alert>
     );
@@ -220,15 +220,15 @@ function SignupFormInner() {
         {loading ? (
           <>
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            Creating account...
+            Creating profile...
           </>
         ) : (
-          'Create account'
+          'Create profile'
         )}
       </Button>
 
       <p className="text-center text-xs leading-relaxed text-slate-400">
-        By creating an account, you agree to our terms of service and privacy policy.
+        By continuing, you agree to our terms of service and privacy policy.
       </p>
     </form>
     </div>

@@ -6,11 +6,9 @@ import useSWR from 'swr';
 import { supabase } from '@/lib/supabase-client';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { AlertCircle, Camera, CheckCircle2, Copy, RefreshCcw, ScanLine, ShieldAlert, Ticket, XCircle } from 'lucide-react';
+import { Camera, CheckCircle2, Copy, RefreshCcw, ShieldAlert, Ticket, XCircle } from 'lucide-react';
 
 type VerifiableEvent = {
   id: string;
@@ -443,140 +441,105 @@ export default function AdminVerifyClient() {
     : 'border-red-500/25 bg-red-500/5 text-red-700';
 
   return (
-    <div className="space-y-6">
-      <header className="space-y-2">
-        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Ticket verifier</h1>
-        <p className="text-sm text-muted-foreground">
-          Generate event-specific verification links, scan ticket QR codes, and mark valid entries as used.
-        </p>
-      </header>
+    <div className="space-y-5">
+      <h1 className="text-2xl font-semibold tracking-tight">Verify</h1>
 
-      <Card className="border-border/70">
-        <CardHeader>
-          <CardTitle>Verification event</CardTitle>
-          <CardDescription>
-            Choose an event first. Each event has a unique verification link and only accepts its own tickets.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="verify-event">Event</Label>
-            <Select value={selectedEvent?.id} onValueChange={onSelectEvent}>
-              <SelectTrigger id="verify-event" className="w-full">
-                <SelectValue placeholder={isLoading ? 'Loading events...' : 'Select event'} />
-              </SelectTrigger>
-              <SelectContent>
-                {events.map((event) => (
-                  <SelectItem key={event.id} value={event.id}>
-                    {event.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+      <div className="space-y-4 rounded-xl border border-border/70 p-4">
+        <p className="text-sm font-medium">Event</p>
+        <Select value={selectedEvent?.id} onValueChange={onSelectEvent}>
+          <SelectTrigger className="w-full">
+            <SelectValue placeholder={isLoading ? 'Loading…' : 'Select event'} />
+          </SelectTrigger>
+          <SelectContent>
+            {events.map((event) => (
+              <SelectItem key={event.id} value={event.id}>
+                {event.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
 
-          {error ? (
-            <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
-              {(error as any)?.status === 401
-                ? 'Unauthorized. Sign in with an admin or organizer account to verify tickets.'
-                : 'Failed to load events.'}
-            </div>
-          ) : null}
+        {error ? (
+          <p className="text-sm text-destructive">
+            {(error as any)?.status === 401 ? 'Unauthorized' : 'Failed to load'}
+          </p>
+        ) : null}
 
-          {selectedEvent ? (
-            <div className="space-y-3 rounded-xl border border-border/80 p-4">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div>
-                  <p className="font-medium">{selectedEvent.name}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {formatDate(selectedEvent.date)} • {selectedEvent.venue}
-                  </p>
-                </div>
-                <Badge variant="outline">{selectedEvent.status}</Badge>
+        {selectedEvent ? (
+          <div className="space-y-3 rounded-xl bg-muted/40 p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="min-w-0">
+                <p className="truncate font-medium">{selectedEvent.name}</p>
+                <p className="text-xs text-muted-foreground">
+                  {formatDate(selectedEvent.date)} · {selectedEvent.venue}
+                </p>
               </div>
-              <div className="flex flex-col gap-2 sm:flex-row">
-                <Input readOnly value={verifyLink} />
-                <Button variant="outline" onClick={copyVerifyLink} className="sm:w-auto">
-                  <Copy className="mr-1.5 h-4 w-4" />
-                  {copyState === 'copied' ? 'Copied' : copyState === 'failed' ? 'Copy failed' : 'Copy link'}
-                </Button>
-              </div>
+              <Badge variant="outline" className="rounded-full text-[10px]">
+                {selectedEvent.status}
+              </Badge>
             </div>
-          ) : null}
-        </CardContent>
-      </Card>
-
-      <Card className="border-border/70">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <ScanLine className="h-5 w-5 text-primary" />
-            QR scanning
-          </CardTitle>
-          <CardDescription>
-            Use camera scanning when supported, or paste the ticket QR payload manually.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex flex-wrap gap-2">
-            <Button onClick={() => void startScanner()} disabled={!selectedEvent || cameraActive}>
-              <Camera className="mr-1.5 h-4 w-4" />
-              {cameraActive ? 'Scanner active' : 'Start camera'}
-            </Button>
-            <Button variant="outline" onClick={stopScanner} disabled={!cameraActive}>
-              Stop camera
-            </Button>
-          </div>
-
-          {cameraError ? (
-            <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
-              {cameraError}
-            </div>
-          ) : null}
-          {!scannerSupported ? (
-            <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-700">
-              QR camera scanning is not available in this browser. Manual verification still works below.
-            </div>
-          ) : null}
-
-          <div className="overflow-hidden rounded-xl border border-border/80 bg-black/90">
-            <video ref={videoRef} className="aspect-video w-full object-cover" muted playsInline />
-          </div>
-          <canvas ref={canvasRef} className="hidden" />
-
-          <form className="space-y-2" onSubmit={onManualSubmit}>
-            <Label htmlFor="manual-qr">Manual QR payload</Label>
             <div className="flex flex-col gap-2 sm:flex-row">
-              <Input
-                id="manual-qr"
-                value={manualPayload}
-                onChange={(event) => setManualPayload(event.target.value)}
-                placeholder='Paste scanned QR content (for example: {"orderId":"...","ticketIndex":0})'
-              />
-              <Button type="submit" disabled={!selectedEvent || !manualPayload.trim() || isVerifying}>
-                {isVerifying ? 'Verifying...' : 'Verify'}
+              <Input readOnly value={verifyLink} />
+              <Button variant="outline" onClick={copyVerifyLink} className="rounded-xl sm:w-auto">
+                <Copy className="mr-1.5 h-4 w-4" />
+                {copyState === 'copied' ? 'Copied' : copyState === 'failed' ? 'Failed' : 'Copy'}
               </Button>
             </div>
-          </form>
-        </CardContent>
-      </Card>
+          </div>
+        ) : null}
+      </div>
 
-      <Card className="border-border/70">
-        <CardHeader>
-          <CardTitle>Verification result</CardTitle>
-          <CardDescription>Latest scanned ticket status for the selected event.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {scanError ? (
-            <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
-              {scanError}
-            </div>
-          ) : null}
+      <div className="space-y-4 rounded-xl border border-border/70 p-4">
+        <p className="text-sm font-medium">Scanner</p>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            className="rounded-xl"
+            onClick={() => void startScanner()}
+            disabled={!selectedEvent || cameraActive}
+          >
+            <Camera className="mr-1.5 h-4 w-4" />
+            {cameraActive ? 'Active' : 'Camera'}
+          </Button>
+          <Button variant="outline" className="rounded-xl" onClick={stopScanner} disabled={!cameraActive}>
+            Stop
+          </Button>
+        </div>
 
-          {!scanResult ? (
-            <div className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-              Scan a QR code to see validation status.
-            </div>
-          ) : (
+        {cameraError ? <p className="text-sm text-destructive">{cameraError}</p> : null}
+        {!scannerSupported ? (
+          <p className="text-sm text-muted-foreground">Camera unavailable — use manual entry</p>
+        ) : null}
+
+        <div className="overflow-hidden rounded-xl border border-border/80 bg-black/90">
+          <video ref={videoRef} className="aspect-video w-full object-cover" muted playsInline />
+        </div>
+        <canvas ref={canvasRef} className="hidden" />
+
+        <form className="space-y-2" onSubmit={onManualSubmit}>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Input
+              value={manualPayload}
+              onChange={(event) => setManualPayload(event.target.value)}
+              placeholder="Paste QR payload"
+            />
+            <Button
+              type="submit"
+              className="rounded-xl"
+              disabled={!selectedEvent || !manualPayload.trim() || isVerifying}
+            >
+              {isVerifying ? '…' : 'Verify'}
+            </Button>
+          </div>
+        </form>
+      </div>
+
+      <div className="space-y-4 rounded-xl border border-border/70 p-4">
+        <p className="text-sm font-medium">Result</p>
+        {scanError ? <p className="text-sm text-destructive">{scanError}</p> : null}
+
+        {!scanResult ? (
+          <p className="py-6 text-center text-sm text-muted-foreground">—</p>
+        ) : (
             <div className={`space-y-3 rounded-xl border p-4 ${resultToneClass}`}>
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-start gap-2">
@@ -589,7 +552,7 @@ export default function AdminVerifyClient() {
                   )}
                   <div>
                     <p className="font-medium">{scanResult.message}</p>
-                    <p className="text-xs opacity-80">Reason: {scanResult.reason}</p>
+                    <p className="text-xs opacity-80">{scanResult.reason}</p>
                   </div>
                 </div>
                 <Button
@@ -618,24 +581,15 @@ export default function AdminVerifyClient() {
               ) : null}
 
               {scanResult.valid && scanResult.canMarkUsed ? (
-                <div className="space-y-2">
-                  <p className="text-sm font-medium">Ready: Mark as Used</p>
-                  <Button onClick={() => void markAsUsed()} disabled={isMarkingUsed}>
-                    {isMarkingUsed ? 'Marking...' : 'Mark as Used'}
-                  </Button>
-                </div>
+                <Button className="rounded-xl" onClick={() => void markAsUsed()} disabled={isMarkingUsed}>
+                  {isMarkingUsed ? '…' : 'Mark used'}
+                </Button>
               ) : scanResult.reason === 'wrong_event' ? (
-                <div className="inline-flex items-center gap-2 rounded-md border border-red-400/30 bg-red-50/70 px-3 py-2 text-sm">
-                  <AlertCircle className="h-4 w-4" />
-                  Invalid for this event link.
-                </div>
-              ) : (
-                <p className="text-sm font-medium">Result captured. Scan another ticket when ready.</p>
-              )}
+                <p className="text-sm">Wrong event</p>
+              ) : null}
             </div>
           )}
-        </CardContent>
-      </Card>
+      </div>
 
       {scanResult ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">

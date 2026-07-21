@@ -33,6 +33,24 @@ CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
 -- Enable Row Level Security
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 
+-- Prevent infinite recursion in RLS policies:
+-- Some policies check admin role by selecting from `users`, which can recurse
+-- when the `users` policies themselves use `users` in their USING clauses.
+-- Use a SECURITY DEFINER helper to read the role safely.
+CREATE OR REPLACE FUNCTION public.get_user_role(user_id UUID)
+RETURNS TEXT AS $$
+DECLARE
+  user_role TEXT;
+BEGIN
+  SELECT role INTO user_role FROM public.users WHERE id = user_id;
+  RETURN user_role;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER STABLE;
+
+-- Allow the helper to be used under RLS checks
+GRANT EXECUTE ON FUNCTION public.get_user_role(UUID) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_user_role(UUID) TO anon;
+
 -- Drop existing policies if they exist (for idempotency)
 DROP POLICY IF EXISTS "Users can read own profile" ON users;
 DROP POLICY IF EXISTS "Users can update own profile" ON users;
@@ -48,7 +66,7 @@ CREATE POLICY "Users can read own profile" ON users
 -- Policy: Admins can view all users
 CREATE POLICY "Admins can view all users" ON users
   FOR SELECT USING (
-    (SELECT role FROM users WHERE id = auth.uid()) = 'admin'
+    public.get_user_role(auth.uid()) = 'admin'
   );
 
 -- Policy: Anyone can view organizer profiles (public info)
@@ -63,10 +81,10 @@ CREATE POLICY "Users can update own profile" ON users
 -- Policy: Admins can update any user
 CREATE POLICY "Admins can update any user" ON users
   FOR UPDATE USING (
-    (SELECT role FROM users WHERE id = auth.uid()) = 'admin'
+    public.get_user_role(auth.uid()) = 'admin'
   )
   WITH CHECK (
-    (SELECT role FROM users WHERE id = auth.uid()) = 'admin'
+    public.get_user_role(auth.uid()) = 'admin'
   );
 
 -- Create a trigger to update updated_at timestamp
@@ -521,6 +539,71 @@ CREATE TRIGGER populate_ticket_details_trigger
   BEFORE INSERT ON tickets
   FOR EACH ROW
   EXECUTE FUNCTION populate_ticket_details();
+
+-- =====================================================
+-- 19. CREATE SUPPORT MESSAGES TABLE
+-- =====================================================
+
+CREATE TABLE IF NOT EXISTS support_messages (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+
+  name TEXT,
+  email TEXT NOT NULL,
+  phone TEXT,
+
+  category TEXT NOT NULL DEFAULT 'general',
+  subject TEXT,
+  order_reference TEXT,
+  event_name TEXT,
+
+  message TEXT NOT NULL,
+
+  status TEXT NOT NULL DEFAULT 'new' CHECK (status IN ('new', 'resolved')),
+  resolved_at TIMESTAMPTZ,
+
+  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_support_messages_created_at ON support_messages(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_support_messages_email ON support_messages(email);
+CREATE INDEX IF NOT EXISTS idx_support_messages_status ON support_messages(status);
+
+ALTER TABLE support_messages ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Admins can view support messages" ON support_messages;
+CREATE POLICY "Admins can view support messages"
+  ON support_messages
+  FOR SELECT
+  USING (
+    (SELECT role FROM users WHERE id = auth.uid()) = 'admin'
+  );
+
+DROP POLICY IF EXISTS "Admins can update support messages" ON support_messages;
+CREATE POLICY "Admins can update support messages"
+  ON support_messages
+  FOR UPDATE
+  USING (
+    (SELECT role FROM users WHERE id = auth.uid()) = 'admin'
+  )
+  WITH CHECK (
+    (SELECT role FROM users WHERE id = auth.uid()) = 'admin'
+  );
+
+CREATE OR REPLACE FUNCTION update_support_messages_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = CURRENT_TIMESTAMP;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS support_messages_updated_at_trigger ON support_messages;
+CREATE TRIGGER support_messages_updated_at_trigger
+  BEFORE UPDATE ON support_messages
+  FOR EACH ROW
+  EXECUTE FUNCTION update_support_messages_updated_at();
 
 -- =====================================================
 -- SETUP COMPLETE
