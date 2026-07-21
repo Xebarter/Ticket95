@@ -14,7 +14,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { supabase } from '@/lib/supabase-client';
+import { getSupabaseBrowserClient } from '@/lib/supabase/browser';
+
+const supabase = getSupabaseBrowserClient();
 
 export default function AdminEventEdit({ event, onUpdatedAction }: { event: any, onUpdatedAction: () => void }) {
   const [open, setOpen] = useState(false);

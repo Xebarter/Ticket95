@@ -101,11 +101,6 @@ export function Footer() {
                   Create Event
                 </Link>
               </li>
-              <li>
-                <Link href="/admin/dashboard" className="text-sm text-muted-foreground hover:text-primary transition-colors">
-                  Admin Panel
-                </Link>
-              </li>
             </ul>
           </div>
 

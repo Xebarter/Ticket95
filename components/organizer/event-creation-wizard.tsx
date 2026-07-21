@@ -8,9 +8,11 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { AlertCircle, CheckCircle2, ChevronLeft, ChevronRight, Trash2, Plus, Image as ImageIcon, Star, ArrowLeft } from 'lucide-react';
 import { createEvent, createSponsor, createTicketTypes, updateEvent, replaceEventSponsors, replaceEventTicketTypes } from '@/lib/supabase-db';
-import { supabase } from '@/lib/supabase-client';
+import { getSupabaseBrowserClient } from '@/lib/supabase/browser';
 import { isEventDatePast } from '@/lib/event-status';
 import { EVENT_CATEGORIES, normalizeEventCategory, type EventCategoryId } from '@/lib/event-categories';
+
+const supabase = getSupabaseBrowserClient();
 
 type WizardStep = 'basic' | 'pricing' | 'organizer' | 'sponsors' | 'review';
 
@@ -119,19 +121,53 @@ const getInitialDateTimeParts = (sourceDate?: string) => {
 };
 
 const CURRENCY_OPTIONS = [
-  'USD',
-  'EUR',
-  'GBP',
-  'UGX',
-  'KES',
-  'TZS',
-  'RWF',
-  'NGN',
-  'GHS',
-  'ZAR',
-  'AED',
-  'INR',
-];
+  { code: 'UGX', label: 'UGX — Ugandan Shilling' },
+  { code: 'KES', label: 'KES — Kenyan Shilling' },
+  { code: 'TZS', label: 'TZS — Tanzanian Shilling' },
+  { code: 'RWF', label: 'RWF — Rwandan Franc' },
+  { code: 'NGN', label: 'NGN — Nigerian Naira' },
+  { code: 'GHS', label: 'GHS — Ghanaian Cedi' },
+  { code: 'ZAR', label: 'ZAR — South African Rand' },
+  { code: 'USD', label: 'USD — US Dollar' },
+  { code: 'EUR', label: 'EUR — Euro' },
+  { code: 'GBP', label: 'GBP — British Pound' },
+  { code: 'AED', label: 'AED — UAE Dirham' },
+  { code: 'INR', label: 'INR — Indian Rupee' },
+] as const;
+
+const MINUTE_OPTIONS = Array.from({ length: 12 }, (_, i) => String(i * 5).padStart(2, '0'));
+
+const STEP_COPY: Record<WizardStep, { title: string; description: string }> = {
+  basic: {
+    title: 'Event details',
+    description: 'Name your event, set when and where it happens, and add photos.',
+  },
+  pricing: {
+    title: 'Tickets',
+    description: 'Choose a currency and add at least one ticket type people can buy.',
+  },
+  organizer: {
+    title: 'Organizer contact',
+    description: 'Buyers and admins use this to reach you about the event.',
+  },
+  sponsors: {
+    title: 'Sponsors',
+    description: 'Optional. Add partners now, or skip and do it later.',
+  },
+  review: {
+    title: 'Review & submit',
+    description: 'Double-check the details before you publish.',
+  },
+};
+
+const NEXT_LABELS: Partial<Record<WizardStep, string>> = {
+  basic: 'Continue to tickets',
+  pricing: 'Continue to organizer',
+  organizer: 'Continue to sponsors',
+  sponsors: 'Review event',
+};
+
+type FieldErrors = Partial<Record<string, string>>;
 
 const maskId = (value?: string | null) => {
   if (!value) return 'null';
@@ -168,6 +204,7 @@ export function EventCreationWizard({
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadComplete, setUploadComplete] = useState(false);
   const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [success, setSuccess] = useState(false);
 
   const [eventImages, setEventImages] = useState<File[]>([]);
@@ -200,6 +237,25 @@ export function EventCreationWizard({
     };
   }, [eventImagePreviews]);
 
+  // Snap minutes to 5-minute options (edit mode may have odd values).
+  useEffect(() => {
+    if (MINUTE_OPTIONS.includes(eventMinute)) return;
+    const n = Math.min(Math.max(parseInt(eventMinute, 10) || 0, 0), 59);
+    const rounded = Math.round(n / 5) * 5;
+    setEventMinute(String(rounded === 60 ? 0 : rounded).padStart(2, '0'));
+  }, [eventMinute]);
+
+  // Open the first unfinished ticket for editing so create isn’t a dead end.
+  useEffect(() => {
+    if (step !== 'pricing' || editingTicketType) return;
+    const unfinished = ticketTypes.find(
+      (ticketType) => !ticketType.price || Number(ticketType.quantity) <= 0
+    );
+    if (unfinished) {
+      setEditingTicketType({ ...unfinished });
+    }
+  }, [step]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const [formData, setFormData] = useState({
     name: initialEvent?.name || '',
     description: initialEvent?.description || '',
@@ -210,7 +266,7 @@ export function EventCreationWizard({
       initialDateTime.timePeriod
     ),
     venue: initialEvent?.venue || '',
-    currency: initialEvent?.currency || 'USD',
+    currency: initialEvent?.currency || 'UGX',
     category: normalizeEventCategory(initialEvent?.category) as EventCategoryId,
     ticketPrice: initialEvent?.ticket_price != null ? String(initialEvent.ticket_price) : '',
     totalTickets: initialEvent?.total_tickets != null ? String(initialEvent.total_tickets) : '',
@@ -237,7 +293,16 @@ export function EventCreationWizard({
       }));
     }
 
-    return [];
+    // Start with one editable type so create mode isn’t an empty dead-end.
+    return [
+      {
+        id: `ticket_type_${Date.now()}_0`,
+        name: 'General Admission',
+        description: '',
+        price: '',
+        quantity: '100',
+      },
+    ];
   });
   const [newTicketType, setNewTicketType] = useState<Omit<WizardTicketType, 'id'>>({
     name: '',
@@ -286,7 +351,15 @@ export function EventCreationWizard({
 
   const handleEventImagesChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
-    setEventImages(files);
+    if (files.length === 0) return;
+    setEventImages((prev) => [...prev, ...files]);
+    setFieldErrors((prev) => {
+      if (!prev.images) return prev;
+      const next = { ...prev };
+      delete next.images;
+      return next;
+    });
+    e.target.value = '';
   };
 
   const removeEventImage = (index: number) => {
@@ -308,6 +381,16 @@ export function EventCreationWizard({
       return prev;
     });
   };
+
+  const galleryImages = useMemo(() => {
+    return [
+      ...existingImageUrls.map((src, index) => ({ src, index })),
+      ...eventImagePreviews.map((src, i) => ({
+        src,
+        index: existingImageUrls.length + i,
+      })),
+    ];
+  }, [existingImageUrls, eventImagePreviews]);
 
   const withTimeout = async <T,>(promise: Promise<T>, ms: number, message: string): Promise<T> => {
     let timeoutId: ReturnType<typeof setTimeout> | undefined;
@@ -430,39 +513,70 @@ export function EventCreationWizard({
     setSponsors(sponsors.filter((s) => s.id !== id));
   };
 
-  const validateStep = (): boolean => {
-    switch (step) {
-      case 'basic':
-        return !!(
-          formData.name.trim() &&
-          formData.category &&
-          eventDate &&
-          eventHour &&
-          eventMinute &&
-          formData.date &&
-          formData.venue.trim() &&
-          (existingImageUrls.length + eventImages.length) > 0
-        );
-      case 'pricing':
-        if (ticketTypes.length === 0) return false;
-        return ticketTypes.every((ticketType) =>
-          ticketType.name.trim() &&
-          Number(ticketType.price) >= 0 &&
-          Number(ticketType.quantity) > 0
-        );
-      case 'organizer':
-        return !!(organizer.name.trim() && organizer.phone.trim());
+  const getErrorsForStep = (targetStep: WizardStep): FieldErrors => {
+    const errors: FieldErrors = {};
+
+    switch (targetStep) {
+      case 'basic': {
+        if (!formData.name.trim()) errors.name = 'Enter an event name';
+        if (!formData.category) errors.category = 'Choose a category';
+        if (!eventDate || !eventHour || !eventMinute || !formData.date) {
+          errors.date = 'Set the date and time';
+        } else if (mode === 'create' && isEventDatePast(formData.date)) {
+          errors.date = 'Choose a date and time in the future';
+        }
+        if (!formData.venue.trim()) errors.venue = 'Enter the venue or location';
+        if (existingImageUrls.length + eventImages.length === 0) {
+          errors.images = 'Add at least one event photo';
+        }
+        break;
+      }
+      case 'pricing': {
+        if (!formData.currency) errors.currency = 'Select a currency';
+        if (ticketTypes.length === 0) {
+          errors.tickets = 'Add at least one ticket type';
+        } else if (
+          !ticketTypes.every(
+            (ticketType) =>
+              ticketType.name.trim() &&
+              ticketType.price !== '' &&
+              Number(ticketType.price) >= 0 &&
+              Number(ticketType.quantity) > 0
+          )
+        ) {
+          errors.tickets = 'Each ticket needs a name, price (0+), and quantity above 0';
+        }
+        break;
+      }
+      case 'organizer': {
+        if (!organizer.name.trim()) errors.organizerName = 'Enter the organizer name';
+        if (!organizer.phone.trim()) errors.organizerPhone = 'Enter a contact phone number';
+        break;
+      }
       default:
-        return true;
+        break;
     }
+
+    return errors;
+  };
+
+  const isStepValid = (targetStep: WizardStep) => Object.keys(getErrorsForStep(targetStep)).length === 0;
+
+  const validateStep = (): boolean => {
+    const errors = getErrorsForStep(step);
+    setFieldErrors(errors);
+    if (Object.keys(errors).length > 0) {
+      const first = Object.values(errors)[0];
+      setError(first || 'Please fix the highlighted fields');
+      return false;
+    }
+    setError('');
+    return true;
   };
 
   const goToNextStep = () => {
-    if (!validateStep()) {
-      setError('Please fill in all required fields');
-      return;
-    }
-    setError('');
+    if (!validateStep()) return;
+    setFieldErrors({});
     const nextStep = steps[currentStepIndex + 1];
     if (nextStep) setStep(nextStep.key);
   };
@@ -471,11 +585,45 @@ export function EventCreationWizard({
     const prevStep = steps[currentStepIndex - 1];
     if (prevStep) setStep(prevStep.key);
     setError('');
+    setFieldErrors({});
   };
 
   const goToStep = (targetStep: WizardStep) => {
+    const targetIndex = steps.findIndex((s) => s.key === targetStep);
+    if (targetIndex < 0 || targetIndex === currentStepIndex) return;
+
+    // Always allow going backward.
+    if (targetIndex < currentStepIndex) {
+      setStep(targetStep);
+      setError('');
+      setFieldErrors({});
+      return;
+    }
+
+    // Going forward: every earlier step must be complete.
+    for (let i = 0; i < targetIndex; i++) {
+      const prior = steps[i];
+      const priorErrors = getErrorsForStep(prior.key);
+      if (Object.keys(priorErrors).length > 0) {
+        setStep(prior.key);
+        setFieldErrors(priorErrors);
+        setError(`Finish “${prior.title}” before continuing`);
+        return;
+      }
+    }
+
     setStep(targetStep);
     setError('');
+    setFieldErrors({});
+  };
+
+  const clearFieldError = (key: string) => {
+    setFieldErrors((prev) => {
+      if (!prev[key]) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
   };
 
   const isTicketTypeValid = (ticketType: Omit<WizardTicketType, 'id'> | WizardTicketType) => {
@@ -577,9 +725,15 @@ export function EventCreationWizard({
     setUploadComplete(false);
 
     if (!user) {
-      setError(isAdminContext ? 'You must be logged in as an admin' : 'You must be logged in as an organizer');
-      setLoading(false);
-      return;
+      // Auth context may still be hydrating — confirm via the cookie session client.
+      const {
+        data: { user: authUser },
+      } = await supabase.auth.getUser();
+      if (!authUser) {
+        setError(isAdminContext ? 'You must be logged in as an admin' : 'You must be logged in as an organizer');
+        setLoading(false);
+        return;
+      }
     }
 
     try {
@@ -816,7 +970,7 @@ export function EventCreationWizard({
             </Button>
           ) : null}
           <h1 className="text-2xl font-semibold tracking-tight">
-            {mode === 'edit' ? 'Edit' : 'Create'}
+            {mode === 'edit' ? 'Edit event' : 'Create event'}
           </h1>
         </div>
       ) : null}
@@ -825,7 +979,7 @@ export function EventCreationWizard({
         <div className="flex gap-1.5 sm:gap-2">
           {steps.map((s, idx) => {
             const active = step === s.key;
-            const done = idx < currentStepIndex;
+            const done = idx < currentStepIndex && isStepValid(s.key);
             return (
               <button
                 type="button"
@@ -857,6 +1011,10 @@ export function EventCreationWizard({
             className="h-full rounded-full bg-primary transition-all"
             style={{ width: `${((currentStepIndex + 1) / steps.length) * 100}%` }}
           />
+        </div>
+        <div>
+          <h2 className="text-lg font-semibold tracking-tight">{STEP_COPY[step].title}</h2>
+          <p className="mt-0.5 text-sm text-muted-foreground">{STEP_COPY[step].description}</p>
         </div>
       </div>
 
@@ -896,19 +1054,29 @@ export function EventCreationWizard({
             {step === 'basic' && (
               <div className="space-y-5">
                 <div>
-                  <label className="text-sm font-medium">Name *</label>
+                  <label className="text-sm font-medium" htmlFor="event-name">
+                    Event name *
+                  </label>
                   <Input
+                    id="event-name"
                     type="text"
                     name="name"
-                    placeholder="Event name"
+                    placeholder="e.g. Kampala Jazz Night"
                     value={formData.name}
-                    onChange={handleChange}
-                    className="mt-1.5"
+                    onChange={(e) => {
+                      handleChange(e);
+                      clearFieldError('name');
+                    }}
+                    aria-invalid={!!fieldErrors.name}
+                    className={`mt-1.5 ${fieldErrors.name ? 'border-destructive' : ''}`}
                   />
+                  {fieldErrors.name ? (
+                    <p className="mt-1 text-xs text-destructive">{fieldErrors.name}</p>
+                  ) : null}
                 </div>
 
                 <div>
-                  <label className="text-sm font-medium">Category *</label>
+                  <p className="text-sm font-medium">Category *</p>
                   <div className="mt-1.5 grid grid-cols-2 gap-2 sm:grid-cols-4">
                     {EVENT_CATEGORIES.map((category) => {
                       const selected = formData.category === category.id;
@@ -916,13 +1084,16 @@ export function EventCreationWizard({
                         <button
                           key={category.id}
                           type="button"
-                          onClick={() =>
-                            setFormData((prev) => ({ ...prev, category: category.id }))
-                          }
+                          onClick={() => {
+                            setFormData((prev) => ({ ...prev, category: category.id }));
+                            clearFieldError('category');
+                          }}
                           className={`rounded-xl border px-3 py-2.5 text-sm font-medium transition-colors ${
                             selected
                               ? 'border-primary bg-primary text-primary-foreground'
-                              : 'border-border bg-background hover:bg-muted/40'
+                              : fieldErrors.category
+                                ? 'border-destructive bg-background hover:bg-muted/40'
+                                : 'border-border bg-background hover:bg-muted/40'
                           }`}
                         >
                           {category.label}
@@ -930,13 +1101,19 @@ export function EventCreationWizard({
                       );
                     })}
                   </div>
+                  {fieldErrors.category ? (
+                    <p className="mt-1 text-xs text-destructive">{fieldErrors.category}</p>
+                  ) : null}
                 </div>
 
                 <div>
-                  <label className="text-sm font-medium">Description</label>
+                  <label className="text-sm font-medium" htmlFor="event-description">
+                    Description
+                  </label>
                   <Textarea
+                    id="event-description"
                     name="description"
-                    placeholder="Optional"
+                    placeholder="What’s this event about? (optional)"
                     value={formData.description}
                     onChange={handleChange}
                     className="mt-1.5 resize-none"
@@ -950,12 +1127,23 @@ export function EventCreationWizard({
                     <Input
                       type="date"
                       value={eventDate}
-                      onChange={(e) => setEventDate(e.target.value)}
+                      onChange={(e) => {
+                        setEventDate(e.target.value);
+                        clearFieldError('date');
+                      }}
+                      aria-invalid={!!fieldErrors.date}
+                      className={fieldErrors.date ? 'border-destructive' : ''}
                     />
                     <select
                       value={eventHour}
-                      onChange={(e) => setEventHour(e.target.value)}
-                      className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                      onChange={(e) => {
+                        setEventHour(e.target.value);
+                        clearFieldError('date');
+                      }}
+                      aria-label="Hour"
+                      className={`h-10 rounded-md border bg-background px-3 text-sm ${
+                        fieldErrors.date ? 'border-destructive' : 'border-input'
+                      }`}
                     >
                       {Array.from({ length: 12 }).map((_, idx) => {
                         const value = String(idx + 1);
@@ -968,22 +1156,31 @@ export function EventCreationWizard({
                     </select>
                     <select
                       value={eventMinute}
-                      onChange={(e) => setEventMinute(e.target.value)}
-                      className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                      onChange={(e) => {
+                        setEventMinute(e.target.value);
+                        clearFieldError('date');
+                      }}
+                      aria-label="Minute"
+                      className={`h-10 rounded-md border bg-background px-3 text-sm ${
+                        fieldErrors.date ? 'border-destructive' : 'border-input'
+                      }`}
                     >
-                      {Array.from({ length: 60 }).map((_, idx) => {
-                        const value = String(idx).padStart(2, '0');
-                        return (
-                          <option key={value} value={value}>
-                            {value}
-                          </option>
-                        );
-                      })}
+                      {MINUTE_OPTIONS.map((value) => (
+                        <option key={value} value={value}>
+                          {value}
+                        </option>
+                      ))}
                     </select>
                     <select
                       value={timePeriod}
-                      onChange={(e) => setTimePeriod(e.target.value as TimePeriod)}
-                      className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                      onChange={(e) => {
+                        setTimePeriod(e.target.value as TimePeriod);
+                        clearFieldError('date');
+                      }}
+                      aria-label="AM or PM"
+                      className={`h-10 rounded-md border bg-background px-3 text-sm ${
+                        fieldErrors.date ? 'border-destructive' : 'border-input'
+                      }`}
                     >
                       <option value="AM">AM</option>
                       <option value="PM">PM</option>
@@ -995,7 +1192,10 @@ export function EventCreationWizard({
                       variant="outline"
                       size="sm"
                       className="h-8 rounded-xl text-xs"
-                      onClick={() => setEventDate(toDateInputValue(new Date()))}
+                      onClick={() => {
+                        setEventDate(toDateInputValue(new Date()));
+                        clearFieldError('date');
+                      }}
                     >
                       Today
                     </Button>
@@ -1008,37 +1208,61 @@ export function EventCreationWizard({
                         const tomorrow = new Date();
                         tomorrow.setDate(tomorrow.getDate() + 1);
                         setEventDate(toDateInputValue(tomorrow));
+                        clearFieldError('date');
                       }}
                     >
                       Tomorrow
                     </Button>
                   </div>
-                  {selectedDateTimePreview ? (
-                    <p className="text-xs text-muted-foreground">{selectedDateTimePreview}</p>
+                  {fieldErrors.date ? (
+                    <p className="text-xs text-destructive">{fieldErrors.date}</p>
+                  ) : selectedDateTimePreview ? (
+                    <p className="text-xs text-muted-foreground">Starts {selectedDateTimePreview}</p>
                   ) : null}
                 </div>
 
                 <div>
-                  <label className="text-sm font-medium">Venue *</label>
+                  <label className="text-sm font-medium" htmlFor="event-venue">
+                    Venue *
+                  </label>
                   <Input
+                    id="event-venue"
                     type="text"
                     name="venue"
-                    placeholder="Venue"
+                    placeholder="e.g. National Theatre, Kampala"
                     value={formData.venue}
-                    onChange={handleChange}
-                    className="mt-1.5"
+                    onChange={(e) => {
+                      handleChange(e);
+                      clearFieldError('venue');
+                    }}
+                    aria-invalid={!!fieldErrors.venue}
+                    className={`mt-1.5 ${fieldErrors.venue ? 'border-destructive' : ''}`}
                   />
+                  {fieldErrors.venue ? (
+                    <p className="mt-1 text-xs text-destructive">{fieldErrors.venue}</p>
+                  ) : null}
                 </div>
 
                 <div>
-                  <label className="text-sm font-medium">Images *</label>
-                  <div className="mt-1.5 rounded-xl border border-dashed border-border/70 bg-muted/20 p-4">
+                  <p className="text-sm font-medium">Event photos *</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    Add at least one. Tap the star to choose the cover image.
+                  </p>
+                  <div
+                    className={`mt-1.5 rounded-xl border border-dashed bg-muted/20 p-4 ${
+                      fieldErrors.images ? 'border-destructive' : 'border-border/70'
+                    }`}
+                  >
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <div className="flex items-center gap-3">
                         <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
                           <ImageIcon className="h-4 w-4 text-primary" />
                         </div>
-                        <p className="text-sm text-muted-foreground">1+ images</p>
+                        <p className="text-sm text-muted-foreground">
+                          {galleryImages.length === 0
+                            ? 'No photos yet'
+                            : `${galleryImages.length} photo${galleryImages.length === 1 ? '' : 's'}`}
+                        </p>
                       </div>
                       <Input
                         type="file"
@@ -1049,28 +1273,31 @@ export function EventCreationWizard({
                       />
                     </div>
 
-                    {eventImages.length > 0 && (
+                    {galleryImages.length > 0 ? (
                       <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
-                        {eventImagePreviews.map((src, idx) => (
-                          <div key={src} className="relative overflow-hidden rounded-xl border bg-background">
+                        {galleryImages.map(({ src, index }) => (
+                          <div
+                            key={`${src}-${index}`}
+                            className="relative overflow-hidden rounded-xl border bg-background"
+                          >
                             <img src={src} alt="" className="h-24 w-full object-cover" />
                             <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 bg-gradient-to-t from-black/60 via-black/20 to-transparent p-2">
                               <Button
                                 type="button"
                                 size="sm"
-                                variant={idx === coverImageIndex ? 'secondary' : 'ghost'}
+                                variant={index === coverImageIndex ? 'secondary' : 'ghost'}
                                 className="h-7 px-2 text-xs text-white hover:text-white"
-                                onClick={() => setCoverImageIndex(idx)}
+                                onClick={() => setCoverImageIndex(index)}
                               >
                                 <Star className="mr-1 h-3.5 w-3.5" />
-                                {idx === coverImageIndex ? 'Cover' : 'Set'}
+                                {index === coverImageIndex ? 'Cover' : 'Set cover'}
                               </Button>
                               <Button
                                 type="button"
                                 size="icon"
                                 variant="ghost"
                                 className="h-7 w-7 text-white hover:text-white"
-                                onClick={() => removeEventImage(idx)}
+                                onClick={() => removeEventImage(index)}
                               >
                                 <Trash2 className="h-4 w-4" />
                               </Button>
@@ -1078,39 +1305,11 @@ export function EventCreationWizard({
                           </div>
                         ))}
                       </div>
-                    )}
-
-                    {existingImageUrls.length > 0 && (
-                      <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
-                        {existingImageUrls.map((src, idx) => (
-                          <div key={src} className="relative overflow-hidden rounded-xl border bg-background">
-                            <img src={src} alt="" className="h-24 w-full object-cover" />
-                            <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 bg-gradient-to-t from-black/60 via-black/20 to-transparent p-2">
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant={idx === coverImageIndex ? 'secondary' : 'ghost'}
-                                className="h-7 px-2 text-xs text-white hover:text-white"
-                                onClick={() => setCoverImageIndex(idx)}
-                              >
-                                <Star className="mr-1 h-3.5 w-3.5" />
-                                {idx === coverImageIndex ? 'Cover' : 'Set'}
-                              </Button>
-                              <Button
-                                type="button"
-                                size="icon"
-                                variant="ghost"
-                                className="h-7 w-7 text-white hover:text-white"
-                                onClick={() => removeEventImage(idx)}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                    ) : null}
                   </div>
+                  {fieldErrors.images ? (
+                    <p className="mt-1 text-xs text-destructive">{fieldErrors.images}</p>
+                  ) : null}
                 </div>
               </div>
             )}
@@ -1118,80 +1317,41 @@ export function EventCreationWizard({
             {step === 'pricing' && (
               <div className="space-y-4">
                 <div>
-                  <label className="text-sm font-medium">Currency *</label>
+                  <label className="text-sm font-medium" htmlFor="event-currency">
+                    Currency *
+                  </label>
                   <select
+                    id="event-currency"
                     name="currency"
                     value={formData.currency}
-                    onChange={(e) =>
-                      setFormData((prev) => ({ ...prev, currency: e.target.value }))
-                    }
-                    className="mt-1.5 h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                    onChange={(e) => {
+                      setFormData((prev) => ({ ...prev, currency: e.target.value }));
+                      clearFieldError('currency');
+                    }}
+                    className={`mt-1.5 h-10 w-full rounded-md border bg-background px-3 text-sm ${
+                      fieldErrors.currency ? 'border-destructive' : 'border-input'
+                    }`}
                   >
                     {CURRENCY_OPTIONS.map((currency) => (
-                      <option key={currency} value={currency}>
-                        {currency}
+                      <option key={currency.code} value={currency.code}>
+                        {currency.label}
                       </option>
                     ))}
                   </select>
+                  {fieldErrors.currency ? (
+                    <p className="mt-1 text-xs text-destructive">{fieldErrors.currency}</p>
+                  ) : null}
                 </div>
-
-                <div className="space-y-3 rounded-xl border border-border/70 p-4">
-                  <p className="text-sm font-medium">Add type</p>
-                  <Input
-                    type="text"
-                    placeholder="Name"
-                    value={newTicketType.name}
-                    onChange={(e) =>
-                      setNewTicketType((prev) => ({ ...prev, name: e.target.value }))
-                    }
-                  />
-                  <Input
-                    type="text"
-                    placeholder="Description (optional)"
-                    value={newTicketType.description || ''}
-                    onChange={(e) =>
-                      setNewTicketType((prev) => ({ ...prev, description: e.target.value }))
-                    }
-                  />
-                  <div className="grid grid-cols-2 gap-2">
-                    <Input
-                      type="number"
-                      placeholder="Price"
-                      min="0"
-                      step="0.01"
-                      value={newTicketType.price}
-                      onChange={(e) =>
-                        setNewTicketType((prev) => ({ ...prev, price: e.target.value }))
-                      }
-                    />
-                    <Input
-                      type="number"
-                      placeholder="Qty"
-                      min="1"
-                      value={newTicketType.quantity}
-                      onChange={(e) =>
-                        setNewTicketType((prev) => ({ ...prev, quantity: e.target.value }))
-                      }
-                    />
-                  </div>
-                  <Button type="button" size="sm" className="rounded-xl" onClick={addTicketType}>
-                    <Plus className="mr-1 h-4 w-4" />
-                    Add
-                  </Button>
-                </div>
-
-                {ticketTypeError ? (
-                  <div className="rounded-xl border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
-                    {ticketTypeError}
-                  </div>
-                ) : null}
 
                 {ticketTypes.length > 0 ? (
                   <div className="space-y-2">
+                    <p className="text-sm font-medium">Your ticket types</p>
                     {ticketTypes.map((ticketType) => (
                       <div
                         key={ticketType.id}
-                        className="space-y-3 rounded-xl border border-border/70 p-3"
+                        className={`space-y-3 rounded-xl border p-3 ${
+                          fieldErrors.tickets ? 'border-destructive/50' : 'border-border/70'
+                        }`}
                       >
                         {editingTicketType?.id === ticketType.id ? (
                           <>
@@ -1216,6 +1376,7 @@ export function EventCreationWizard({
                             </div>
                             <Input
                               type="text"
+                              placeholder="Ticket name"
                               value={editingTicketType.name}
                               onChange={(e) =>
                                 setEditingTicketType((prev) =>
@@ -1225,6 +1386,7 @@ export function EventCreationWizard({
                             />
                             <Input
                               type="text"
+                              placeholder="Description (optional)"
                               value={editingTicketType.description || ''}
                               onChange={(e) =>
                                 setEditingTicketType((prev) =>
@@ -1237,6 +1399,7 @@ export function EventCreationWizard({
                                 type="number"
                                 min="0"
                                 step="0.01"
+                                placeholder="Price"
                                 value={editingTicketType.price}
                                 onChange={(e) =>
                                   setEditingTicketType((prev) =>
@@ -1247,6 +1410,7 @@ export function EventCreationWizard({
                               <Input
                                 type="number"
                                 min="1"
+                                placeholder="Quantity"
                                 value={editingTicketType.quantity}
                                 onChange={(e) =>
                                   setEditingTicketType((prev) =>
@@ -1266,10 +1430,15 @@ export function EventCreationWizard({
                                     {ticketType.description}
                                   </p>
                                 ) : null}
+                                {!ticketType.price ? (
+                                  <p className="mt-1 text-xs text-amber-600">Set a price to continue</p>
+                                ) : null}
                               </div>
                               <p className="shrink-0 text-sm tabular-nums text-muted-foreground">
-                                {formData.currency} {Number(ticketType.price || 0).toFixed(2)} ·{' '}
-                                {Number(ticketType.quantity || 0)}
+                                {ticketType.price
+                                  ? `${formData.currency} ${Number(ticketType.price || 0).toFixed(2)}`
+                                  : 'No price'}{' '}
+                                · {Number(ticketType.quantity || 0)} seats
                               </p>
                             </div>
                             <div className="flex justify-end gap-2">
@@ -1278,7 +1447,10 @@ export function EventCreationWizard({
                                 variant="outline"
                                 size="sm"
                                 className="h-8 rounded-xl"
-                                onClick={() => beginEditTicketType(ticketType)}
+                                onClick={() => {
+                                  beginEditTicketType(ticketType);
+                                  clearFieldError('tickets');
+                                }}
                               >
                                 Edit
                               </Button>
@@ -1299,9 +1471,70 @@ export function EventCreationWizard({
                       </div>
                     ))}
                   </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground">Add at least one type</p>
-                )}
+                ) : null}
+
+                <div className="space-y-3 rounded-xl border border-border/70 p-4">
+                  <p className="text-sm font-medium">Add another ticket type</p>
+                  <Input
+                    type="text"
+                    placeholder="Name (e.g. VIP, Early Bird)"
+                    value={newTicketType.name}
+                    onChange={(e) =>
+                      setNewTicketType((prev) => ({ ...prev, name: e.target.value }))
+                    }
+                  />
+                  <Input
+                    type="text"
+                    placeholder="What’s included? (optional)"
+                    value={newTicketType.description || ''}
+                    onChange={(e) =>
+                      setNewTicketType((prev) => ({ ...prev, description: e.target.value }))
+                    }
+                  />
+                  <div className="grid grid-cols-2 gap-2">
+                    <Input
+                      type="number"
+                      placeholder={`Price (${formData.currency})`}
+                      min="0"
+                      step="0.01"
+                      value={newTicketType.price}
+                      onChange={(e) =>
+                        setNewTicketType((prev) => ({ ...prev, price: e.target.value }))
+                      }
+                    />
+                    <Input
+                      type="number"
+                      placeholder="How many available"
+                      min="1"
+                      value={newTicketType.quantity}
+                      onChange={(e) =>
+                        setNewTicketType((prev) => ({ ...prev, quantity: e.target.value }))
+                      }
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="rounded-xl"
+                    onClick={() => {
+                      addTicketType();
+                      clearFieldError('tickets');
+                    }}
+                  >
+                    <Plus className="mr-1 h-4 w-4" />
+                    Add ticket type
+                  </Button>
+                </div>
+
+                {ticketTypeError ? (
+                  <div className="rounded-xl border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+                    {ticketTypeError}
+                  </div>
+                ) : null}
+
+                {fieldErrors.tickets ? (
+                  <p className="text-xs text-destructive">{fieldErrors.tickets}</p>
+                ) : null}
 
                 {normalizedTicketTypes.length > 0 ? (
                   <div className="grid grid-cols-3 gap-2 rounded-xl bg-muted/40 p-3 text-center text-xs">
@@ -1310,7 +1543,7 @@ export function EventCreationWizard({
                       <p className="mt-0.5 font-semibold tabular-nums">{normalizedTicketTypes.length}</p>
                     </div>
                     <div>
-                      <p className="text-muted-foreground">Qty</p>
+                      <p className="text-muted-foreground">Total seats</p>
                       <p className="mt-0.5 font-semibold tabular-nums">{totalTicketsFromTypes}</p>
                     </div>
                     <div>
@@ -1327,32 +1560,59 @@ export function EventCreationWizard({
             {step === 'organizer' && (
               <div className="space-y-4">
                 <div>
-                  <label className="text-sm font-medium">Name *</label>
+                  <label className="text-sm font-medium" htmlFor="organizer-name">
+                    Organizer name *
+                  </label>
                   <Input
+                    id="organizer-name"
                     type="text"
                     name="name"
-                    placeholder="Organization"
+                    placeholder="Your name or organization"
                     value={organizer.name}
-                    onChange={handleOrganizerChange}
-                    className="mt-1.5"
+                    onChange={(e) => {
+                      handleOrganizerChange(e);
+                      clearFieldError('organizerName');
+                    }}
+                    aria-invalid={!!fieldErrors.organizerName}
+                    className={`mt-1.5 ${fieldErrors.organizerName ? 'border-destructive' : ''}`}
                   />
+                  {fieldErrors.organizerName ? (
+                    <p className="mt-1 text-xs text-destructive">{fieldErrors.organizerName}</p>
+                  ) : null}
                 </div>
 
                 <div>
-                  <label className="text-sm font-medium">Phone *</label>
+                  <label className="text-sm font-medium" htmlFor="organizer-phone">
+                    Contact phone *
+                  </label>
                   <Input
+                    id="organizer-phone"
                     type="tel"
                     name="phone"
-                    placeholder="+256 …"
+                    placeholder="+256 700 000000"
                     value={organizer.phone}
-                    onChange={handleOrganizerChange}
-                    className="mt-1.5"
+                    onChange={(e) => {
+                      handleOrganizerChange(e);
+                      clearFieldError('organizerPhone');
+                    }}
+                    aria-invalid={!!fieldErrors.organizerPhone}
+                    className={`mt-1.5 ${fieldErrors.organizerPhone ? 'border-destructive' : ''}`}
                   />
+                  {fieldErrors.organizerPhone ? (
+                    <p className="mt-1 text-xs text-destructive">{fieldErrors.organizerPhone}</p>
+                  ) : (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Shown to buyers if they need help with their tickets.
+                    </p>
+                  )}
                 </div>
 
                 <div>
-                  <label className="text-sm font-medium">Logo</label>
+                  <label className="text-sm font-medium" htmlFor="organizer-logo">
+                    Logo (optional)
+                  </label>
                   <Input
+                    id="organizer-logo"
                     type="file"
                     accept="image/*"
                     onChange={handleOrganizerLogoFileChange}
@@ -1375,16 +1635,20 @@ export function EventCreationWizard({
 
             {step === 'sponsors' && (
               <div className="space-y-4">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-sm text-muted-foreground">Optional</p>
+                <div className="flex items-center justify-between gap-2 rounded-xl border border-border/70 bg-muted/30 px-3 py-2.5">
+                  <p className="text-sm text-muted-foreground">No sponsors? You can skip this step.</p>
                   <Button
                     type="button"
                     size="sm"
-                    variant="ghost"
-                    className="h-8 rounded-xl px-3 text-xs"
-                    onClick={() => setStep('review')}
+                    variant="secondary"
+                    className="h-8 shrink-0 rounded-xl px-3 text-xs"
+                    onClick={() => {
+                      setError('');
+                      setFieldErrors({});
+                      setStep('review');
+                    }}
                   >
-                    Skip
+                    Skip for now
                   </Button>
                 </div>
 
@@ -1414,7 +1678,7 @@ export function EventCreationWizard({
                     disabled={!newSponsor.name.trim()}
                   >
                     <Plus className="mr-1 h-4 w-4" />
-                    Add
+                    Add sponsor
                   </Button>
                 </div>
 
@@ -1454,24 +1718,57 @@ export function EventCreationWizard({
             {step === 'review' && (
               <div className="space-y-3">
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <ReviewItem label="Name" value={formData.name} />
+                  <ReviewItem
+                    label="Event"
+                    value={formData.name || '—'}
+                    onEdit={() => goToStep('basic')}
+                  />
                   <ReviewItem
                     label="Category"
                     value={
                       EVENT_CATEGORIES.find((c) => c.id === formData.category)?.label || 'Other'
                     }
+                    onEdit={() => goToStep('basic')}
                   />
-                  <ReviewItem label="Date" value={selectedDateTimePreview || '—'} />
                   <ReviewItem
-                    label="From"
-                    value={`${formData.currency} ${minTicketPrice.toFixed(2)}`}
+                    label="When"
+                    value={selectedDateTimePreview || '—'}
+                    onEdit={() => goToStep('basic')}
                   />
-                  <ReviewItem label="Tickets" value={String(totalTicketsFromTypes)} />
-                  <ReviewItem label="Organizer" value={organizer.name || '—'} />
+                  <ReviewItem
+                    label="Where"
+                    value={formData.venue || '—'}
+                    onEdit={() => goToStep('basic')}
+                  />
+                  <ReviewItem
+                    label="Tickets from"
+                    value={`${formData.currency} ${minTicketPrice.toFixed(2)}`}
+                    onEdit={() => goToStep('pricing')}
+                  />
+                  <ReviewItem
+                    label="Organizer"
+                    value={organizer.name || '—'}
+                    onEdit={() => goToStep('organizer')}
+                  />
                 </div>
 
                 {organizer.phone ? (
-                  <p className="text-xs text-muted-foreground">{organizer.phone}</p>
+                  <p className="text-xs text-muted-foreground">Phone: {organizer.phone}</p>
+                ) : null}
+
+                {galleryImages.length > 0 ? (
+                  <div className="flex gap-2 overflow-x-auto pb-1">
+                    {galleryImages.map(({ src, index }) => (
+                      <div
+                        key={`${src}-review-${index}`}
+                        className={`relative h-16 w-16 shrink-0 overflow-hidden rounded-lg border ${
+                          index === coverImageIndex ? 'ring-2 ring-primary' : ''
+                        }`}
+                      >
+                        <img src={src} alt="" className="h-full w-full object-cover" />
+                      </div>
+                    ))}
+                  </div>
                 ) : null}
 
                 {sponsors.length > 0 ? (
@@ -1485,7 +1782,15 @@ export function EventCreationWizard({
                       </span>
                     ))}
                   </div>
-                ) : null}
+                ) : (
+                  <button
+                    type="button"
+                    className="text-xs text-muted-foreground underline-offset-2 hover:underline"
+                    onClick={() => goToStep('sponsors')}
+                  >
+                    No sponsors — add some?
+                  </button>
+                )}
 
                 {normalizedTicketTypes.length > 0 ? (
                   <div className="space-y-1.5 rounded-xl border border-border/70 p-3">
@@ -1497,7 +1802,7 @@ export function EventCreationWizard({
                         <span>{ticketType.name}</span>
                         <span className="tabular-nums text-muted-foreground">
                           {formData.currency} {ticketType.price.toFixed(2)} ·{' '}
-                          {ticketType.total_quantity}
+                          {ticketType.total_quantity} seats
                         </span>
                       </div>
                     ))}
@@ -1505,7 +1810,9 @@ export function EventCreationWizard({
                 ) : null}
 
                 {!isAdminContext ? (
-                  <p className="text-xs text-muted-foreground">Pending approval after submit</p>
+                  <p className="rounded-xl bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+                    After you submit, an admin reviews the event before it goes live.
+                  </p>
                 ) : null}
               </div>
             )}
@@ -1528,8 +1835,10 @@ export function EventCreationWizard({
                       ? 'Saving…'
                       : 'Creating…'
                     : mode === 'edit'
-                      ? 'Save'
-                      : 'Create'}
+                      ? 'Save changes'
+                      : isAdminContext
+                        ? 'Create event'
+                        : 'Submit for approval'}
                 </Button>
               ) : (
                 <Button
@@ -1537,7 +1846,7 @@ export function EventCreationWizard({
                   disabled={!canGoForward || loading}
                   className="flex-1 rounded-xl"
                 >
-                  Next
+                  {NEXT_LABELS[step] || 'Next'}
                   <ChevronRight className="ml-1 h-4 w-4" />
                 </Button>
               )}
@@ -1548,10 +1857,29 @@ export function EventCreationWizard({
   );
 }
 
-function ReviewItem({ label, value }: { label: string; value: string }) {
+function ReviewItem({
+  label,
+  value,
+  onEdit,
+}: {
+  label: string;
+  value: string;
+  onEdit?: () => void;
+}) {
   return (
     <div className="rounded-xl bg-muted/40 p-3">
-      <p className="text-xs text-muted-foreground">{label}</p>
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-xs text-muted-foreground">{label}</p>
+        {onEdit ? (
+          <button
+            type="button"
+            onClick={onEdit}
+            className="text-[11px] font-medium text-primary hover:underline"
+          >
+            Edit
+          </button>
+        ) : null}
+      </div>
       <p className="mt-0.5 font-medium leading-snug">{value}</p>
     </div>
   );

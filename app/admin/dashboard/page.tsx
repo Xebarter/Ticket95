@@ -1,8 +1,10 @@
-import { Suspense } from 'react';
 import AdminStats from './stats';
 import AdminEventList from './event-list';
+import { getAdminEvents, getAdminStats } from '@/lib/admin-dashboard-data';
 
-export default function AdminDashboardPage() {
+export default async function AdminDashboardPage() {
+  const [stats, events] = await Promise.all([getAdminStats(), getAdminEvents()]);
+
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-semibold tracking-tight">Overview</h1>
@@ -11,30 +13,14 @@ export default function AdminDashboardPage() {
         <h2 id="admin-stats-heading" className="sr-only">
           Stats
         </h2>
-        <Suspense
-          fallback={
-            <div className="flex justify-center py-10">
-              <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-            </div>
-          }
-        >
-          <AdminStats />
-        </Suspense>
+        <AdminStats initialData={stats} />
       </section>
 
       <section aria-labelledby="admin-events-heading" className="space-y-4">
         <h2 id="admin-events-heading" className="text-lg font-semibold tracking-tight">
           Queue
         </h2>
-        <Suspense
-          fallback={
-            <div className="flex justify-center py-10">
-              <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-            </div>
-          }
-        >
-          <AdminEventList />
-        </Suspense>
+        <AdminEventList initialEvents={events} />
       </section>
     </div>
   );

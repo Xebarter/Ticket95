@@ -1,10 +1,10 @@
 'use client';
 
 import useSWR from 'swr';
-import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent } from '@/components/ui/card';
+import type { AdminStats as AdminStatsData } from '@/lib/admin-dashboard-data';
 
-async function fetchStats() {
+async function fetchStats(): Promise<AdminStatsData> {
   const res = await fetch('/api/admin/events/stats');
   if (!res.ok) throw new Error('Failed to fetch stats');
   return res.json();
@@ -21,25 +21,17 @@ function StatCard({ label, value }: { label: string; value: number }) {
   );
 }
 
-export default function AdminStats() {
-  const { data, error, isLoading } = useSWR('admin-stats', fetchStats);
+export default function AdminStats({
+  initialData,
+}: {
+  initialData?: AdminStatsData;
+}) {
+  const { data, error } = useSWR('admin-stats', fetchStats, {
+    fallbackData: initialData,
+    revalidateOnMount: !initialData,
+  });
 
-  if (isLoading) {
-    return (
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
-        {Array.from({ length: 5 }).map((_, i) => (
-          <Card key={i} className="border-border/70">
-            <CardContent className="space-y-3 p-4">
-              <Skeleton className="h-3 w-16" />
-              <Skeleton className="h-7 w-10" />
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-    );
-  }
-
-  if (error) {
+  if (error && !data) {
     return <p className="text-sm text-destructive">Unable to load stats</p>;
   }
 

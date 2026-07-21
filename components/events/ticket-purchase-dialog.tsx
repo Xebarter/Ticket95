@@ -2,8 +2,10 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '@/lib/supabase-auth-context'
-import { supabase } from '@/lib/supabase-client'
+import { getSupabaseBrowserClient } from '@/lib/supabase/browser'
 import type { Event, TicketType } from '@/lib/supabase-client'
+
+const supabase = getSupabaseBrowserClient()
 import Image from 'next/image'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'

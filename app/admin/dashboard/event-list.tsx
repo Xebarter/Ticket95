@@ -4,27 +4,43 @@
 import useSWR from 'swr';
 import dynamic from 'next/dynamic';
 import Image from 'next/image';
-import { Suspense, useMemo } from 'react';
+import { useMemo } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { CalendarX2, CheckCircle2, Eye, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Skeleton } from '@/components/ui/skeleton';
 import Link from 'next/link';
 import { getEventLifecycleStatus } from '@/lib/event-status';
-const EventApprovalCard = dynamic(() => import('@/components/admin/event-approval-card').then(mod => mod.EventApprovalCard));
-const AdminEventCreate = dynamic(() => import('./event-create').then(mod => mod.default), { ssr: false });
-const AdminEventEdit = dynamic(() => import('./event-edit').then(mod => mod.default), { ssr: false });
-const FeaturedToggle = dynamic(() => import('@/components/admin/featured-toggle').then(mod => mod.FeaturedToggle), { ssr: false });
+import type { AdminEventRow } from '@/lib/admin-dashboard-data';
+
+const EventApprovalCard = dynamic(() =>
+  import('@/components/admin/event-approval-card').then((mod) => mod.EventApprovalCard)
+);
+const AdminEventEdit = dynamic(() => import('./event-edit').then((mod) => mod.default), {
+  ssr: false,
+});
+const FeaturedToggle = dynamic(
+  () => import('@/components/admin/featured-toggle').then((mod) => mod.FeaturedToggle),
+  { ssr: false }
+);
 
 async function fetchEvents() {
-  const res = await fetch('/api/admin/events?fields=id,name,description,date,venue,image_url,total_tickets,ticket_price,organizer_name,organizer_phone,status,created_at,is_featured');
+  const res = await fetch(
+    '/api/admin/events?fields=id,name,description,date,venue,image_url,total_tickets,ticket_price,organizer_name,organizer_phone,status,created_at,is_featured'
+  );
   if (!res.ok) throw new Error('Failed to fetch events');
   return res.json();
 }
 
-export default function AdminEventList() {
-  const { data, error, isLoading, mutate } = useSWR('admin-events', fetchEvents);
+export default function AdminEventList({
+  initialEvents = [],
+}: {
+  initialEvents?: AdminEventRow[];
+}) {
+  const { data, error, mutate } = useSWR('admin-events', fetchEvents, {
+    fallbackData: { events: initialEvents },
+    revalidateOnMount: initialEvents.length === 0,
+  });
   const events = data?.events ?? [];
 
   const { pending, approved, rejected, expired } = useMemo(() => {
@@ -42,18 +58,7 @@ export default function AdminEventList() {
 
   const total = events.length;
 
-  if (isLoading && events.length === 0) {
-    return (
-      <div className="space-y-4">
-        <Skeleton className="h-10 w-44" />
-        <Skeleton className="h-10 w-full" />
-        <Skeleton className="h-28 w-full" />
-        <Skeleton className="h-28 w-full" />
-      </div>
-    );
-  }
-
-  if (error) {
+  if (error && events.length === 0) {
     return (
       <Card className="border-destructive/30 bg-destructive/5">
         <CardContent className="p-4 text-sm text-destructive">
@@ -62,13 +67,14 @@ export default function AdminEventList() {
       </Card>
     );
   }
-  if (!data) return null;
 
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between gap-3">
         <p className="text-sm tabular-nums text-muted-foreground">{total}</p>
-        <AdminEventCreate onCreatedAction={mutate} />
+        <Button asChild size="sm" className="rounded-xl">
+          <Link href="/admin/events/create">New event</Link>
+        </Button>
       </div>
 
       <Tabs defaultValue="pending" className="w-full">
@@ -92,9 +98,7 @@ export default function AdminEventList() {
             <p className="py-8 text-center text-sm text-muted-foreground">None</p>
           ) : (
             pending.map((event: any) => (
-              <Suspense key={event.id} fallback={<div className="h-24 animate-pulse rounded-lg border bg-card" />}>
-                <EventApprovalCard event={event} onApprove={mutate} />
-              </Suspense>
+              <EventApprovalCard key={event.id} event={event} onApprove={mutate} />
             ))
           )}
         </TabsContent>

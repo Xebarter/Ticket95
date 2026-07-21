@@ -1,5 +1,7 @@
 import AdminEventsPage from '../dashboard/events-page';
+import { getAdminEvents } from '@/lib/admin-dashboard-data';
 
-export default function AdminEventsPageRoute() {
-  return <AdminEventsPage />;
+export default async function AdminEventsPageRoute() {
+  const events = await getAdminEvents();
+  return <AdminEventsPage initialEvents={events} />;
 }

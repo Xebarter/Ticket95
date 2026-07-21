@@ -3,12 +3,14 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import useSWR from 'swr';
-import { supabase } from '@/lib/supabase-client';
+import { getSupabaseBrowserClient } from '@/lib/supabase/browser';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Camera, CheckCircle2, Copy, RefreshCcw, ShieldAlert, Ticket, XCircle } from 'lucide-react';
+
+const supabase = getSupabaseBrowserClient();
 
 type VerifiableEvent = {
   id: string;

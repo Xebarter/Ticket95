@@ -1,5 +1,22 @@
-import { supabase, User, Event, Sponsor, Order, Ticket, TicketType } from './supabase-client';
+import { supabase as publicSupabase, User, Event, Sponsor, Order, Ticket, TicketType } from './supabase-client';
+import { getSupabaseBrowserClient } from './supabase/browser';
 import { getNowIso } from './event-status';
+
+/** Use cookie-based auth client in the browser so RLS/storage see the signed-in user. */
+function getClient() {
+  if (typeof window !== 'undefined') {
+    return getSupabaseBrowserClient();
+  }
+  return publicSupabase;
+}
+
+const supabase = new Proxy(publicSupabase, {
+  get(_target, prop, receiver) {
+    const client = getClient();
+    const value = Reflect.get(client, prop, receiver);
+    return typeof value === 'function' ? value.bind(client) : value;
+  },
+});
 
 // User queries
 export async function getUserByEmail(email: string): Promise<User | null> {
