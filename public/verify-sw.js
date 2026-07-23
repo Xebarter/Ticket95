@@ -1,44 +1,51 @@
-/**
- * Legacy Ticket95 verifier SW (was registered at origin root /verify-sw.js).
- * Older versions redirected ALL site navigations back to /verify/{slug}?source=pwa.
- *
- * This file now only self-unregisters so the main site works again.
- * New installs use /verify/sw.js with scope /verify/.
- */
+/* Ticket95 Verifier SW — scope /verify/ only. Does not touch the main site. */
+const CACHE = 'ticket95-verifier-shell-v4'
+
 self.addEventListener('install', (event) => {
+  event.waitUntil(
+    caches.open(CACHE).then((cache) => cache.addAll(['/offline-verifier.html']).catch(() => undefined))
+  )
   self.skipWaiting()
-  event.waitUntil(Promise.resolve())
 })
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     (async () => {
-      try {
-        const keys = await caches.keys()
-        await Promise.all(
-          keys
-            .filter((k) => k.startsWith('ticket95-verifier') || k === 'ticket95.lastVerifySlug')
-            .map((k) => caches.delete(k))
-        )
-      } catch {
-        // ignore
-      }
-      try {
-        await self.registration.unregister()
-      } catch {
-        // ignore
-      }
-      const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
-      for (const client of clients) {
-        // Nudge controlled pages to reload once so they drop the old controller
-        try {
-          client.postMessage({ type: 'VERIFIER_SW_RETIRED' })
-        } catch {
-          // ignore
-        }
-      }
+      const keys = await caches.keys()
+      await Promise.all(
+        keys
+          .filter((k) => k.startsWith('ticket95-verifier') && k !== CACHE)
+          .map((k) => caches.delete(k))
+      )
+      await self.clients.claim()
     })()
   )
 })
 
-// Intentionally no fetch handler — do not redirect the main site.
+self.addEventListener('fetch', (event) => {
+  const url = new URL(event.request.url)
+  if (event.request.method !== 'GET') return
+
+  // Only document navigations under /verify — never APIs or the main site
+  if (event.request.mode !== 'navigate') return
+  if (!url.pathname.startsWith('/verify')) return
+
+  event.respondWith(
+    fetch(event.request)
+      .then((response) => {
+        if (response.ok) {
+          const copy = response.clone()
+          caches.open(CACHE).then((cache) => cache.put(event.request, copy))
+        }
+        return response
+      })
+      .catch(async () => {
+        const cached = await caches.match(event.request)
+        if (cached) return cached
+        return (
+          (await caches.match('/offline-verifier.html')) ||
+          new Response('Verifier offline', { status: 503, statusText: 'Offline' })
+        )
+      })
+  )
+})

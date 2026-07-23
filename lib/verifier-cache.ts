@@ -83,27 +83,30 @@ export async function loadSession(slug: string): Promise<VerifierLocalSession | 
 
 export async function clearSession(slug: string): Promise<void> {
   const db = await openDb()
-  const tx = db.transaction(['sessions', 'tickets', 'pending'], 'readwrite')
-  tx.objectStore('sessions').delete(slug)
-  const ticketStore = tx.objectStore('tickets')
-  const ticketIndex = ticketStore.index('by_slug')
-  const ticketReq = ticketIndex.getAllKeys(slug)
-  const ticketKeys = await new Promise<IDBValidKey[]>((resolve, reject) => {
-    ticketReq.onsuccess = () => resolve(ticketReq.result || [])
-    ticketReq.onerror = () => reject(ticketReq.error)
-  })
-  for (const key of ticketKeys) ticketStore.delete(key)
+  // Keep all IDB work inside request callbacks — awaiting mid-transaction
+  // makes the tx inactive on Safari/Chrome and can hang verifier boot.
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(['sessions', 'tickets', 'pending'], 'readwrite')
+    const ticketStore = tx.objectStore('tickets')
+    const pendingStore = tx.objectStore('pending')
 
-  const pendingStore = tx.objectStore('pending')
-  const pendingIndex = pendingStore.index('by_slug')
-  const pendingReq = pendingIndex.getAllKeys(slug)
-  const pendingKeys = await new Promise<IDBValidKey[]>((resolve, reject) => {
-    pendingReq.onsuccess = () => resolve(pendingReq.result || [])
-    pendingReq.onerror = () => reject(pendingReq.error)
-  })
-  for (const key of pendingKeys) pendingStore.delete(key)
+    tx.objectStore('sessions').delete(slug)
 
-  await txDone(tx)
+    const ticketReq = ticketStore.index('by_slug').getAllKeys(slug)
+    ticketReq.onsuccess = () => {
+      for (const key of ticketReq.result || []) ticketStore.delete(key)
+      const pendingReq = pendingStore.index('by_slug').getAllKeys(slug)
+      pendingReq.onsuccess = () => {
+        for (const key of pendingReq.result || []) pendingStore.delete(key)
+      }
+      pendingReq.onerror = () => reject(pendingReq.error || new Error('Failed to clear pending'))
+    }
+    ticketReq.onerror = () => reject(ticketReq.error || new Error('Failed to clear tickets'))
+
+    tx.oncomplete = () => resolve()
+    tx.onerror = () => reject(tx.error || new Error('Failed to clear verifier session'))
+    tx.onabort = () => reject(tx.error || new Error('Verifier session clear aborted'))
+  })
   db.close()
 }
 
@@ -114,19 +117,21 @@ export async function replaceTickets(
   tickets: CachedVerifierTicket[]
 ): Promise<void> {
   const db = await openDb()
-  const tx = db.transaction('tickets', 'readwrite')
-  const store = tx.objectStore('tickets')
-  const index = store.index('by_slug')
-  const existing = await new Promise<IDBValidKey[]>((resolve, reject) => {
-    const req = index.getAllKeys(slug)
-    req.onsuccess = () => resolve(req.result || [])
-    req.onerror = () => reject(req.error)
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction('tickets', 'readwrite')
+    const store = tx.objectStore('tickets')
+    const req = store.index('by_slug').getAllKeys(slug)
+    req.onsuccess = () => {
+      for (const key of req.result || []) store.delete(key)
+      for (const ticket of tickets) {
+        store.put({ ...ticket, slug } satisfies TicketRecord)
+      }
+    }
+    req.onerror = () => reject(req.error || new Error('Failed to replace tickets'))
+    tx.oncomplete = () => resolve()
+    tx.onerror = () => reject(tx.error || new Error('Failed to replace tickets'))
+    tx.onabort = () => reject(tx.error || new Error('Replace tickets aborted'))
   })
-  for (const key of existing) store.delete(key)
-  for (const ticket of tickets) {
-    store.put({ ...ticket, slug } satisfies TicketRecord)
-  }
-  await txDone(tx)
   db.close()
 }
 

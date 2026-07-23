@@ -3,8 +3,11 @@
 import { useEffect } from 'react'
 
 /**
- * Unregisters the legacy verifier service worker that lived at /verify-sw.js
- * and (on older builds) redirected the entire origin to /verify/{slug}?source=pwa.
+ * Removes broken verifier service-worker registrations:
+ * - root-scoped /verify-sw.js (old build that redirected the whole site)
+ * - /verify/sw.js (short-lived path that some devices registered)
+ *
+ * Leaves a healthy /verify-sw.js registration with scope /verify/ alone.
  */
 export function VerifierSwCleanup() {
   useEffect(() => {
@@ -12,6 +15,7 @@ export function VerifierSwCleanup() {
 
     void (async () => {
       try {
+        const origin = window.location.origin
         const registrations = await navigator.serviceWorker.getRegistrations()
         await Promise.all(
           registrations.map(async (registration) => {
@@ -20,7 +24,15 @@ export function VerifierSwCleanup() {
               registration.waiting?.scriptURL ||
               registration.installing?.scriptURL ||
               ''
-            if (scriptUrl.endsWith('/verify-sw.js')) {
+            const scopeUrl = registration.scope
+
+            if (scriptUrl.includes('/verify/sw.js')) {
+              await registration.unregister()
+              return
+            }
+
+            // Only remove verify-sw.js if it claimed the whole origin (hijack bug)
+            if (scriptUrl.endsWith('/verify-sw.js') && scopeUrl === `${origin}/`) {
               await registration.unregister()
             }
           })

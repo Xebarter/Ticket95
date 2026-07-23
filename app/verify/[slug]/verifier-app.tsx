@@ -100,6 +100,17 @@ function rememberSlug(slug: string) {
   }
 }
 
+function fetchTimeoutSignal(ms: number): AbortSignal {
+  const timeoutFn = (AbortSignal as typeof AbortSignal & { timeout?: (delay: number) => AbortSignal })
+    .timeout
+  if (typeof timeoutFn === 'function') {
+    return timeoutFn(ms)
+  }
+  const controller = new AbortController()
+  window.setTimeout(() => controller.abort(), ms)
+  return controller.signal
+}
+
 function createScanAudio() {
   let ctx: AudioContext | null = null
 
@@ -279,33 +290,83 @@ export function VerifierApp({ slug }: { slug: string }) {
   )
 
   const bootstrap = useCallback(
-    async (active: VerifierLocalSession) => {
-      setPhase('loading')
-      setError(null)
-      const res = await fetch('/api/verify/tickets', {
-        headers: authHeaders(active.token),
-      })
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        throw new Error(data?.error || 'Failed to download tickets')
+    async (active: VerifierLocalSession, opts?: { background?: boolean }) => {
+      const background = Boolean(opts?.background)
+      if (!background) {
+        setPhase('loading')
+        setError(null)
       }
-      const data = await res.json()
-      const rows = (data.tickets || []) as CachedVerifierTicket[]
-      await replaceTickets(safeSlug, rows)
-      applyTickets(rows)
-      const nextSession: VerifierLocalSession = {
-        ...active,
-        eventName: data.event?.name || active.eventName,
-        eventImageUrl: data.event?.imageUrl ?? active.eventImageUrl ?? null,
-        eventVenue: data.event?.venue ?? active.eventVenue ?? null,
-        syncedAt: data.syncedAt || new Date().toISOString(),
+
+      const finishWithCache = async () => {
+        const cached = await loadTickets(safeSlug)
+        if (cached.length) {
+          applyTickets(cached)
+          setSession(active)
+          sessionRef.current = active
+          await refreshPendingCount()
+          setPhase('ready')
+          return true
+        }
+        return false
       }
-      await saveSession(nextSession)
-      setSession(nextSession)
-      sessionRef.current = nextSession
-      rememberSlug(safeSlug)
-      await refreshPendingCount()
-      setPhase('ready')
+
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        if (await finishWithCache()) return
+        if (!background) {
+          setPhase('login')
+          setError('You are offline. Connect to download tickets, or unlock again.')
+        }
+        return
+      }
+
+      try {
+        const res = await fetch('/api/verify/tickets', {
+          headers: authHeaders(active.token),
+          signal: fetchTimeoutSignal(45_000),
+        })
+        if (!res.ok) {
+          if (res.status === 401 || res.status === 403) {
+            await clearSession(safeSlug)
+            setSession(null)
+            sessionRef.current = null
+            setPhase('login')
+            setError('Session expired. Enter the access code again.')
+            return
+          }
+          const data = await res.json().catch(() => ({}))
+          throw new Error(data?.error || 'Failed to download tickets')
+        }
+        const data = await res.json()
+        const rows = (data.tickets || []) as CachedVerifierTicket[]
+        await replaceTickets(safeSlug, rows)
+        applyTickets(rows)
+        const nextSession: VerifierLocalSession = {
+          ...active,
+          eventName: data.event?.name || active.eventName,
+          eventImageUrl: data.event?.imageUrl ?? active.eventImageUrl ?? null,
+          eventVenue: data.event?.venue ?? active.eventVenue ?? null,
+          syncedAt: data.syncedAt || new Date().toISOString(),
+        }
+        await saveSession(nextSession)
+        setSession(nextSession)
+        sessionRef.current = nextSession
+        rememberSlug(safeSlug)
+        await refreshPendingCount()
+        setPhase('ready')
+      } catch (err) {
+        if (await finishWithCache()) {
+          if (!background) {
+            setError(err instanceof Error ? err.message : 'Using cached tickets')
+          }
+          return
+        }
+        if (background) return
+        await clearSession(safeSlug)
+        setSession(null)
+        sessionRef.current = null
+        setPhase('login')
+        setError(err instanceof Error ? err.message : 'Failed to prepare verifier')
+      }
     },
     [applyTickets, refreshPendingCount, safeSlug]
   )
@@ -360,16 +421,17 @@ export function VerifierApp({ slug }: { slug: string }) {
           setSession(stored)
           sessionRef.current = stored
           const cached = await loadTickets(safeSlug)
+          if (cancelled) return
           if (cached.length) {
             applyTickets(cached)
             setPhase('ready')
-            void bootstrap(stored).catch(() => undefined)
+            void bootstrap(stored, { background: true })
           } else {
             await bootstrap(stored)
           }
         } else {
           if (stored) await clearSession(safeSlug)
-          setPhase('login')
+          if (!cancelled) setPhase('login')
         }
       } catch {
         if (!cancelled) setPhase('login')
@@ -378,7 +440,10 @@ export function VerifierApp({ slug }: { slug: string }) {
     return () => {
       cancelled = true
     }
-  }, [applyTickets, bootstrap, safeSlug])
+    // Intentionally only re-boot when slug changes — bootstrap identity churn
+    // previously cancelled in-flight prepare and left the UI on "Preparing…".
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [safeSlug])
 
   // Online / install / SW
   useEffect(() => {
@@ -405,7 +470,6 @@ export function VerifierApp({ slug }: { slug: string }) {
     if ('serviceWorker' in navigator) {
       void (async () => {
         try {
-          // Retire legacy root-scoped SW that redirected the whole origin to /verify/...
           const registrations = await navigator.serviceWorker.getRegistrations()
           await Promise.all(
             registrations.map(async (registration) => {
@@ -414,34 +478,24 @@ export function VerifierApp({ slug }: { slug: string }) {
                 registration.waiting?.scriptURL ||
                 registration.installing?.scriptURL ||
                 ''
-              if (scriptUrl.endsWith('/verify-sw.js')) {
+              // Drop mistaken /verify/sw.js registrations; keep a single root SW
+              if (scriptUrl.includes('/verify/sw.js')) {
                 await registration.unregister()
               }
             })
           )
-          await navigator.serviceWorker.register('/verify/sw.js', { scope: '/verify/' })
+          await navigator.serviceWorker.register('/verify-sw.js', { scope: '/verify/' })
           rememberSlug(safeSlug)
         } catch {
-          // ignore
+          // ignore — verifier works without SW
         }
       })()
     }
-
-    const onSwMessage = (event: MessageEvent) => {
-      if (event.data?.type === 'VERIFIER_SW_RETIRED' && !isStandaloneDisplay()) {
-        // Drop legacy controller without yanking door staff out of the PWA
-        if (navigator.serviceWorker?.controller) {
-          window.location.reload()
-        }
-      }
-    }
-    navigator.serviceWorker?.addEventListener('message', onSwMessage)
 
     return () => {
       window.removeEventListener('online', onOnline)
       window.removeEventListener('offline', onOffline)
       window.removeEventListener('beforeinstallprompt', onBip)
-      navigator.serviceWorker?.removeEventListener('message', onSwMessage)
     }
   }, [flushPending, safeSlug])
 
