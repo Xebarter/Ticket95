@@ -774,6 +774,8 @@ export function VerifierApp({ slug }: { slug: string }) {
   }
 
   if (phase === 'login') {
+    const showCenteredInstall = !isStandaloneDisplay()
+
     return (
       <div className="relative mx-auto flex min-h-[100dvh] w-full max-w-lg flex-col overflow-hidden">
         <div className="absolute inset-0">
@@ -786,22 +788,52 @@ export function VerifierApp({ slug }: { slug: string }) {
           <div className="absolute inset-0 bg-gradient-to-b from-black/55 via-[#0a0e1a]/88 to-[#0a0e1a]" />
         </div>
 
-        <div className="relative z-10 flex flex-1 flex-col justify-end px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-[max(2rem,env(safe-area-inset-top))]">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#d4b46a]">
-            Door verifier
-          </p>
-          <h1 className="mt-2 text-3xl font-semibold tracking-tight text-white drop-shadow">
-            {heroName}
-          </h1>
-          {heroVenue ? (
-            <p className="mt-1 text-sm text-white/70">{heroVenue}</p>
+        <div className="relative z-10 flex min-h-[100dvh] flex-1 flex-col px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-[max(2rem,env(safe-area-inset-top))]">
+          <div className="shrink-0">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#d4b46a]">
+              Door verifier
+            </p>
+            <h1 className="mt-2 text-3xl font-semibold tracking-tight text-white drop-shadow">
+              {heroName}
+            </h1>
+            {heroVenue ? (
+              <p className="mt-1 text-sm text-white/70">{heroVenue}</p>
+            ) : (
+              <p className="mt-1 text-sm text-white/60">
+                {showCenteredInstall
+                  ? 'Install this verifier on your phone for the door'
+                  : 'Enter the organizer access code'}
+              </p>
+            )}
+          </div>
+
+          {showCenteredInstall ? (
+            <div className="flex flex-1 flex-col items-center justify-center py-8">
+              <button
+                type="button"
+                onClick={() => void onInstall()}
+                className="flex h-16 w-full max-w-xs items-center justify-center gap-3 rounded-2xl bg-[#d4b46a] px-8 text-base font-semibold text-slate-950 shadow-[0_18px_50px_rgba(212,180,106,0.35)] transition active:scale-[0.98]"
+              >
+                <Download className="h-5 w-5" />
+                Install verifier
+              </button>
+              {iosHint && !installPrompt ? (
+                <p className="mt-4 max-w-xs text-center text-sm text-white/70">
+                  iPhone: tap Share, then <span className="text-white">Add to Home Screen</span>
+                </p>
+              ) : (
+                <p className="mt-4 max-w-xs text-center text-sm text-white/55">
+                  Add to your home screen, then unlock with the access code
+                </p>
+              )}
+            </div>
           ) : (
-            <p className="mt-1 text-sm text-white/60">Enter the organizer access code</p>
+            <div className="flex-1" />
           )}
 
           <form
             onSubmit={onLogin}
-            className="mt-8 space-y-3 rounded-2xl border border-white/10 bg-black/35 p-4 backdrop-blur-md"
+            className="shrink-0 space-y-3 rounded-2xl border border-white/10 bg-black/35 p-4 backdrop-blur-md"
           >
             <label className="block space-y-1.5">
               <span className="text-xs font-medium text-slate-300">Access code</span>
@@ -830,23 +862,13 @@ export function VerifierApp({ slug }: { slug: string }) {
             <button
               type="submit"
               disabled={busy || code.length < 6}
-              className="flex h-12 w-full items-center justify-center rounded-xl bg-[#d4b46a] text-sm font-semibold text-slate-950 disabled:opacity-50"
+              className="flex h-12 w-full items-center justify-center rounded-xl bg-white text-sm font-semibold text-slate-900 disabled:opacity-50"
             >
               {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Start verifying'}
             </button>
           </form>
 
-          <div className="mt-4 flex flex-wrap items-center gap-3 text-xs text-white/55">
-            {(installPrompt || iosHint) && (
-              <button
-                type="button"
-                onClick={() => void onInstall()}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-white/15 px-2.5 py-1.5 text-white/80"
-              >
-                <Download className="h-3.5 w-3.5" />
-                Install app
-              </button>
-            )}
+          <div className="mt-4 flex flex-wrap items-center justify-center gap-3 text-xs text-white/55">
             <button
               type="button"
               onClick={() => setSwitchOpen((v) => !v)}
@@ -855,11 +877,6 @@ export function VerifierApp({ slug }: { slug: string }) {
               Switch event
             </button>
           </div>
-          {iosHint && !installPrompt ? (
-            <p className="mt-2 text-[11px] text-white/45">
-              iPhone: Share → Add to Home Screen
-            </p>
-          ) : null}
 
           {switchOpen ? (
             <form
