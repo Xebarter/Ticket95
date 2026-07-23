@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { requireAdmin } from '@/lib/session';
 import { deleteAdminEvent } from '@/lib/admin-event-details';
+import { clampAffiliateCommissionPercent } from '@/lib/affiliate-constants';
 
 export async function GET(
   _request: NextRequest,
@@ -91,6 +92,7 @@ export async function PUT(
       'rejection_reason',
       'is_featured',
       'affiliates_enabled',
+      'affiliate_commission_percent',
     ] as const;
 
     const sanitizedEventData: Record<string, unknown> = {};
@@ -98,6 +100,12 @@ export async function PUT(
       if (Object.prototype.hasOwnProperty.call(eventData, key) && eventData[key] !== undefined) {
         sanitizedEventData[key] = eventData[key];
       }
+    }
+
+    if (sanitizedEventData.affiliate_commission_percent != null) {
+      sanitizedEventData.affiliate_commission_percent = clampAffiliateCommissionPercent(
+        sanitizedEventData.affiliate_commission_percent
+      );
     }
 
     if (Object.keys(sanitizedEventData).length === 0) {

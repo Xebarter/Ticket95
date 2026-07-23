@@ -28,6 +28,12 @@ import { EVENT_CATEGORIES, normalizeEventCategory, type EventCategoryId } from '
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import {
+  DEFAULT_AFFILIATE_COMMISSION_PERCENT,
+  MIN_AFFILIATE_COMMISSION_PERCENT,
+  MAX_AFFILIATE_COMMISSION_PERCENT,
+  clampAffiliateCommissionPercent,
+} from '@/lib/affiliate-constants';
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -75,6 +81,7 @@ type InitialEventData = {
   status?: 'pending' | 'approved' | 'rejected';
   rejection_reason?: string | null;
   affiliates_enabled?: boolean;
+  affiliate_commission_percent?: number;
   is_featured?: boolean;
 };
 
@@ -320,6 +327,13 @@ export function EventCreationWizard({
   });
   const [affiliatesEnabled, setAffiliatesEnabled] = useState(
     Boolean(initialEvent?.affiliates_enabled)
+  );
+  const [affiliateCommissionPercent, setAffiliateCommissionPercent] = useState(() =>
+    String(
+      clampAffiliateCommissionPercent(
+        initialEvent?.affiliate_commission_percent ?? DEFAULT_AFFILIATE_COMMISSION_PERCENT
+      )
+    )
   );
   const [isFeatured, setIsFeatured] = useState(Boolean(initialEvent?.is_featured));
   const [eventStatus, setEventStatus] = useState<'pending' | 'approved' | 'rejected'>(() => {
@@ -880,6 +894,7 @@ export function EventCreationWizard({
           image_url: primaryImageUrl || undefined,
           image_urls: allUrls,
           affiliates_enabled: affiliatesEnabled,
+          affiliate_commission_percent: clampAffiliateCommissionPercent(affiliateCommissionPercent),
           status: 'pending',
         });
 
@@ -976,6 +991,7 @@ export function EventCreationWizard({
           image_url: primaryImageUrl || undefined,
           image_urls: allUrls,
           affiliates_enabled: affiliatesEnabled,
+          affiliate_commission_percent: clampAffiliateCommissionPercent(affiliateCommissionPercent),
           ...(shouldResubmitForApproval ? { status: 'pending' as const, rejection_reason: null } : {}),
           ...(isAdminContext
             ? {
@@ -1933,21 +1949,50 @@ export function EventCreationWizard({
                 )}
 
                 <WizardSection title="Publishing options">
-                  <div className="flex items-start justify-between gap-3 rounded-xl border border-border/60 bg-background px-3 py-3">
-                    <div className="space-y-1">
-                      <Label htmlFor="affiliates-enabled" className="text-sm font-medium">
-                        Allow affiliates
-                      </Label>
-                      <p className="text-xs text-muted-foreground">
-                        Let Ticket95 account holders share your event and earn a platform commission on
-                        sales they refer.
-                      </p>
+                  <div className="space-y-3 rounded-xl border border-border/60 bg-background px-3 py-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="space-y-1">
+                        <Label htmlFor="affiliates-enabled" className="text-sm font-medium">
+                          Allow affiliates
+                        </Label>
+                        <p className="text-xs text-muted-foreground">
+                          Let Ticket95 account holders share your event and earn a commission on
+                          sales they refer.
+                        </p>
+                      </div>
+                      <Switch
+                        id="affiliates-enabled"
+                        checked={affiliatesEnabled}
+                        onCheckedChange={setAffiliatesEnabled}
+                      />
                     </div>
-                    <Switch
-                      id="affiliates-enabled"
-                      checked={affiliatesEnabled}
-                      onCheckedChange={setAffiliatesEnabled}
-                    />
+
+                    {affiliatesEnabled ? (
+                      <div className="space-y-2 border-t border-border/60 pt-3">
+                        <Label htmlFor="affiliate-commission-percent" className="text-sm font-medium">
+                          Affiliate commission (%)
+                        </Label>
+                        <Input
+                          id="affiliate-commission-percent"
+                          type="number"
+                          min={MIN_AFFILIATE_COMMISSION_PERCENT}
+                          max={MAX_AFFILIATE_COMMISSION_PERCENT}
+                          step={0.5}
+                          value={affiliateCommissionPercent}
+                          onChange={(e) => setAffiliateCommissionPercent(e.target.value)}
+                          onBlur={() =>
+                            setAffiliateCommissionPercent(
+                              String(clampAffiliateCommissionPercent(affiliateCommissionPercent))
+                            )
+                          }
+                          className="max-w-[10rem] rounded-xl"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Minimum {MIN_AFFILIATE_COMMISSION_PERCENT}%. This rate is shown to
+                          affiliates and applied to referred sales.
+                        </p>
+                      </div>
+                    ) : null}
                   </div>
 
                   {isAdminContext ? (

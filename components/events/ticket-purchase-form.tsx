@@ -371,7 +371,7 @@ interface TicketPurchaseFormProps {
   id?: string;
 }
 
-/** Desktop sticky sidebar — pair with TicketPurchaseMobileSection sharing the same purchase state. */
+/** Desktop sidebar — pair with TicketPurchaseMobileSection sharing the same purchase state. */
 export function TicketPurchaseDesktopAside({
   purchase,
   id = 'purchase-tickets',
@@ -385,7 +385,7 @@ export function TicketPurchaseDesktopAside({
 
   if (purchase.isSoldOut) {
     return (
-      <aside className="sticky top-20">
+      <aside>
         <div
           id={id}
           className="rounded-2xl border border-slate-200 bg-white p-5 text-center shadow-[0_8px_30px_rgba(15,23,42,0.06)]"
@@ -404,12 +404,12 @@ export function TicketPurchaseDesktopAside({
   const displayFromPrice = Number.isFinite(startingPrice) ? startingPrice : 0;
 
   return (
-    <aside className="sticky top-20">
+    <aside>
       <div
         id={id}
-        className="flex max-h-[calc(100vh-6rem)] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_8px_30px_rgba(15,23,42,0.06)]"
+        className="rounded-2xl border border-slate-200 bg-white shadow-[0_8px_30px_rgba(15,23,42,0.06)]"
       >
-        <div className="shrink-0 border-b border-slate-100 bg-gradient-to-br from-white to-slate-50/80 px-5 py-4">
+        <div className="border-b border-slate-100 bg-gradient-to-br from-white to-slate-50/80 px-5 py-4">
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">
@@ -425,15 +425,13 @@ export function TicketPurchaseDesktopAside({
             </div>
           </div>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          <TicketPurchaseFormBody
-            purchase={purchase}
-            showSponsors={false}
-            guestEmailId={guestEmailId}
-            guestNameId={guestNameId}
-            compactTickets
-          />
-        </div>
+        <TicketPurchaseFormBody
+          purchase={purchase}
+          showSponsors={false}
+          guestEmailId={guestEmailId}
+          guestNameId={guestNameId}
+          compactTickets
+        />
         <TicketPurchaseCheckoutBar purchase={purchase} showCancel={false} />
       </div>
     </aside>

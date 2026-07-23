@@ -11,6 +11,7 @@ interface EventsPageProps {
   searchParams?: Promise<{
     search?: string;
     category?: string;
+    filter?: string;
   }>;
 }
 

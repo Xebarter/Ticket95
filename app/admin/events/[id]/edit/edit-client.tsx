@@ -32,6 +32,7 @@ export default function AdminEditEventClient({ event }: { event: AdminEventDetai
         status: event.status,
         rejection_reason: event.rejection_reason,
         affiliates_enabled: event.affiliates_enabled,
+        affiliate_commission_percent: event.affiliate_commission_percent,
         is_featured: event.is_featured,
       }}
       initialSponsors={event.sponsors.map((sponsor) => ({

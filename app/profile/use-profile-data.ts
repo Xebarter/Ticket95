@@ -15,7 +15,7 @@ export function useProfileData() {
 
   useEffect(() => {
     const fetchData = async () => {
-      if (!user) {
+      if (!user?.id) {
         setMyEvents([]);
         setMyOrders([]);
         setMyTickets([]);
@@ -39,8 +39,8 @@ export function useProfileData() {
       }
     };
 
-    fetchData();
-  }, [user]);
+    void fetchData();
+  }, [user?.id, user?.email]);
 
   const totals = useMemo(() => {
     const validTickets = myTickets.filter((ticket) => ticket.status === 'valid').length;
@@ -56,5 +56,11 @@ export function useProfileData() {
     return { validTickets, approvedEvents, totalSpent, estimatedRevenue };
   }, [myEvents, myOrders, myTickets]);
 
-  return { user, loading, myEvents, myOrders, myTickets, totals };
+  const patchEvent = (eventId: string, patch: Partial<Event>) => {
+    setMyEvents((prev) =>
+      prev.map((event) => (event.id === eventId ? { ...event, ...patch } : event))
+    );
+  };
+
+  return { user, loading, myEvents, myOrders, myTickets, totals, patchEvent };
 }

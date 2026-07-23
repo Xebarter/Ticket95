@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/session';
-import { getAffiliateSettings, setAffiliateSettings } from '@/lib/affiliates';
+import {
+  clampAffiliateCommissionPercent,
+  getAffiliateSettings,
+  setAffiliateSettings,
+  MIN_AFFILIATE_COMMISSION_PERCENT,
+  MAX_AFFILIATE_COMMISSION_PERCENT,
+} from '@/lib/affiliates';
 
 export async function GET() {
   try {
@@ -25,13 +31,19 @@ export async function PATCH(request: NextRequest) {
     let commissionPercent: number | undefined;
     if (body?.commissionPercent != null) {
       const parsed = Number(body.commissionPercent);
-      if (Number.isNaN(parsed) || parsed < 0 || parsed > 100) {
+      if (
+        Number.isNaN(parsed) ||
+        parsed < MIN_AFFILIATE_COMMISSION_PERCENT ||
+        parsed > MAX_AFFILIATE_COMMISSION_PERCENT
+      ) {
         return NextResponse.json(
-          { error: 'commissionPercent must be a number between 0 and 100' },
+          {
+            error: `commissionPercent must be between ${MIN_AFFILIATE_COMMISSION_PERCENT} and ${MAX_AFFILIATE_COMMISSION_PERCENT}`,
+          },
           { status: 400 }
         );
       }
-      commissionPercent = parsed;
+      commissionPercent = clampAffiliateCommissionPercent(parsed);
     }
 
     const settings = await setAffiliateSettings(

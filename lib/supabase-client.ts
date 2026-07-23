@@ -50,6 +50,12 @@ export interface Event {
   category?: 'sports' | 'concert' | 'movies' | 'other';
   /** When true, account holders can share referral links and earn commission */
   affiliates_enabled?: boolean;
+  /** Per-event affiliate commission percent (minimum 5) */
+  affiliate_commission_percent?: number;
+  /** Public path segment for /verify/{slug} */
+  verify_slug?: string | null;
+  verifier_code_hash?: string | null;
+  verifier_code_rotated_at?: string | null;
   status: 'pending' | 'approved' | 'rejected';
   rejection_reason?: string;
   is_featured?: boolean;
@@ -151,8 +157,21 @@ export interface Ticket {
   ticket_price?: number;
   status: 'valid' | 'used' | 'expired' | 'refunded';
   qr_code: string;
+  checked_in_at?: string | null;
+  checked_in_by?: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface VerifierSession {
+  id: string;
+  event_id: string;
+  device_name: string;
+  token_jti: string;
+  expires_at: string;
+  revoked_at?: string | null;
+  last_seen_at?: string | null;
+  created_at: string;
 }
 
 export interface AppNotification {

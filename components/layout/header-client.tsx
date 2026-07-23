@@ -26,6 +26,7 @@ import { BrandLogo } from '@/components/brand/brand-logo'
 import { HeaderSearch } from '@/components/layout/header-search'
 import { NotificationBell } from '@/components/notifications/notification-bell'
 import { EVENT_CATEGORIES } from '@/lib/event-categories'
+import { DiscoveryFilterNav } from '@/components/events/discovery-filter-nav'
 import { cn } from '@/lib/utils'
 
 function HeaderSearchFallback({ compact = false }: { compact?: boolean }) {
@@ -55,7 +56,10 @@ function CategoryNavLinks({
 }) {
   const pathname = usePathname()
   const searchParams = useSearchParams()
-  const activeCategory = pathname === '/events' ? searchParams.get('category') : null
+  const activeCategory =
+    pathname === '/events' && !searchParams.get('filter')
+      ? searchParams.get('category')
+      : null
 
   return (
     <nav className={className} aria-label="Event categories">
@@ -193,7 +197,7 @@ function MobileCategoryMenu() {
         <button
           type="button"
           className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm transition-colors hover:bg-slate-50"
-          aria-label="Open categories menu"
+          aria-label="Open browse menu"
         >
           <Menu className="h-5 w-5" />
         </button>
@@ -201,14 +205,31 @@ function MobileCategoryMenu() {
       <SheetContent side="left" className="w-[min(18rem,85vw)] p-0">
         <SheetHeader className="border-b border-slate-200 px-5 py-4 text-left">
           <SheetTitle className="text-base font-semibold text-slate-900">
-            Categories
+            Browse
           </SheetTitle>
         </SheetHeader>
-        <CategoryNavLinks
-          className="flex flex-col gap-1 p-3"
-          linkClassName="rounded-lg px-3 py-3 hover:bg-slate-50"
-          onNavigate={() => setOpen(false)}
-        />
+        <div className="overflow-y-auto">
+          <div className="px-5 pb-2 pt-4">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#9A7B2F]">
+              Discover
+            </p>
+          </div>
+          <DiscoveryFilterNav
+            variant="sheet"
+            className="px-3 pb-3"
+            onNavigate={() => setOpen(false)}
+          />
+          <div className="border-t border-slate-200 px-5 pb-2 pt-4">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#9A7B2F]">
+              Categories
+            </p>
+          </div>
+          <CategoryNavLinks
+            className="flex flex-col gap-1 px-3 pb-3"
+            linkClassName="rounded-lg px-3 py-3 hover:bg-slate-50"
+            onNavigate={() => setOpen(false)}
+          />
+        </div>
       </SheetContent>
     </Sheet>
   )

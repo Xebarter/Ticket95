@@ -1,275 +1,126 @@
-Ticket95.com Help Center
-Welcome to the Ticket95 Help Center
+# Ticket95 Door Verifier (shipped contract)
+
+Fast, installable, shareable ticket check-in for event doors.
 
-Need help with tickets, payments, events, or your account? The Ticket95 Help Center provides answers and support to help you enjoy a smooth ticket-buying experience.
+## Goals
 
-Find quick solutions below or contact our support team for assistance.
+* Scan tickets in under 100ms after one-time download (local `Map` lookup).
+* Support many verifier devices at once.
+* Sync check-ins across devices (atomic DB update + sync poll + realtime broadcast).
+* Keep working briefly offline; queue check-ins and flush when online.
+* Staff never need a Ticket95 login — only a link + 6-digit code.
+* Install as a Progressive Web App on phone/tablet/laptop.
 
-How Can We Help You?
-🎟 Buying Tickets
-How do I purchase a ticket?
+## How organizers share
 
-Buying tickets on Ticket95.com is simple:
+1. Open **Profile → Verify**.
+2. For an event, click **Generate code** (or **Rotate code**).
+3. Use **Share verifier** (or copy link + code). Staff can also scan the on-screen QR of the link.
+4. Rotating the code revokes existing door sessions.
 
-Search for your preferred event.
-Select the event date and ticket type.
-Choose the number of tickets you need.
-Complete payment.
-Receive your digital ticket instantly.
+Share URL shape:
 
-Your ticket will be available through your Ticket95 account and sent to your registered email or phone number.
+```
+https://{host}/verify/{slug}
+```
 
-I cannot find an event I want. What should I do?
+Staff enter the 6-digit access code and an optional device name (e.g. Gate A).
 
-If you cannot find an event:
+## How staff install
 
-Check that the event name is spelled correctly.
-Browse the event categories.
-Check whether ticket sales have started.
-Contact the event organizer or Ticket95 support.
+* **Android / desktop Chrome:** open the link → unlock with code → tap **Install** when prompted (Add to Home Screen).
+* **iPhone:** Safari → Share → **Add to Home Screen**.
+* Manifest start URL is scoped to `/verify/{slug}` so the home-screen icon opens the right event.
 
-New events are added regularly.
+## Architecture (what actually ships)
 
-Can I purchase tickets without creating an account?
+```
+Customer purchase → tickets row in Supabase
+                         │
+                         ▼
+Organizer generates slug + hashed access code
+                         │
+                         ▼
+Staff: /verify/{slug} + code → verifier_sessions JWT
+                         │
+                         ▼
+Bootstrap GET /api/verify/tickets → IndexedDB + in-memory Map
+                         │
+                    Scan = Map.get (no DB)
+                         │
+                         ▼
+Optimistic mark local → POST /api/verify/check-in (atomic)
+                         │
+         sync poll + broadcast channel verify:{eventId}
+```
 
-Yes, some events allow guest purchases. However, creating a Ticket95 account makes it easier to:
+### Ticket95 field mapping
 
-Access your tickets anytime
-Track your purchases
-Receive event updates
-Manage your bookings
-Payments & Transactions
-💳 Payment Issues
-My payment was successful but I did not receive my ticket.
+| Concept | Implementation |
+|---|---|
+| qrToken | `tickets.qr_code` (exact string match; paid tickets store JSON without `ticketId`) |
+| used | `tickets.status === 'used'` |
+| checked_in_at / checked_in_by | columns on `tickets` |
+| eventSlug | `events.verify_slug` |
+| access code | `events.verifier_code_hash` (plaintext shown once to organizer) |
+| sessions | `verifier_sessions` |
 
-If money was deducted but your ticket was not received:
+Signed `T95.` QR envelopes, buyer-name search, NFC, face ID, etc. remain **future** — current QR payloads keep working.
 
-Check your email inbox and spam folder.
-Log into your Ticket95 account.
-Check your ticket history.
-Contact support with your payment reference.
+### APIs
 
-Please provide:
+| Route | Auth | Purpose |
+|---|---|---|
+| `POST /api/verify/session` | access code | Issue door JWT |
+| `GET /api/verify/tickets` | verifier JWT | Bootstrap lean tickets |
+| `POST /api/verify/check-in` | verifier JWT | Atomic mark used |
+| `GET /api/verify/sync?since=` | verifier JWT | Delta sync |
+| `GET/POST /api/profile/verify/access` | organizer/admin | Link + generate/rotate code |
+| `POST /api/profile/verify/scan` | organizer/admin | Organizer fallback scanner |
+| `POST /api/profile/verify/mark-used` | organizer/admin | Organizer fallback mark used |
 
-Transaction ID
-Phone number/email used
-Event name
-Payment receipt
-My payment failed. What should I do?
+### Local cache (lean only)
 
-Try the following:
+```
+id, qr_code, status, ticket_type_name, checked_in_at, checked_in_by, updated_at
+```
 
-Confirm you have sufficient funds.
-Check your internet connection.
-Retry the payment.
-Use another payment method.
+Never download payment details, emails, or phones.
 
-If the issue continues, contact Ticket95 support.
+### Atomic check-in
 
-What payment methods are available?
+```sql
+UPDATE tickets
+SET status = 'used', checked_in_at = now(), checked_in_by = ?
+WHERE id = ? AND event_id = ? AND status = 'valid'
+```
 
-Ticket95 supports secure payment methods including:
+Rows affected 0 → already used / conflict.
 
-Mobile money
-Debit and credit cards
-Online payment solutions
-Other payment options available during checkout
+### Offline
 
-Payment options may vary depending on your country and event.
+Successful local scans enqueue in IndexedDB (`pending`). On `online`, flush via check-in API. HTTP 409 → show conflict.
 
-Tickets
-🎫 Managing Your Tickets
-Where can I find my ticket?
+### Security
 
-Your ticket can be accessed through:
+* Access codes are hashed with a server pepper (`VERIFIER_CODE_PEPPER` or `VERIFIER_JWT_SECRET`).
+* Sessions expire (~24h), are individually revocable, and are bulk-revoked on code rotate.
+* Old unauthenticated profile verify APIs are locked down.
 
-Your Ticket95 account dashboard
-Confirmation email
-SMS notification (where available)
-How do I use my digital ticket?
+### Migration
 
-At the event entrance:
+Run [`scripts/sql/023_verifier_system.sql`](scripts/sql/023_verifier_system.sql) (also appended in `run_all_migrations.sql`).
 
-Open your Ticket95 ticket.
-Present the QR code or ticket confirmation.
-Allow staff to scan and verify your ticket.
-I lost my ticket. Can I recover it?
+### Performance targets
 
-Yes.
+* Init: seconds for typical catalogs (bulk select once).
+* Lookup: Map.get, milliseconds.
+* Multi-device latency: sync poll ~4s + broadcast best-effort.
 
-Simply:
+## UI principles
 
-Log into your Ticket95 account.
-Open My Tickets.
-Select the event.
+Large buttons, high-contrast VALID / INVALID flash, counts for Loaded / Checked in / Remaining, minimal taps (auto check-in on valid scan).
 
-If you still cannot find your ticket, contact support.
+## Future (not in this release)
 
-Can I transfer my ticket to another person?
-
-Ticket transfers depend on the event organizer's policy.
-
-Some tickets may be transferred while others are linked to the original purchaser.
-
-Event Entry & Attendance
-🚪 At The Event
-What should I bring when attending an event?
-
-Bring:
-
-Your digital ticket or QR code
-Valid identification if required
-Any event-specific requirements
-What time should I arrive?
-
-Arrival time depends on the event. We recommend arriving early to allow time for:
-
-Ticket verification
-Security checks
-Finding your seat/location
-My ticket QR code is not scanning. What should I do?
-
-Try:
-
-Increasing your phone brightness.
-Refreshing your ticket.
-Checking that you are presenting the correct ticket.
-
-If the problem continues, visit the event help desk.
-
-Refunds & Cancellations
-🔄 Refund Support
-Can I cancel my ticket?
-
-Ticket cancellation depends on the event's refund policy.
-
-Some tickets may be non-refundable after purchase.
-
-My event was cancelled. Will I get a refund?
-
-If an event is cancelled, Ticket95 will communicate the available options, which may include:
-
-Refund processing
-Ticket transfers
-Rescheduled event access
-The event date changed. Is my ticket still valid?
-
-In most cases, tickets remain valid for the rescheduled date.
-
-Ticket95 will communicate any changes from the event organizer.
-
-Account Support
-👤 Managing Your Account
-How do I reset my password?
-Select Forgot Password on the login page.
-Enter your registered email.
-Follow the password reset instructions.
-How do I update my account details?
-
-You can update your:
-
-Name
-Email
-Phone number
-Password
-Profile information
-
-from your account settings.
-
-How do I delete my Ticket95 account?
-
-To request account deletion, contact Ticket95 support.
-
-Please note that some transaction records may need to be retained for legal and operational purposes.
-
-Event Organizer Support
-🎤 Selling Tickets with Ticket95
-How can I sell tickets for my event?
-
-Event organizers can create an account and submit their events for approval.
-
-Ticket95 helps organizers:
-
-Sell digital tickets
-Manage attendees
-Track sales
-Verify entry
-Promote events
-What events can be hosted on Ticket95?
-
-Ticket95 supports:
-
-Concerts
-Sports events
-Movies
-Theatre shows
-Festivals
-Conferences
-School events
-Corporate events
-How do organizers receive ticket sales payments?
-
-Payment settlement depends on the agreement between Ticket95 and the event organizer, including event completion and verification requirements.
-
-Safety & Ticket Verification
-🔐 Protecting Your Tickets
-How do I know my ticket is genuine?
-
-Only tickets purchased through official Ticket95 channels should be trusted.
-
-Valid tickets contain verification details such as:
-
-Unique ticket ID
-QR code
-Event information
-I bought a ticket from someone else. Will it work?
-
-Tickets purchased from unofficial sellers may not be valid.
-
-Ticket95 recommends purchasing only through:
-
-Ticket95.com
-Authorized event partners
-How do I report suspicious activity?
-
-Contact Ticket95 support if you notice:
-
-Fake tickets
-Payment scams
-Unauthorized ticket sales
-Suspicious event listings
-Contact Ticket95 Support
-Need More Help?
-
-Our support team is ready to assist you.
-
-Contact Us
-
-📧 Email: support@ticket95.com
-📱 WhatsApp/Phone: [Insert Number]
-🌐 Website: Ticket95.com
-
-When contacting support, include:
-
-Your name
-Account email/phone
-Event name
-Ticket number
-Payment reference (if applicable)
-
-This helps us resolve your issue faster.
-
-Popular Help Topics
-
-Quick links:
-
-🎟 Buy a ticket
-💳 Payment failed
-📩 Ticket not received
-🔄 Request refund
-🔐 Account problems
-🎤 Sell tickets as an organizer
-✅ Verify a ticket
-Ticket95 Support Promise
-
-At Ticket95.com, we are committed to making event access simple, secure, and enjoyable. Whether you are attending a concert, cheering at a sports event, watching a movie, or experiencing live entertainment, our team is here to support you every step of the way.
+NFC, barcodes beyond QR, face recognition, wristbands, multi-day passes, heatmaps, signed QR tokens, VIP lanes, hardware scanners.

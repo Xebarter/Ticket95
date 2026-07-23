@@ -4,7 +4,9 @@ import { supabaseAdmin } from '@/lib/supabase-admin';
 import {
   ensureAffiliateForUser,
   getAffiliateSettings,
+  clampAffiliateCommissionPercent,
 } from '@/lib/affiliates';
+import { DEFAULT_AFFILIATE_COMMISSION_PERCENT } from '@/lib/affiliate-constants';
 
 export async function GET() {
   try {
@@ -37,7 +39,7 @@ export async function GET() {
     const nowIso = new Date().toISOString();
     const { data: events, error: eventsError } = await supabaseAdmin
       .from('events')
-      .select('id, name, date, venue, currency, image_url, tickets_available, status')
+      .select('id, name, date, venue, currency, image_url, tickets_available, status, affiliate_commission_percent')
       .eq('status', 'approved')
       .eq('affiliates_enabled', true)
       .gt('date', nowIso)
@@ -66,7 +68,12 @@ export async function GET() {
       success: true,
       settings,
       affiliate,
-      events: events || [],
+      events: (events || []).map((event) => ({
+        ...event,
+        affiliate_commission_percent: clampAffiliateCommissionPercent(
+          event.affiliate_commission_percent ?? DEFAULT_AFFILIATE_COMMISSION_PERCENT
+        ),
+      })),
       commissions: rows,
       totals,
     });

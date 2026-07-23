@@ -28,7 +28,8 @@ export async function GET(request: NextRequest) {
         category,
         ticket_price,
         total_tickets,
-        tickets_available
+        tickets_available,
+        is_featured
       `);
 
     const nowIso = getNowIso();

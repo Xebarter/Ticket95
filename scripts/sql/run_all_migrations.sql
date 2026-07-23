@@ -841,6 +841,77 @@ CREATE INDEX IF NOT EXISTS idx_orders_affiliate_id ON orders(affiliate_id)
   WHERE affiliate_id IS NOT NULL;
 
 -- =====================================================
+-- 022: Per-event affiliate commission percent
+-- =====================================================
+ALTER TABLE events
+  ADD COLUMN IF NOT EXISTS affiliate_commission_percent NUMERIC(5, 2) NOT NULL DEFAULT 5;
+
+UPDATE events
+SET affiliate_commission_percent = 5
+WHERE affiliate_commission_percent IS NULL
+   OR affiliate_commission_percent < 5;
+
+ALTER TABLE events
+  DROP CONSTRAINT IF EXISTS events_affiliate_commission_percent_check;
+
+ALTER TABLE events
+  ADD CONSTRAINT events_affiliate_commission_percent_check
+  CHECK (
+    affiliate_commission_percent >= 5
+    AND affiliate_commission_percent <= 100
+  );
+
+-- =====================================================
+-- 023: Verifier system
+-- =====================================================
+ALTER TABLE events
+  ADD COLUMN IF NOT EXISTS verify_slug TEXT;
+
+ALTER TABLE events
+  ADD COLUMN IF NOT EXISTS verifier_code_hash TEXT;
+
+ALTER TABLE events
+  ADD COLUMN IF NOT EXISTS verifier_code_rotated_at TIMESTAMPTZ;
+
+UPDATE events
+SET verify_slug = lower(substr(replace(gen_random_uuid()::text, '-', ''), 1, 10))
+WHERE verify_slug IS NULL OR verify_slug = '';
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_events_verify_slug
+  ON events (verify_slug)
+  WHERE verify_slug IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS verifier_sessions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  event_id UUID NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+  device_name TEXT NOT NULL DEFAULT 'Door device',
+  token_jti TEXT NOT NULL UNIQUE,
+  expires_at TIMESTAMPTZ NOT NULL,
+  revoked_at TIMESTAMPTZ,
+  last_seen_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_verifier_sessions_event_id
+  ON verifier_sessions (event_id);
+
+CREATE INDEX IF NOT EXISTS idx_verifier_sessions_active
+  ON verifier_sessions (event_id, expires_at)
+  WHERE revoked_at IS NULL;
+
+ALTER TABLE tickets
+  ADD COLUMN IF NOT EXISTS checked_in_at TIMESTAMPTZ;
+
+ALTER TABLE tickets
+  ADD COLUMN IF NOT EXISTS checked_in_by UUID REFERENCES verifier_sessions(id) ON DELETE SET NULL;
+
+CREATE INDEX IF NOT EXISTS idx_tickets_event_status
+  ON tickets (event_id, status);
+
+CREATE INDEX IF NOT EXISTS idx_tickets_event_updated_at
+  ON tickets (event_id, updated_at);
+
+-- =====================================================
 -- SETUP COMPLETE
 -- =====================================================
 -- All tables, indexes, triggers, and RLS policies have been created.

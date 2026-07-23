@@ -44,6 +44,7 @@ export default function EditEventPage() {
         status: 'pending' | 'approved' | 'rejected';
         rejection_reason?: string | null;
         affiliates_enabled?: boolean;
+        affiliate_commission_percent?: number;
       }
     | undefined
   >(undefined);
@@ -110,6 +111,7 @@ export default function EditEventPage() {
           status: event.status,
           rejection_reason: event.rejection_reason,
           affiliates_enabled: event.affiliates_enabled,
+          affiliate_commission_percent: event.affiliate_commission_percent,
         });
         setInitialSponsors(
           (sponsors as SponsorRow[]).map((s) => ({

@@ -3,7 +3,9 @@ import {
   createAffiliateCommissionForOrder,
   getAffiliateByReferralCode,
   getAffiliateSettings,
+  clampAffiliateCommissionPercent,
 } from '@/lib/affiliates';
+import { DEFAULT_AFFILIATE_COMMISSION_PERCENT } from '@/lib/affiliate-constants';
 
 type OrderRow = {
   id: string;
@@ -140,6 +142,22 @@ export async function completePaidOrder(order: OrderRow) {
   const { error: insertError } = await supabaseAdmin.from('tickets').insert(ticketsPayload);
   if (insertError) throw insertError;
 
+  // Notify live verifiers about new tickets (best-effort)
+  void (async () => {
+    try {
+      const { broadcastTicketUpdate } = await import('@/lib/verifier-session');
+      const { data: created } = await supabaseAdmin
+        .from('tickets')
+        .select('id, qr_code, status, ticket_type_name, checked_in_at, checked_in_by, updated_at')
+        .eq('order_id', order.id);
+      for (const ticket of created || []) {
+        await broadcastTicketUpdate(order.event_id, ticket);
+      }
+    } catch (error) {
+      console.warn('Verifier ticket broadcast failed:', error);
+    }
+  })();
+
   const inventoryUpdates = [...soldByType.entries()].map(([ticketTypeId, quantitySold]) => {
     const ticketType = ticketTypeMap.get(ticketTypeId)!;
     const newAvailable = Math.max(0, ticketType.available_quantity - quantitySold);
@@ -174,7 +192,11 @@ export async function completePaidOrder(order: OrderRow) {
 
 async function maybeAwardAffiliateCommission(
   order: OrderRow,
-  event: { affiliates_enabled?: boolean | null; currency?: string | null }
+  event: {
+    affiliates_enabled?: boolean | null;
+    affiliate_commission_percent?: number | null;
+    currency?: string | null;
+  }
 ) {
   try {
     const settings = await getAffiliateSettings();
@@ -209,6 +231,11 @@ async function maybeAwardAffiliateCommission(
 
     const orderAmount = Number(order.total_price ?? 0);
     const currency = order.currency || event.currency || 'USD';
+    const commissionPercent = clampAffiliateCommissionPercent(
+      event.affiliate_commission_percent ??
+        settings.commissionPercent ??
+        DEFAULT_AFFILIATE_COMMISSION_PERCENT
+    );
 
     await createAffiliateCommissionForOrder({
       orderId: order.id,
@@ -217,7 +244,7 @@ async function maybeAwardAffiliateCommission(
       orderAmount,
       currency,
       affiliateId: affiliate.id,
-      commissionPercent: settings.commissionPercent,
+      commissionPercent,
     });
   } catch (error) {
     console.error('Affiliate commission award failed:', error);

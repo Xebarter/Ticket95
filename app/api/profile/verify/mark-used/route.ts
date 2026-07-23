@@ -1,18 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
+import { getServerAuthUser } from '@/lib/server-auth';
 
 type EventRecord = {
   id: string;
+  organizer_id: string;
 };
 
-async function getEventForVerification(eventId: string) {
-  const { data, error } = await supabaseAdmin.from('events').select('id').eq('id', eventId).single<EventRecord>();
+async function getOwnedEvent(eventId: string, userId: string, role: string) {
+  const { data, error } = await supabaseAdmin
+    .from('events')
+    .select('id, organizer_id')
+    .eq('id', eventId)
+    .single<EventRecord>();
   if (error || !data) return null;
+  if (role !== 'admin' && data.organizer_id !== userId) return null;
   return data;
 }
 
 export async function POST(request: NextRequest) {
   try {
+    const auth = await getServerAuthUser(request);
+    if (!auth) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const body = await request.json();
     const eventId = String(body?.eventId || '').trim();
     const ticketId = String(body?.ticketId || '').trim();
@@ -21,7 +33,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Event and ticket are required' }, { status: 400 });
     }
 
-    const event = await getEventForVerification(eventId);
+    const event = await getOwnedEvent(eventId, auth.userId, auth.role);
     if (!event) {
       return NextResponse.json({ error: 'Invalid verification link.' }, { status: 404 });
     }
@@ -44,13 +56,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: `Ticket cannot be marked used (${ticket.status})` }, { status: 400 });
     }
 
+    const nowIso = new Date().toISOString();
     const { data: updated, error: updateError } = await supabaseAdmin
       .from('tickets')
-      .update({ status: 'used' })
+      .update({
+        status: 'used',
+        checked_in_at: nowIso,
+      })
       .eq('id', ticketId)
       .eq('event_id', event.id)
       .eq('status', 'valid')
-      .select('id, status, updated_at')
+      .select('id, status, updated_at, checked_in_at')
       .single();
 
     if (updateError || !updated) {

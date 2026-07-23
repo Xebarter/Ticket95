@@ -106,11 +106,11 @@ export default function AdminSettingsPage() {
               </div>
 
               <div className="grid gap-2">
-                <Label htmlFor="commission-percent">Commission rate (%)</Label>
+                <Label htmlFor="commission-percent">Default commission rate (%)</Label>
                 <Input
                   id="commission-percent"
                   type="number"
-                  min={0}
+                  min={5}
                   max={100}
                   step={0.1}
                   value={settings.commissionPercent}
@@ -123,7 +123,8 @@ export default function AdminSettingsPage() {
                   className="max-w-[12rem]"
                 />
                 <p className="text-xs text-muted-foreground">
-                  Applied to the order total when a buyer purchases through an affiliate link.
+                  Suggested default for new events. Organizers set the actual rate per event
+                  (minimum 5%). Awards use each event&apos;s rate.
                 </p>
               </div>
 

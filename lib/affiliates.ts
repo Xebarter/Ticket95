@@ -1,7 +1,16 @@
 import { supabaseAdmin } from '@/lib/supabase-admin';
-import { DEFAULT_AFFILIATE_COMMISSION_PERCENT } from '@/lib/affiliate-constants';
+import {
+  DEFAULT_AFFILIATE_COMMISSION_PERCENT,
+  clampAffiliateCommissionPercent,
+} from '@/lib/affiliate-constants';
 
-export { AFFILIATE_REF_STORAGE_KEY, DEFAULT_AFFILIATE_COMMISSION_PERCENT } from '@/lib/affiliate-constants';
+export {
+  AFFILIATE_REF_STORAGE_KEY,
+  DEFAULT_AFFILIATE_COMMISSION_PERCENT,
+  MIN_AFFILIATE_COMMISSION_PERCENT,
+  MAX_AFFILIATE_COMMISSION_PERCENT,
+  clampAffiliateCommissionPercent,
+} from '@/lib/affiliate-constants';
 
 export type AffiliateRow = {
   id: string;
@@ -71,7 +80,8 @@ export async function getAffiliateSettings(): Promise<AffiliateSettings> {
 
   return {
     programEnabled,
-    commissionPercent: Math.min(100, Math.max(0, commissionPercent)),
+    // Platform default for new events / fallback when an event rate is missing
+    commissionPercent: clampAffiliateCommissionPercent(commissionPercent),
   };
 }
 
@@ -85,7 +95,7 @@ export async function setAffiliateSettings(
       typeof settings.programEnabled === 'boolean' ? settings.programEnabled : current.programEnabled,
     commissionPercent:
       typeof settings.commissionPercent === 'number'
-        ? Math.min(100, Math.max(0, settings.commissionPercent))
+        ? clampAffiliateCommissionPercent(settings.commissionPercent)
         : current.commissionPercent,
   };
 

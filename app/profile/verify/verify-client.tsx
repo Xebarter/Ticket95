@@ -12,7 +12,6 @@ import {
   ArrowLeft,
   CalendarDays,
   CheckCircle2,
-  Copy,
   Keyboard,
   MapPin,
   ScanLine,
@@ -26,6 +25,7 @@ import {
   ProfilePageHeader,
   ProfileSection,
 } from '@/components/profile/profile-ui';
+import { VerifierSharePanel } from '@/components/verify/verifier-share-panel';
 
 type ScanTicket = {
   id: string;
@@ -95,7 +95,6 @@ export default function VerifyClient() {
   const searchParams = useSearchParams();
   const eventId = (searchParams.get('event') || '').trim();
   const { loading: loadingProfile, myEvents } = useProfileData();
-  const [copiedEventId, setCopiedEventId] = useState<string | null>(null);
   const [manualOpen, setManualOpen] = useState(false);
 
   const [manualPayload, setManualPayload] = useState('');
@@ -248,6 +247,7 @@ export default function VerifyClient() {
     try {
       const response = await fetch('/api/profile/verify/scan', {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ eventId, qrData: payload }),
       });
@@ -409,6 +409,7 @@ export default function VerifyClient() {
     try {
       const response = await fetch('/api/profile/verify/mark-used', {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ eventId, ticketId: scanResult.ticket.id }),
       });
@@ -432,31 +433,12 @@ export default function VerifyClient() {
     lastScannedAtRef.current = 0;
   };
 
-  const getVerifyLink = (id: string) => {
-    if (typeof window === 'undefined') return '';
-    return `${window.location.origin}/profile/verify?event=${id}`;
-  };
-
-  const copyVerifyLink = async (id: string) => {
-    const link = getVerifyLink(id);
-    if (!link) return;
-    try {
-      await navigator.clipboard.writeText(link);
-      setCopiedEventId(id);
-      window.setTimeout(() => {
-        setCopiedEventId((previous) => (previous === id ? null : previous));
-      }, 1500);
-    } catch {
-      setCopiedEventId(null);
-    }
-  };
-
   if (!eventId) {
     return (
       <div className="space-y-5">
         <ProfilePageHeader
           title="Verify"
-          description="Pick an event, then open the door scanner or share a link with your team."
+          description="Share an installable door verifier with your team, or scan tickets yourself."
         />
 
         {loadingProfile ? (
@@ -475,9 +457,9 @@ export default function VerifyClient() {
         ) : (
           <ProfileSection
             title="Your events"
-            description="Tap an event to open the scanner at the door."
+            description="Share the installable verifier with door staff, or scan yourself."
           >
-            <div className="space-y-3">
+            <div className="space-y-4">
               {myEvents.map((event) => {
                 const image = getEventImages(event)[0];
                 return (
@@ -512,20 +494,15 @@ export default function VerifyClient() {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-2 border-t border-border/60 bg-muted/20 p-3 sm:flex sm:justify-end sm:gap-2 sm:px-4">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="h-11 rounded-xl sm:h-9 sm:w-auto"
-                        onClick={() => void copyVerifyLink(event.id)}
-                      >
-                        <Copy className="mr-1.5 h-4 w-4" />
-                        {copiedEventId === event.id ? 'Copied' : 'Copy link'}
-                      </Button>
-                      <Button asChild className="h-11 rounded-xl sm:h-9 sm:w-auto">
+                    <div className="border-t border-border/60 bg-muted/10 p-3 sm:px-4">
+                      <VerifierSharePanel eventId={event.id} eventName={event.name} />
+                    </div>
+
+                    <div className="border-t border-border/60 bg-muted/20 p-3 sm:flex sm:justify-end sm:px-4">
+                      <Button asChild className="h-11 w-full rounded-xl sm:h-9 sm:w-auto">
                         <Link href={`/profile/verify?event=${event.id}`}>
                           <ScanLine className="mr-1.5 h-4 w-4" />
-                          Open scanner
+                          Scan as organizer
                         </Link>
                       </Button>
                     </div>

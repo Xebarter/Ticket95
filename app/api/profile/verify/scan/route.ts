@@ -1,24 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
+import { getServerAuthUser } from '@/lib/server-auth';
 import { normalizeQrValue, parseTicketQr } from '@/lib/ticket-verification';
 
 type EventRecord = {
   id: string;
   name: string;
+  organizer_id: string;
 };
 
-async function getEventForVerification(eventId: string) {
+async function getOwnedEvent(eventId: string, userId: string, role: string) {
   const { data, error } = await supabaseAdmin
     .from('events')
-    .select('id, name')
+    .select('id, name, organizer_id')
     .eq('id', eventId)
     .single<EventRecord>();
   if (error || !data) return null;
+  if (role !== 'admin' && data.organizer_id !== userId) return null;
   return data;
 }
 
 export async function POST(request: NextRequest) {
   try {
+    const auth = await getServerAuthUser(request);
+    if (!auth) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const body = await request.json();
     const eventId = String(body?.eventId || '').trim();
     const scannedRaw = normalizeQrValue(body?.qrData);
@@ -27,7 +35,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Event and QR payload are required' }, { status: 400 });
     }
 
-    const event = await getEventForVerification(eventId);
+    const event = await getOwnedEvent(eventId, auth.userId, auth.role);
     if (!event) {
       return NextResponse.json({ error: 'Invalid verification link.' }, { status: 404 });
     }
