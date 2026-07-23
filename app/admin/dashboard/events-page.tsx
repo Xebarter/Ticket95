@@ -366,9 +366,9 @@ function EventRow({
           ) : null}
 
           <Button variant="ghost" size="icon" asChild className="h-9 w-9 rounded-xl">
-            <Link href={`/events/${event.id}`} target="_blank" rel="noreferrer">
+            <Link href={`/admin/events/${event.id}`}>
               <Eye className="h-4 w-4" />
-              <span className="sr-only">Preview</span>
+              <span className="sr-only">View details</span>
             </Link>
           </Button>
           <AdminEventEdit event={event} onUpdatedAction={refresh} />

@@ -73,25 +73,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [user]);
 
   const claimGuestPurchases = useCallback(async (authUserId: string, accessToken?: string | null) => {
-    if (!authUserId || !accessToken) return;
+    if (!authUserId) return;
     if (claimedGuestPurchaseUserIdsRef.current.has(authUserId)) return;
 
     try {
+      const headers: HeadersInit = {};
+      if (accessToken) {
+        headers.Authorization = `Bearer ${accessToken}`;
+      }
+
       const response = await fetch('/api/guest-purchases/claim', {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
+        headers,
+        credentials: 'include',
       });
+
+      // Mark attempted either way so auth refresh loops don't spam failed claims.
+      claimedGuestPurchaseUserIdsRef.current.add(authUserId);
+
+      if (response.status === 401) {
+        // Session may not be ready yet; linking also runs on login/signup/callback.
+        return;
+      }
 
       if (!response.ok) {
         const payload = await response.json().catch(() => ({}));
-        throw new Error(payload?.error || 'Failed to claim guest purchases');
+        console.warn(
+          'Guest purchase linking skipped:',
+          payload?.error || `HTTP ${response.status}`
+        );
       }
-
-      claimedGuestPurchaseUserIdsRef.current.add(authUserId);
     } catch (error) {
-      console.error('Guest purchase linking failed:', error);
+      claimedGuestPurchaseUserIdsRef.current.add(authUserId);
+      console.warn('Guest purchase linking skipped:', error);
     }
   }, []);
 
@@ -104,6 +118,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         headers: {
           Authorization: `Bearer ${accessToken}`,
         },
+        credentials: 'include',
       });
 
       if (!response.ok) return null;
@@ -136,8 +151,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const applyAuthenticatedSession = useCallback(
     async (session: { user: { id: string; email?: string | null }; access_token: string }) => {
-      await claimGuestPurchases(session.user.id, session.access_token);
+      // Establish app cookie first so claim can fall back to session auth.
       const userData = await resolveAppUser(session.user.email, session.access_token);
+      await claimGuestPurchases(session.user.id, session.access_token);
       if (userData) {
         setUser(userData);
         return userData;

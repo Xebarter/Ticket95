@@ -8,6 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { CalendarDays, MapPin, Phone, Ticket, Wallet } from 'lucide-react';
+import { formatEventDateTime } from '@/lib/event-display';
 
 interface EventApprovalCardProps {
   event: {
@@ -147,7 +148,7 @@ export function EventApprovalCard({ event, onApprove }: EventApprovalCardProps) 
         <div className="grid gap-2 text-xs sm:grid-cols-2 sm:gap-3 sm:text-sm lg:grid-cols-4">
           <div className="rounded-xl border border-border/70 bg-background/70 p-3">
             <p className="mb-1 inline-flex items-center gap-1 text-muted-foreground"><CalendarDays className="h-3.5 w-3.5" />Date</p>
-            <p className="font-medium">{new Date(event.date).toLocaleDateString()}</p>
+            <p className="font-medium">{formatEventDateTime(event.date)}</p>
           </div>
           <div className="rounded-xl border border-border/70 bg-background/70 p-3">
             <p className="mb-1 inline-flex items-center gap-1 text-muted-foreground"><MapPin className="h-3.5 w-3.5" />Venue</p>

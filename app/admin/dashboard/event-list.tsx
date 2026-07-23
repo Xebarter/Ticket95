@@ -13,6 +13,14 @@ import Link from 'next/link';
 import { getEventLifecycleStatus } from '@/lib/event-status';
 import type { AdminEventRow } from '@/lib/admin-dashboard-data';
 
+function formatAdminEventDate(date: string) {
+  return new Date(date).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
 const EventApprovalCard = dynamic(() =>
   import('@/components/admin/event-approval-card').then((mod) => mod.EventApprovalCard)
 );
@@ -130,7 +138,7 @@ export default function AdminEventList({
                   <div className="min-w-0">
                     <div className="line-clamp-1 font-medium">{event.name}</div>
                     <div className="text-xs text-muted-foreground sm:text-sm">
-                      {event.organizer_name} • {new Date(event.date).toLocaleDateString()} • {event.venue}
+                      {event.organizer_name} • {formatAdminEventDate(event.date)} • {event.venue}
                     </div>
                     {event.organizer_phone ? (
                       <div className="text-[11px] text-muted-foreground">Phone: {event.organizer_phone}</div>
@@ -144,9 +152,9 @@ export default function AdminEventList({
                 <div className="flex flex-wrap items-center gap-2 md:justify-end">
                   <FeaturedToggle eventId={event.id} isFeatured={!!event.is_featured} onToggle={mutate} />
                   <Button asChild variant="ghost" size="sm" className="h-8 rounded-full px-3 text-xs">
-                    <Link href={`/events/${event.id}`}>
+                    <Link href={`/admin/events/${event.id}`}>
                       <Eye className="mr-1.5 h-3.5 w-3.5" />
-                      Preview
+                      Details
                     </Link>
                   </Button>
                   <AdminEventEdit event={event} onUpdatedAction={mutate} />
@@ -183,7 +191,7 @@ export default function AdminEventList({
                   <div className="min-w-0">
                     <div className="line-clamp-1 font-medium">{event.name}</div>
                     <div className="text-xs text-muted-foreground sm:text-sm">
-                      {event.organizer_name} • {new Date(event.date).toLocaleDateString()} • {event.venue}
+                      {event.organizer_name} • {formatAdminEventDate(event.date)} • {event.venue}
                     </div>
                     {event.organizer_phone ? (
                       <div className="text-[11px] text-muted-foreground">Phone: {event.organizer_phone}</div>
@@ -196,9 +204,9 @@ export default function AdminEventList({
                 </div>
                 <div className="flex items-center gap-2">
                   <Button asChild variant="ghost" size="sm" className="h-8 rounded-full px-3 text-xs">
-                    <Link href={`/events/${event.id}`}>
+                    <Link href={`/admin/events/${event.id}`}>
                       <Eye className="mr-1.5 h-3.5 w-3.5" />
-                      Preview
+                      Details
                     </Link>
                   </Button>
                   <AdminEventEdit event={event} onUpdatedAction={mutate} />
@@ -235,7 +243,7 @@ export default function AdminEventList({
                   <div className="min-w-0">
                     <div className="line-clamp-1 font-medium">{event.name}</div>
                     <div className="text-xs text-muted-foreground sm:text-sm">
-                      {event.organizer_name} • {new Date(event.date).toLocaleDateString()} • {event.venue}
+                      {event.organizer_name} • {formatAdminEventDate(event.date)} • {event.venue}
                     </div>
                     <div className="mt-1 inline-flex items-center gap-1 rounded-full border border-slate-500/35 bg-slate-500/15 px-2 py-0.5 text-[11px] text-slate-700">
                       <CalendarX2 className="h-3 w-3" />
@@ -245,9 +253,9 @@ export default function AdminEventList({
                 </div>
                 <div className="flex items-center gap-2">
                   <Button asChild variant="ghost" size="sm" className="h-8 rounded-full px-3 text-xs">
-                    <Link href={`/events/${event.id}`}>
+                    <Link href={`/admin/events/${event.id}`}>
                       <Eye className="mr-1.5 h-3.5 w-3.5" />
-                      Preview
+                      Details
                     </Link>
                   </Button>
                   <AdminEventEdit event={event} onUpdatedAction={mutate} />

@@ -3,9 +3,11 @@
 import React from 'react'
 import dynamic from 'next/dynamic'
 import Image from 'next/image'
+import Link from 'next/link'
 import { Calendar, MapPin, Clock3, Ticket, ArrowRight } from 'lucide-react'
 import type { Event } from '@/lib/supabase-client'
 import { getEventCategoryLabel } from '@/lib/event-categories'
+import { formatDisplayPrice } from '@/lib/event-display'
 import { cn } from '@/lib/utils'
 
 const TicketPurchaseDialog = dynamic(
@@ -42,18 +44,6 @@ function formatEventTime(dateString: string): string {
   })
 }
 
-function formatCurrencyAmount(currency: string | undefined, amount: number) {
-  const safeCurrency = currency || 'USD'
-  try {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: safeCurrency,
-      maximumFractionDigits: 0,
-    }).format(amount)
-  } catch {
-    return `${safeCurrency} ${Math.floor(amount).toLocaleString()}`
-  }
-}
 
 function startingPrice(event: Event) {
   if (event.ticket_types && event.ticket_types.length > 0) {
@@ -65,20 +55,31 @@ function startingPrice(event: Event) {
 
 interface EventGridProps {
   events: Event[]
+  /** Card opens purchase dialog; "View tickets" navigates to event details. */
+  interaction?: 'navigate' | 'split'
 }
 
 type PublicEventCardProps = {
   event: Event
   idx?: number
   onClick?: () => void
+  detailsHref?: string
 }
 
-export function PublicEventCard({ event, idx = 0, onClick }: PublicEventCardProps) {
+export function PublicEventCard({ event, idx = 0, onClick, detailsHref }: PublicEventCardProps) {
   const ticketCount = event.ticket_types?.length || 0
   const price = startingPrice(event)
   const available = Math.max(event.tickets_available || 0, 0)
   const lowStock = available > 0 && available <= 50
   const soldOut = available === 0 && (event.total_tickets || 0) > 0
+
+  const ctaLabel = soldOut ? 'View details' : ticketCount > 0 ? 'View tickets' : 'View event'
+  const ctaClassName = cn(
+    'inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold transition-colors',
+    soldOut
+      ? 'bg-slate-100 text-slate-500'
+      : 'bg-slate-900 text-white group-hover:bg-slate-800'
+  )
 
   return (
     <article
@@ -181,28 +182,32 @@ export function PublicEventCard({ event, idx = 0, onClick }: PublicEventCardProp
               From
             </p>
             <p className="mt-0.5 text-lg font-bold tracking-tight text-slate-900">
-              {formatCurrencyAmount(event.currency, price)}
+              {formatDisplayPrice(event.currency, price)}
             </p>
           </div>
 
-          <div
-            className={cn(
-              'inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold transition-colors',
-              soldOut
-                ? 'bg-slate-100 text-slate-500'
-                : 'bg-slate-900 text-white group-hover:bg-slate-800'
-            )}
-          >
-            <span>{soldOut ? 'View details' : ticketCount > 0 ? 'View tickets' : 'View event'}</span>
-            <ArrowRight className="h-3.5 w-3.5" />
-          </div>
+          {detailsHref ? (
+            <Link
+              href={detailsHref}
+              className={ctaClassName}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <span>{ctaLabel}</span>
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          ) : (
+            <div className={ctaClassName}>
+              <span>{ctaLabel}</span>
+              <ArrowRight className="h-3.5 w-3.5" />
+            </div>
+          )}
         </div>
       </div>
     </article>
   )
 }
 
-export function EventGridClient({ events }: EventGridProps) {
+export function EventGridClient({ events, interaction = 'navigate' }: EventGridProps) {
   const [activeEvent, setActiveEvent] = React.useState<Event | null>(null)
   const [dialogKey, setDialogKey] = React.useState(0)
 
@@ -220,7 +225,7 @@ export function EventGridClient({ events }: EventGridProps) {
     }
   }, [activeEvent])
 
-  const openEvent = (event: Event) => {
+  const openPurchaseDialog = (event: Event) => {
     setDialogKey((prev) => prev + 1)
     setActiveEvent(event)
   }
@@ -244,17 +249,24 @@ export function EventGridClient({ events }: EventGridProps) {
   return (
     <>
       <div className="grid gap-5 sm:grid-cols-2 sm:gap-6 lg:grid-cols-3">
-        {events.map((event, idx) => (
-          <PublicEventCard
-            key={event.id}
-            event={event}
-            idx={idx}
-            onClick={() => openEvent(event)}
-          />
-        ))}
+        {events.map((event, idx) =>
+          interaction === 'split' ? (
+            <PublicEventCard
+              key={event.id}
+              event={event}
+              idx={idx}
+              onClick={() => openPurchaseDialog(event)}
+              detailsHref={`/events/${event.id}`}
+            />
+          ) : (
+            <Link key={event.id} href={`/events/${event.id}`} className="block h-full">
+              <PublicEventCard event={event} idx={idx} />
+            </Link>
+          )
+        )}
       </div>
 
-      {activeEvent ? (
+      {interaction === 'split' && activeEvent ? (
         <TicketPurchaseDialog
           key={dialogKey}
           event={activeEvent}

@@ -123,16 +123,16 @@ export function ProfileSidebar({
         </div>
       </div>
 
-      <div className="border-b border-border/60 px-4 py-3">
-        <div className="flex items-center gap-3">
-          <Avatar className="h-9 w-9">
+      <div className="border-b border-border/60 px-4 py-4">
+        <div className="flex items-center gap-3 rounded-2xl bg-muted/40 p-2.5">
+          <Avatar className="h-10 w-10">
             <AvatarImage src={user?.profile_logo_url || undefined} alt="" />
-            <AvatarFallback className="bg-primary/10 text-sm font-medium text-primary">
+            <AvatarFallback className="bg-primary/10 text-sm font-semibold text-primary">
               {initial}
             </AvatarFallback>
           </Avatar>
           <div className="min-w-0">
-            <p className="truncate text-sm font-medium leading-tight">{displayName}</p>
+            <p className="truncate text-sm font-semibold leading-tight">{displayName}</p>
             <p className="truncate text-xs text-muted-foreground">{user?.email || '—'}</p>
           </div>
         </div>
@@ -254,8 +254,8 @@ export function ProfileSidebar({
   return (
     <aside
       className={cn(
-        'hidden h-full overflow-hidden rounded-2xl border border-border/70 bg-card/95 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-card/85 md:flex md:flex-col',
-        isOpen ? 'w-56 lg:w-60' : 'w-0'
+        'hidden h-full overflow-hidden rounded-3xl border border-border/70 bg-card/95 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-card/85 md:flex md:flex-col',
+        isOpen ? 'w-60 lg:w-64' : 'w-0'
       )}
     >
       {content}
@@ -269,7 +269,7 @@ interface ProfileMobileHeaderProps {
 
 export function ProfileMobileHeader({ onMenuClick }: ProfileMobileHeaderProps) {
   return (
-    <header className="mb-4 flex items-center justify-between gap-3 rounded-2xl border border-border/70 bg-card/95 px-3 py-2.5 shadow-sm md:hidden">
+    <header className="mb-4 flex items-center justify-between gap-3 rounded-3xl border border-border/70 bg-card/95 px-3 py-2.5 shadow-sm md:hidden">
       <BrandLogo href="/" size="sm" />
       <div className="flex items-center gap-1">
         <NotificationBell />

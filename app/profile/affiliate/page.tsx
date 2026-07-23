@@ -1,12 +1,18 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
-import { Check, Copy, Loader2, Share2 } from 'lucide-react';
+import { Check, Copy, Handshake, Share2, Ticket, Wallet } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import {
+  ProfileLoadingState,
+  ProfileMetric,
+  ProfilePageHeader,
+  ProfileSection,
+} from '@/components/profile/profile-ui';
 
 type AffiliateEvent = {
   id: string;
@@ -111,60 +117,71 @@ export default function AffiliateDashboardPage() {
   };
 
   if (loading) {
-    return (
-      <div className="flex min-h-[280px] items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
+    return <ProfileLoadingState label="Loading affiliate dashboard…" />;
   }
 
   return (
     <div className="space-y-6">
-      <header className="space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight">Affiliate</h1>
-        <p className="text-sm text-muted-foreground">
-          Share ticket links for affiliate-enabled events and earn {commissionPercent}% commission on
-          completed sales.
-        </p>
-      </header>
+      <ProfilePageHeader
+        title="Affiliate"
+        description={`Share ticket links for affiliate-enabled events and earn ${commissionPercent}% commission on completed sales.`}
+      />
 
       {!programEnabled ? (
-        <Card className="border-border/70">
-          <CardContent className="p-4 text-sm text-muted-foreground">
-            The affiliate program is currently paused by Ticket95. You can still view past
-            commissions below.
-          </CardContent>
-        </Card>
+        <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-sm text-amber-900">
+          The affiliate program is currently paused by Ticket95. You can still view past commissions
+          below.
+        </div>
       ) : null}
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Metric label="Your code" value={referralCode || '—'} />
-        <Metric label="Sales" value={String(totals.sales)} />
-        <Metric label="Pending" value={formatMoney(totals.pending)} />
-        <Metric label="Lifetime" value={formatMoney(totals.lifetime)} />
+        <ProfileMetric label="Your code" value={referralCode || '—'} icon={Handshake} />
+        <ProfileMetric label="Sales" value={String(totals.sales)} />
+        <ProfileMetric label="Pending" value={formatMoney(totals.pending)} accent="amber" icon={Wallet} />
+        <ProfileMetric
+          label="Lifetime"
+          value={formatMoney(totals.lifetime)}
+          accent="emerald"
+          icon={Wallet}
+        />
       </div>
 
-      <Card className="border-border/70">
-        <CardContent className="space-y-3 p-4 sm:p-5">
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-sm font-medium">Events you can promote</p>
-            <Badge variant="outline" className="rounded-full">
-              {commissionPercent}% commission
-            </Badge>
-          </div>
-
-          {events.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No affiliate-enabled events right now. Organizers must allow affiliates on their
-              events.
-            </p>
-          ) : (
-            <div className="space-y-2">
-              {events.map((event) => (
-                <div
-                  key={event.id}
-                  className="flex flex-col gap-3 rounded-xl border border-border/70 p-3 sm:flex-row sm:items-center sm:justify-between"
-                >
+      <ProfileSection
+        title="Events you can promote"
+        description="Copy or share your unique referral link for each event."
+        actions={
+          <Badge variant="outline" className="rounded-full">
+            {commissionPercent}% commission
+          </Badge>
+        }
+      >
+        {events.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            No affiliate-enabled events right now. Organizers must allow affiliates on their events.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {events.map((event) => (
+              <div
+                key={event.id}
+                className="flex flex-col gap-3 rounded-xl border border-border/70 bg-background/70 p-3 sm:flex-row sm:items-center sm:justify-between"
+              >
+                <div className="flex min-w-0 items-start gap-3">
+                  <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-xl border border-border/70 bg-muted sm:h-[4.5rem] sm:w-[4.5rem]">
+                    {event.image_url ? (
+                      <Image
+                        src={event.image_url}
+                        alt=""
+                        fill
+                        className="object-cover"
+                        sizes="72px"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-muted-foreground">
+                        <Ticket className="h-6 w-6" />
+                      </div>
+                    )}
+                  </div>
                   <div className="min-w-0">
                     <Link
                       href={`/events/${event.id}?ref=${encodeURIComponent(referralCode)}`}
@@ -181,86 +198,71 @@ export default function AffiliateDashboardPage() {
                       · {event.venue}
                     </p>
                   </div>
-                  <div className="flex gap-1.5">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="rounded-xl"
-                      onClick={() => copyLink(event.id)}
-                    >
-                      {copiedId === event.id ? (
-                        <Check className="mr-1.5 h-4 w-4" />
-                      ) : (
-                        <Copy className="mr-1.5 h-4 w-4" />
-                      )}
-                      Copy link
-                    </Button>
-                    <Button
-                      size="sm"
-                      className="rounded-xl"
-                      onClick={() => shareLink(event)}
-                    >
-                      <Share2 className="mr-1.5 h-4 w-4" />
-                      Share
-                    </Button>
+                </div>
+                <div className="flex gap-1.5 pl-[4.75rem] sm:pl-0">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="rounded-xl"
+                    onClick={() => copyLink(event.id)}
+                  >
+                    {copiedId === event.id ? (
+                      <Check className="mr-1.5 h-4 w-4" />
+                    ) : (
+                      <Copy className="mr-1.5 h-4 w-4" />
+                    )}
+                    Copy link
+                  </Button>
+                  <Button size="sm" className="rounded-xl" onClick={() => shareLink(event)}>
+                    <Share2 className="mr-1.5 h-4 w-4" />
+                    Share
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </ProfileSection>
+
+      <ProfileSection
+        title="Your commissions"
+        description="Earnings appear here after a referred purchase completes."
+      >
+        {commissions.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            No earnings yet. Share a link and commissions appear here after a successful purchase.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {commissions.map((row) => {
+              const eventName = row.events?.name || 'Event';
+              return (
+                <div
+                  key={row.id}
+                  className="flex items-center justify-between gap-3 rounded-xl border border-border/70 bg-background/70 px-3 py-2.5"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">{eventName}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {row.commission_percent}% of{' '}
+                      {formatMoney(Number(row.order_amount), row.currency)} ·{' '}
+                      {new Date(row.created_at).toLocaleDateString()}
+                    </p>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <p className="text-sm font-semibold tabular-nums">
+                      {formatMoney(Number(row.commission_amount), row.currency)}
+                    </p>
+                    <Badge variant="outline" className="mt-1 rounded-full capitalize text-[10px]">
+                      {row.status}
+                    </Badge>
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card className="border-border/70">
-        <CardContent className="space-y-3 p-4 sm:p-5">
-          <p className="text-sm font-medium">Your commissions</p>
-          {commissions.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No earnings yet. Share a link and commissions appear here after a successful purchase.
-            </p>
-          ) : (
-            <div className="space-y-2">
-              {commissions.map((row) => {
-                const eventName = row.events?.name || 'Event';
-                return (
-                  <div
-                    key={row.id}
-                    className="flex items-center justify-between gap-3 rounded-xl border border-border/70 px-3 py-2.5"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium">{eventName}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {row.commission_percent}% of{' '}
-                        {formatMoney(Number(row.order_amount), row.currency)} ·{' '}
-                        {new Date(row.created_at).toLocaleDateString()}
-                      </p>
-                    </div>
-                    <div className="shrink-0 text-right">
-                      <p className="text-sm font-medium tabular-nums">
-                        {formatMoney(Number(row.commission_amount), row.currency)}
-                      </p>
-                      <Badge variant="outline" className="mt-1 rounded-full capitalize text-[10px]">
-                        {row.status}
-                      </Badge>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+              );
+            })}
+          </div>
+        )}
+      </ProfileSection>
     </div>
-  );
-}
-
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <Card className="border-border/70">
-      <CardContent className="p-4">
-        <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{label}</p>
-        <p className="mt-1 truncate text-xl font-semibold tabular-nums">{value}</p>
-      </CardContent>
-    </Card>
   );
 }

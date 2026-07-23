@@ -24,76 +24,11 @@ type TicketSelection = {
   quantity: number;
 };
 
-async function getEventByIdAdmin(eventId: string) {
-  const { data, error } = await supabaseAdmin
-    .from('events')
-    .select('*')
-    .eq('id', eventId)
-    .single();
-
-  if (error) {
-    if (error.code === 'PGRST116') return null;
-    throw error;
-  }
-
-  return data;
-}
-
-async function getTicketTypeByIdAdmin(ticketTypeId: string) {
-  const { data, error } = await supabaseAdmin
-    .from('ticket_types')
-    .select('*')
-    .eq('id', ticketTypeId)
-    .single();
-
-  if (error) {
-    if (error.code === 'PGRST116') return null;
-    throw error;
-  }
-
-  return data;
-}
-
-async function updateTicketTypeQuantityAdmin(ticketTypeId: string, quantitySold: number) {
-  const { data: ticketType, error: fetchError } = await supabaseAdmin
-    .from('ticket_types')
-    .select('available_quantity')
-    .eq('id', ticketTypeId)
-    .single();
-
-  if (fetchError) throw fetchError;
-
-  const newAvailable = Math.max(0, (ticketType?.available_quantity || 0) - quantitySold);
-  const { error: updateError } = await supabaseAdmin
-    .from('ticket_types')
-    .update({ available_quantity: newAvailable })
-    .eq('id', ticketTypeId);
-
-  if (updateError) throw updateError;
-}
-
-async function createTicketsAdmin(ticketsPayload: Record<string, unknown>[]) {
-  const { error } = await supabaseAdmin.from('tickets').insert(ticketsPayload);
-  if (error) throw error;
-}
-
-async function updateEventTicketsAdmin(eventId: string, quantity: number) {
-  const { data: event, error: fetchError } = await supabaseAdmin
-    .from('events')
-    .select('tickets_available')
-    .eq('id', eventId)
-    .single();
-
-  if (fetchError) throw fetchError;
-
-  const newAvailable = Math.max(0, (event?.tickets_available || 0) - quantity);
-  const { error: updateError } = await supabaseAdmin
-    .from('events')
-    .update({ tickets_available: newAvailable })
-    .eq('id', eventId);
-
-  if (updateError) throw updateError;
-}
+type TicketTypeRow = {
+  id: string;
+  available_quantity: number;
+  name?: string;
+};
 
 export async function completePaidOrder(order: OrderRow) {
   if (order.status === 'completed') {
@@ -104,19 +39,55 @@ export async function completePaidOrder(order: OrderRow) {
     ticketSelections?: TicketSelection[];
   };
 
-  const selections = metadata.ticketSelections || [];
+  const selections = (metadata.ticketSelections || []).filter((s) => Number(s.quantity) > 0);
   if (!selections.length) {
     throw new Error('Missing ticket selection metadata');
-  }
-
-  const event = await getEventByIdAdmin(order.event_id);
-  if (!event) {
-    throw new Error('Event not found for order');
   }
 
   const totalQuantity = selections.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
   if (totalQuantity < 1) {
     throw new Error('Invalid ticket selections');
+  }
+
+  const ticketTypeIds = [...new Set(selections.map((s) => s.ticketTypeId))];
+
+  const [eventResult, sponsorsResult, ticketTypesResult] = await Promise.all([
+    supabaseAdmin.from('events').select('*').eq('id', order.event_id).single(),
+    supabaseAdmin
+      .from('sponsors')
+      .select('name, logo_url, order_index')
+      .eq('event_id', order.event_id)
+      .order('order_index', { ascending: true }),
+    supabaseAdmin.from('ticket_types').select('id, available_quantity, name').in('id', ticketTypeIds),
+  ]);
+
+  if (eventResult.error) {
+    if (eventResult.error.code === 'PGRST116') throw new Error('Event not found for order');
+    throw eventResult.error;
+  }
+  if (sponsorsResult.error) throw sponsorsResult.error;
+  if (ticketTypesResult.error) throw ticketTypesResult.error;
+
+  const event = eventResult.data;
+  if (!event) throw new Error('Event not found for order');
+
+  const eventSponsors = (sponsorsResult.data || []).map((sponsor) => ({
+    name: sponsor.name,
+    logo_url: sponsor.logo_url || undefined,
+  }));
+
+  const ticketTypeMap = new Map<string, TicketTypeRow>(
+    (ticketTypesResult.data || []).map((tt) => [tt.id, tt])
+  );
+
+  for (const selection of selections) {
+    const ticketType = ticketTypeMap.get(selection.ticketTypeId);
+    if (!ticketType) {
+      throw new Error(`Ticket type not found: ${selection.ticketTypeName}`);
+    }
+    if (ticketType.available_quantity < selection.quantity) {
+      throw new Error(`Not enough availability for ${selection.ticketTypeName}`);
+    }
   }
 
   const ticketsPayload: Array<{
@@ -136,19 +107,6 @@ export async function completePaidOrder(order: OrderRow) {
 
   let ticketIndex = 0;
   for (const selection of selections) {
-    if (selection.quantity <= 0) continue;
-
-    const ticketType = await getTicketTypeByIdAdmin(selection.ticketTypeId);
-    if (!ticketType) {
-      throw new Error(`Ticket type not found: ${selection.ticketTypeName}`);
-    }
-
-    if (ticketType.available_quantity < selection.quantity) {
-      throw new Error(`Not enough availability for ${selection.ticketTypeName}`);
-    }
-
-    await updateTicketTypeQuantityAdmin(selection.ticketTypeId, selection.quantity);
-
     for (let i = 0; i < selection.quantity; i += 1) {
       ticketsPayload.push({
         order_id: order.id,
@@ -157,7 +115,7 @@ export async function completePaidOrder(order: OrderRow) {
         event_name: event.name,
         organizer_name: event.organizer_name,
         organizer_logo_url: event.organizer_logo_url,
-        sponsors: event.sponsors || [],
+        sponsors: eventSponsors,
         ticket_type_id: selection.ticketTypeId,
         ticket_type_name: selection.ticketTypeName,
         ticket_price: selection.ticketPrice,
@@ -171,17 +129,45 @@ export async function completePaidOrder(order: OrderRow) {
     }
   }
 
-  await createTicketsAdmin(ticketsPayload);
-  await updateEventTicketsAdmin(order.event_id, totalQuantity);
+  const soldByType = new Map<string, number>();
+  for (const selection of selections) {
+    soldByType.set(
+      selection.ticketTypeId,
+      (soldByType.get(selection.ticketTypeId) || 0) + selection.quantity
+    );
+  }
 
-  const { error: updateOrderError } = await supabaseAdmin
-    .from('orders')
-    .update({ status: 'completed' })
-    .eq('id', order.id);
+  const { error: insertError } = await supabaseAdmin.from('tickets').insert(ticketsPayload);
+  if (insertError) throw insertError;
 
-  if (updateOrderError) throw updateOrderError;
+  const inventoryUpdates = [...soldByType.entries()].map(([ticketTypeId, quantitySold]) => {
+    const ticketType = ticketTypeMap.get(ticketTypeId)!;
+    const newAvailable = Math.max(0, ticketType.available_quantity - quantitySold);
+    return supabaseAdmin
+      .from('ticket_types')
+      .update({ available_quantity: newAvailable })
+      .eq('id', ticketTypeId);
+  });
 
-  await maybeAwardAffiliateCommission(order, event);
+  const eventTicketsAvailable = Math.max(0, Number(event.tickets_available || 0) - totalQuantity);
+
+  const inventoryResults = await Promise.all([
+    ...inventoryUpdates,
+    supabaseAdmin
+      .from('events')
+      .update({ tickets_available: eventTicketsAvailable })
+      .eq('id', order.event_id),
+    supabaseAdmin.from('orders').update({ status: 'completed' }).eq('id', order.id),
+  ]);
+
+  for (const result of inventoryResults) {
+    if (result.error) throw result.error;
+  }
+
+  // Do not block checkout on affiliate bookkeeping
+  void maybeAwardAffiliateCommission(order, event).catch((error) => {
+    console.error('Affiliate commission award failed:', error);
+  });
 
   return { alreadyCompleted: false };
 }
@@ -221,14 +207,8 @@ async function maybeAwardAffiliateCommission(
     // No self-referral commissions
     if (order.user_id && affiliate.user_id === order.user_id) return;
 
-    const { data: orderRow } = await supabaseAdmin
-      .from('orders')
-      .select('total_price, currency')
-      .eq('id', order.id)
-      .maybeSingle();
-
-    const orderAmount = Number(order.total_price ?? orderRow?.total_price ?? 0);
-    const currency = order.currency || orderRow?.currency || event.currency || 'USD';
+    const orderAmount = Number(order.total_price ?? 0);
+    const currency = order.currency || event.currency || 'USD';
 
     await createAffiliateCommissionForOrder({
       orderId: order.id,

@@ -1,12 +1,29 @@
 'use client';
 
+import { useEffect, useState } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
-import { Plus, QrCode, TrendingUp } from 'lucide-react';
+import {
+  Calendar,
+  Plus,
+  QrCode,
+  Ticket,
+  TrendingUp,
+  Wallet,
+} from 'lucide-react';
 import { useProfileData } from './use-profile-data';
+import { getEventById } from '@/lib/supabase-db';
+import { getEventImages } from '@/lib/event-display';
 import { getEventLifecycleStatus } from '@/lib/event-status';
+import {
+  ProfileEmptyState,
+  ProfileLoadingState,
+  ProfileMetric,
+  ProfilePageHeader,
+  ProfileSection,
+} from '@/components/profile/profile-ui';
 
 const formatMoney = (amount: number, currency = 'USD') =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(amount);
@@ -16,92 +33,163 @@ export default function ProfileOverviewPage() {
   const latestValidTicket = myTickets.find((ticket) => ticket.status === 'valid');
   const newestEvent = myEvents[0];
   const newestEventStatus = newestEvent ? getEventLifecycleStatus(newestEvent) : null;
+  const newestEventImage = newestEvent ? getEventImages(newestEvent)[0] : undefined;
+  const [ticketEventImage, setTicketEventImage] = useState<string | undefined>();
+
+  useEffect(() => {
+    if (!latestValidTicket?.event_id) {
+      setTicketEventImage(undefined);
+      return;
+    }
+
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const event = await getEventById(latestValidTicket.event_id);
+        if (cancelled) return;
+        setTicketEventImage(event ? getEventImages(event)[0] : undefined);
+      } catch {
+        if (!cancelled) setTicketEventImage(undefined);
+      }
+    };
+
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [latestValidTicket?.event_id]);
 
   if (loading) {
-    return (
-      <div className="flex min-h-[280px] items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-      </div>
-    );
+    return <ProfileLoadingState />;
   }
 
   return (
     <div className="space-y-6">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold tracking-tight">Overview</h1>
-        <Button asChild size="sm" className="rounded-xl">
-          <Link href="/organizer/dashboard/create">
-            <Plus className="mr-1.5 h-4 w-4" />
-            New event
-          </Link>
-        </Button>
-      </header>
+      <ProfilePageHeader
+        title="Overview"
+        description="A quick look at your tickets, events, and earnings."
+        actions={
+          <Button asChild size="sm" className="rounded-xl">
+            <Link href="/organizer/dashboard/create">
+              <Plus className="mr-1.5 h-4 w-4" />
+              New event
+            </Link>
+          </Button>
+        }
+      />
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Metric label="Tickets" value={String(totals.validTickets)} />
-        <Metric label="Events" value={String(totals.approvedEvents)} />
-        <Metric label="Spent" value={formatMoney(totals.totalSpent)} />
-        <Metric label="Revenue" value={formatMoney(totals.estimatedRevenue)} />
+        <ProfileMetric label="Ready tickets" value={String(totals.validTickets)} icon={Ticket} />
+        <ProfileMetric label="Live events" value={String(totals.approvedEvents)} icon={Calendar} />
+        <ProfileMetric label="Spent" value={formatMoney(totals.totalSpent)} icon={Wallet} />
+        <ProfileMetric
+          label="Est. revenue"
+          value={formatMoney(totals.estimatedRevenue)}
+          icon={TrendingUp}
+          accent="emerald"
+        />
       </div>
 
-      <div className="grid gap-3 lg:grid-cols-2">
-        <Card className="border-border/70">
-          <CardContent className="space-y-3 p-4">
-            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Ticket</p>
-            {latestValidTicket ? (
-              <>
-                <div>
-                  <p className="font-medium leading-snug">{latestValidTicket.event_name}</p>
-                  <p className="mt-0.5 text-sm text-muted-foreground">{latestValidTicket.organizer_name}</p>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <ProfileSection title="Latest ticket" description="Your most recent ready-to-use pass.">
+          {latestValidTicket ? (
+            <div className="space-y-4">
+              <div className="flex items-start gap-3">
+                <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-xl border border-border/70 bg-muted sm:h-[4.5rem] sm:w-[4.5rem]">
+                  {ticketEventImage ? (
+                    <Image
+                      src={ticketEventImage}
+                      alt=""
+                      fill
+                      className="object-cover"
+                      sizes="72px"
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center text-muted-foreground">
+                      <Ticket className="h-6 w-6" />
+                    </div>
+                  )}
                 </div>
-                <Button asChild size="sm" variant="outline" className="rounded-xl">
-                  <Link href="/profile/tickets">
-                    <QrCode className="mr-1.5 h-4 w-4" />
-                    Open
-                  </Link>
-                </Button>
-              </>
-            ) : (
-              <p className="text-sm text-muted-foreground">None</p>
-            )}
-          </CardContent>
-        </Card>
+                <div className="min-w-0">
+                  <p className="font-semibold leading-snug">{latestValidTicket.event_name}</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {latestValidTicket.organizer_name}
+                    {latestValidTicket.ticket_type_name
+                      ? ` · ${latestValidTicket.ticket_type_name}`
+                      : ''}
+                  </p>
+                </div>
+              </div>
+              <Button asChild size="sm" className="rounded-xl">
+                <Link href="/profile/tickets">
+                  <QrCode className="mr-1.5 h-4 w-4" />
+                  Open tickets
+                </Link>
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">No ready tickets yet.</p>
+              <Button asChild size="sm" variant="outline" className="rounded-xl">
+                <Link href="/events">Browse events</Link>
+              </Button>
+            </div>
+          )}
+        </ProfileSection>
 
-        <Card className="border-border/70">
-          <CardContent className="space-y-3 p-4">
-            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Event</p>
-            {newestEvent ? (
-              <>
-                <div className="flex items-start gap-2">
-                  <p className="min-w-0 flex-1 font-medium leading-snug">{newestEvent.name}</p>
-                  <Badge variant="outline" className="shrink-0 rounded-full text-[10px]">
-                    {newestEventStatus}
-                  </Badge>
+        <ProfileSection title="Latest event" description="Jump back into managing your newest listing.">
+          {newestEvent ? (
+            <div className="space-y-4">
+              <div className="flex items-start gap-3">
+                <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-xl border border-border/70 bg-muted sm:h-[4.5rem] sm:w-[4.5rem]">
+                  {newestEventImage ? (
+                    <Image
+                      src={newestEventImage}
+                      alt=""
+                      fill
+                      className="object-cover"
+                      sizes="72px"
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center text-muted-foreground">
+                      <Calendar className="h-6 w-6" />
+                    </div>
+                  )}
                 </div>
-                <Button asChild size="sm" variant="outline" className="rounded-xl">
-                  <Link href="/profile/events">
-                    <TrendingUp className="mr-1.5 h-4 w-4" />
-                    Manage
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-start gap-2">
+                    <p className="min-w-0 flex-1 font-semibold leading-snug">{newestEvent.name}</p>
+                    <Badge variant="outline" className="shrink-0 rounded-full capitalize text-[10px]">
+                      {newestEventStatus}
+                    </Badge>
+                  </div>
+                  <p className="mt-1 text-sm text-muted-foreground">{newestEvent.venue}</p>
+                </div>
+              </div>
+              <Button asChild size="sm" variant="outline" className="rounded-xl">
+                <Link href="/profile/events">
+                  <TrendingUp className="mr-1.5 h-4 w-4" />
+                  Manage events
+                </Link>
+              </Button>
+            </div>
+          ) : (
+            <ProfileEmptyState
+              icon={Calendar}
+              title="No events yet"
+              description="Publish an event to start selling tickets and tracking performance."
+              action={
+                <Button asChild size="sm" className="rounded-xl">
+                  <Link href="/organizer/dashboard/create">
+                    <Plus className="mr-1.5 h-4 w-4" />
+                    Create event
                   </Link>
                 </Button>
-              </>
-            ) : (
-              <p className="text-sm text-muted-foreground">None</p>
-            )}
-          </CardContent>
-        </Card>
+              }
+            />
+          )}
+        </ProfileSection>
       </div>
     </div>
-  );
-}
-
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <Card className="border-border/70">
-      <CardContent className="p-4">
-        <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{label}</p>
-        <p className="mt-1.5 text-2xl font-semibold tracking-tight">{value}</p>
-      </CardContent>
-    </Card>
   );
 }

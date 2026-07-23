@@ -7,14 +7,16 @@ export default function AdminCreateEventPage() {
   const router = useRouter();
 
   return (
-    <EventCreationWizard
-      context="admin"
-      onCancel={() => {
-        router.push('/admin/events');
-      }}
-      onDone={() => {
-        router.push('/admin/events');
-      }}
-    />
+    <div className="mx-auto max-w-5xl">
+      <EventCreationWizard
+        context="admin"
+        onCancel={() => {
+          router.push('/admin/events');
+        }}
+        onDone={() => {
+          router.push('/admin/events');
+        }}
+      />
+    </div>
   );
 }

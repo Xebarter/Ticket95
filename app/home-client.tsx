@@ -62,7 +62,7 @@ export function HomeClient({ events, featuredEvents }: HomeClientProps) {
             )}
           </div>
 
-          <EventGridClient events={filteredEvents} />
+          <EventGridClient events={filteredEvents} interaction="split" />
 
           {filteredEvents.length === 0 && (
             <div className="py-12 text-center">

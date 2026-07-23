@@ -6,7 +6,7 @@ import { useAuth } from '@/lib/supabase-auth-context';
 import { getEventById, getSponsorsByEvent, getTicketTypesByEvent } from '@/lib/supabase-db';
 import { EventCreationWizard } from '@/components/organizer/event-creation-wizard';
 import ProfileLayoutShell from '@/app/profile/ProfileLayoutShell';
-import type { Event } from '@/lib/supabase-client';
+import type { EventCategoryId } from '@/lib/event-categories';
 
 type SponsorRow = { id: string; name: string; logo_url?: string };
 type TicketTypeRow = {
@@ -19,31 +19,48 @@ type TicketTypeRow = {
   order_index: number;
 };
 
-type InitialEventData = {
-  id?: string;
-  name?: string;
-  description?: string;
-  date?: string;
-  venue?: string;
-  ticket_price?: number;
-  total_tickets?: number;
-  tickets_available?: number;
-  organizer_name?: string;
-  organizer_phone?: string;
-  organizer_logo_url?: string;
-  image_url?: string;
-  image_urls?: string[];
-};
-
 export default function EditEventPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
   const { user } = useAuth();
 
-  const [initialEvent, setInitialEvent] = useState<InitialEventData | undefined>(undefined);
-  const [initialSponsors, setInitialSponsors] = useState<Array<{ id: string; name: string; logo?: string }> | undefined>(undefined);
+  const [initialEvent, setInitialEvent] = useState<
+    | {
+        id: string;
+        name: string;
+        description?: string;
+        date: string;
+        venue: string;
+        currency?: string;
+        category?: EventCategoryId;
+        ticket_price: number;
+        total_tickets: number;
+        tickets_available: number;
+        organizer_name: string;
+        organizer_phone?: string;
+        organizer_logo_url?: string;
+        image_url?: string;
+        image_urls?: string[];
+        status: 'pending' | 'approved' | 'rejected';
+        rejection_reason?: string | null;
+        affiliates_enabled?: boolean;
+      }
+    | undefined
+  >(undefined);
+  const [initialSponsors, setInitialSponsors] = useState<
+    Array<{ id: string; name: string; logo?: string }> | undefined
+  >(undefined);
   const [initialTicketTypes, setInitialTicketTypes] = useState<
-    Array<{ id: string; name: string; description?: string; price: number; total_quantity: number; available_quantity: number; order_index: number }> | undefined
+    | Array<{
+        id: string;
+        name: string;
+        description?: string;
+        price: number;
+        total_quantity: number;
+        available_quantity: number;
+        order_index: number;
+      }>
+    | undefined
   >(undefined);
   const [loading, setLoading] = useState(true);
 
@@ -74,7 +91,26 @@ export default function EditEventPage() {
           getTicketTypesByEvent(eventId),
         ]);
 
-        setInitialEvent(event as unknown as Event);
+        setInitialEvent({
+          id: event.id,
+          name: event.name,
+          description: event.description,
+          date: event.date,
+          venue: event.venue,
+          currency: event.currency,
+          category: event.category,
+          ticket_price: event.ticket_price,
+          total_tickets: event.total_tickets,
+          tickets_available: event.tickets_available,
+          organizer_name: event.organizer_name,
+          organizer_phone: event.organizer_phone,
+          organizer_logo_url: event.organizer_logo_url,
+          image_url: event.image_url,
+          image_urls: event.image_urls,
+          status: event.status,
+          rejection_reason: event.rejection_reason,
+          affiliates_enabled: event.affiliates_enabled,
+        });
         setInitialSponsors(
           (sponsors as SponsorRow[]).map((s) => ({
             id: s.id,
@@ -113,17 +149,14 @@ export default function EditEventPage() {
 
   return (
     <ProfileLayoutShell>
-      <div className="space-y-5">
-        <h1 className="text-2xl font-semibold tracking-tight">Edit</h1>
-        <EventCreationWizard
-          mode="edit"
-          eventId={params.id}
-          initialEvent={initialEvent}
-          initialSponsors={initialSponsors}
-          initialTicketTypes={initialTicketTypes}
-          onDone={() => router.push('/profile/events')}
-        />
-      </div>
+      <EventCreationWizard
+        mode="edit"
+        eventId={params.id}
+        initialEvent={initialEvent}
+        initialSponsors={initialSponsors}
+        initialTicketTypes={initialTicketTypes}
+        onDone={() => router.push('/profile/events')}
+      />
     </ProfileLayoutShell>
   );
 }

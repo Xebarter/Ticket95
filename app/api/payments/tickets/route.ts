@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
+import { getPaymentOrderTicketsPayload } from '@/lib/payment-order-tickets';
 
 async function getOrderAdmin(orderId: string) {
   const { data, error } = await supabaseAdmin
     .from('orders')
-    .select('id, status, payment_provider, payment_tracking_id, user_id, payment_metadata')
+    .select('id, status, payment_provider, payment_tracking_id, user_id, payment_metadata, event_id')
     .eq('id', orderId)
     .single();
 
@@ -14,17 +15,6 @@ async function getOrderAdmin(orderId: string) {
   }
 
   return data;
-}
-
-async function getTicketsByOrderAdmin(orderId: string) {
-  const { data, error } = await supabaseAdmin
-    .from('tickets')
-    .select('*')
-    .eq('order_id', orderId)
-    .order('created_at', { ascending: true });
-
-  if (error) throw error;
-  return data || [];
 }
 
 export async function GET(request: NextRequest) {
@@ -61,28 +51,18 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Missing free checkout context' }, { status: 403 });
     }
 
-    const tickets = await getTicketsByOrderAdmin(order.id);
-    const paymentMetadata = (order.payment_metadata || {}) as {
-      customer?: { email?: string | null };
-    };
-    const customerEmail = paymentMetadata.customer?.email || null;
-    const isGuestOrder = !order.user_id;
+    const payload = await getPaymentOrderTicketsPayload({
+      orderId: order.id,
+      userId: order.user_id,
+      paymentProvider: order.payment_provider,
+      paymentMetadata: order.payment_metadata as Record<string, unknown> | null,
+      eventId: order.event_id,
+    });
 
-    return NextResponse.json(
-      {
-        tickets,
-        order: {
-          isGuest: isGuestOrder,
-          customerEmail,
-        },
-      },
-      { status: 200 }
-    );
-  } catch (error: any) {
+    return NextResponse.json(payload, { status: 200 });
+  } catch (error: unknown) {
     console.error('Get payment tickets error:', error);
-    return NextResponse.json(
-      { error: error?.message || 'Failed to load payment tickets' },
-      { status: 500 }
-    );
+    const message = error instanceof Error ? error.message : 'Failed to load payment tickets';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

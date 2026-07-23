@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/session';
 import { createPaytotaPurchase } from '@/lib/paytota';
 import { completePaidOrder } from '@/lib/complete-paid-order';
+import { getPaymentOrderTicketsPayload } from '@/lib/payment-order-tickets';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { getAffiliateByReferralCode, getAffiliateSettings } from '@/lib/affiliates';
 
@@ -84,12 +85,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const event = await getEventByIdAdmin(eventId);
+    const [event, ticketTypes] = await Promise.all([
+      getEventByIdAdmin(eventId),
+      getTicketTypesByEventAdmin(eventId),
+    ]);
     if (!event || event.status !== 'approved') {
       return NextResponse.json({ error: 'Event not available for purchase' }, { status: 400 });
     }
 
-    const ticketTypes = await getTicketTypesByEventAdmin(eventId);
     if (!ticketTypes.length) {
       return NextResponse.json({ error: 'No ticket types available for this event' }, { status: 400 });
     }
@@ -173,19 +176,31 @@ export async function POST(request: NextRequest) {
         payment_metadata: order.payment_metadata,
       });
 
-      await updateOrderAdmin(order.id, {
-        payment_metadata: {
-          ...(order.payment_metadata || {}),
-          checkoutMode: 'free',
-          completedAt: new Date().toISOString(),
-        },
-      });
+      const freeMetadata = {
+        ...(order.payment_metadata || {}),
+        checkoutMode: 'free',
+        completedAt: new Date().toISOString(),
+      };
+
+      const [, ticketsPayload] = await Promise.all([
+        updateOrderAdmin(order.id, { payment_metadata: freeMetadata }),
+        getPaymentOrderTicketsPayload({
+          orderId: order.id,
+          userId: order.user_id,
+          paymentProvider: 'free',
+          paymentMetadata: freeMetadata,
+          eventId: order.event_id,
+        }),
+      ]);
 
       return NextResponse.json({
         success: true,
         freeCheckout: true,
         orderId: order.id,
         status: 'completed',
+        tickets: ticketsPayload.tickets,
+        event: ticketsPayload.event,
+        order: ticketsPayload.order,
         redirectUrl: `/payment-complete?freeCheckout=1&guestCheckout=${session?.userId ? '0' : '1'}&orderId=${encodeURIComponent(order.id)}&customerEmail=${encodeURIComponent(checkoutEmail)}`,
       });
     }

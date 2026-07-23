@@ -92,7 +92,7 @@ export function EventsPageClient({
         </div>
 
         {filteredEvents.length > 0 ? (
-          <EventGridClient events={filteredEvents} />
+          <EventGridClient events={filteredEvents} interaction="split" />
         ) : (
           <div className="py-16 text-center">
             <div className="mx-auto max-w-md">

@@ -33,17 +33,12 @@ function ProfileLayoutShellInner({ children }: { children: React.ReactNode }) {
 
   // Full-bleed verify scanner — keep chrome out of the way
   if (pathname?.startsWith('/profile/verify') && verifyEventId) {
-    return (
-      <>
-        {children}
-        <Footer />
-      </>
-    );
+    return <>{children}</>;
   }
 
   return (
     <>
-      <main className="min-h-screen bg-[radial-gradient(ellipse_at_top,_rgba(37,99,235,0.10),_transparent_50%),linear-gradient(to_bottom,_hsl(var(--background)),_hsl(var(--background)))]">
+      <main className="min-h-screen bg-[radial-gradient(ellipse_at_top,_rgba(37,99,235,0.08),_transparent_55%),linear-gradient(to_bottom,_hsl(var(--background)),_hsl(var(--muted)/0.25))]">
         <div className="mx-auto max-w-7xl px-3 py-4 sm:px-5 sm:py-6 lg:px-8">
           <ProfileMobileHeader onMenuClick={() => setMobileNavOpen(true)} />
 
@@ -54,14 +49,14 @@ function ProfileLayoutShellInner({ children }: { children: React.ReactNode }) {
             noEventsMode={noEventsMode}
           />
 
-          <div className="grid gap-4 md:grid-cols-[14rem_1fr] lg:grid-cols-[15rem_1fr] lg:gap-6">
+          <div className="grid gap-4 md:grid-cols-[15rem_1fr] lg:grid-cols-[16rem_1fr] lg:gap-6">
             <div className="hidden md:block">
               <div className="sticky top-4 h-[calc(100vh-2rem)]">
                 <ProfileSidebar variant="desktop" noEventsMode={noEventsMode} />
               </div>
             </div>
 
-            <section className="min-w-0 rounded-2xl border border-border/70 bg-card/95 p-4 shadow-sm sm:p-6">
+            <section className="min-w-0 rounded-3xl border border-border/70 bg-card/95 p-4 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-card/90 sm:p-6 lg:p-7">
               {children}
             </section>
           </div>

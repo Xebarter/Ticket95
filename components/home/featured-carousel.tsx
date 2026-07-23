@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import Image from 'next/image'
+import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import {
   ChevronLeft,
@@ -13,16 +14,8 @@ import {
 } from 'lucide-react'
 import type { Event } from '@/lib/supabase-client'
 import { getEventCategoryLabel } from '@/lib/event-categories'
-import dynamic from 'next/dynamic'
+import { formatDisplayPrice } from '@/lib/event-display'
 import { cn } from '@/lib/utils'
-
-const TicketPurchaseDialog = dynamic(
-  () =>
-    import('@/components/events/ticket-purchase-dialog').then(
-      (mod) => mod.TicketPurchaseDialog
-    ),
-  { ssr: false }
-)
 
 interface FeaturedCarouselProps {
   events: Event[]
@@ -55,19 +48,6 @@ function formatEventTime(dateString: string): string {
   })
 }
 
-function formatCurrencyAmount(currency: string | undefined, amount: number) {
-  const safeCurrency = currency || 'USD'
-  try {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: safeCurrency,
-      maximumFractionDigits: 0,
-    }).format(amount)
-  } catch {
-    return `${safeCurrency} ${Math.floor(amount).toLocaleString()}`
-  }
-}
-
 function startingPrice(event: Event) {
   if (event.ticket_types && event.ticket_types.length > 0) {
     return Math.min(...event.ticket_types.map((t) => t.price || 0))
@@ -81,12 +61,11 @@ export function FeaturedCarousel({ events }: FeaturedCarouselProps) {
   const [currentIndex, setCurrentIndex] = useState(0)
   const [isAutoPlaying, setIsAutoPlaying] = useState(true)
   const [progress, setProgress] = useState(0)
-  const [selectedEvent, setSelectedEvent] = useState<Event | null>(null)
-  const pauseReasons = useRef({ hover: false, focus: false, dialog: false })
+  const pauseReasons = useRef({ hover: false, focus: false })
 
   const syncAutoplay = useCallback(() => {
-    const { hover, focus, dialog } = pauseReasons.current
-    setIsAutoPlaying(!(hover || focus || dialog) && events.length > 1)
+    const { hover, focus } = pauseReasons.current
+    setIsAutoPlaying(!(hover || focus) && events.length > 1)
   }, [events.length])
 
   const nextSlide = useCallback(() => {
@@ -103,11 +82,6 @@ export function FeaturedCarousel({ events }: FeaturedCarouselProps) {
     setCurrentIndex(index)
     setProgress(0)
   }
-
-  useEffect(() => {
-    pauseReasons.current.dialog = !!selectedEvent
-    syncAutoplay()
-  }, [selectedEvent, syncAutoplay])
 
   useEffect(() => {
     if (!isAutoPlaying || events.length <= 1) {
@@ -133,7 +107,6 @@ export function FeaturedCarousel({ events }: FeaturedCarouselProps) {
     if (events.length <= 1) return
 
     const onKeyDown = (event: KeyboardEvent) => {
-      if (selectedEvent) return
       if (event.key === 'ArrowRight') {
         event.preventDefault()
         nextSlide()
@@ -145,7 +118,7 @@ export function FeaturedCarousel({ events }: FeaturedCarouselProps) {
 
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [events.length, nextSlide, prevSlide, selectedEvent])
+  }, [events.length, nextSlide, prevSlide])
 
   if (events.length === 0) return null
 
@@ -294,7 +267,7 @@ export function FeaturedCarousel({ events }: FeaturedCarouselProps) {
                       From
                     </p>
                     <p className="mt-1 text-2xl font-bold tracking-tight text-slate-900">
-                      {formatCurrencyAmount(event.currency, price)}
+                      {formatDisplayPrice(event.currency, price)}
                     </p>
                   </div>
                   <div className="text-right">
@@ -320,12 +293,14 @@ export function FeaturedCarousel({ events }: FeaturedCarouselProps) {
                 ) : null}
 
                 <Button
-                  onClick={() => setSelectedEvent(event)}
+                  asChild
                   className="mt-5 h-11 w-full rounded-lg bg-slate-900 text-sm font-semibold text-white shadow-none hover:bg-slate-800"
                   size="lg"
                 >
-                  <Ticket className="mr-2 h-4 w-4" />
-                  View tickets
+                  <Link href={`/events/${event.id}?tickets=1`}>
+                    <Ticket className="mr-2 h-4 w-4" />
+                    View tickets
+                  </Link>
                 </Button>
               </div>
             </div>
@@ -389,16 +364,6 @@ export function FeaturedCarousel({ events }: FeaturedCarouselProps) {
           </div>
         ) : null}
       </div>
-
-      {selectedEvent ? (
-        <TicketPurchaseDialog
-          key={selectedEvent.id}
-          event={selectedEvent}
-          onDialogClose={() => setSelectedEvent(null)}
-          onPurchaseComplete={() => setSelectedEvent(null)}
-          trigger={null}
-        />
-      ) : null}
     </>
   )
 }

@@ -6,13 +6,34 @@ import { useAuth } from '@/lib/supabase-auth-context';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { AlertCircle, CheckCircle2, ChevronLeft, ChevronRight, Trash2, Plus, Image as ImageIcon, Star, ArrowLeft } from 'lucide-react';
+import { AlertCircle, Trash2, Plus, Image as ImageIcon, Star, MapPin, Award, Ticket } from 'lucide-react';
+import {
+  WizardField,
+  WizardFooterNav,
+  WizardLoadingOverlay,
+  WizardMobileStepper,
+  WizardPageHeader,
+  WizardPanel,
+  WizardReviewItem,
+  WizardSection,
+  WizardStepSidebar,
+  WizardSuccessState,
+  WIZARD_STEP_ICONS,
+} from '@/components/organizer/event-wizard-ui';
 import { createEvent, createSponsor, createTicketTypes, updateEvent, replaceEventSponsors, replaceEventTicketTypes } from '@/lib/supabase-db';
+import { MAX_EVENT_SPONSORS } from '@/lib/event-sponsors';
 import { getSupabaseBrowserClient } from '@/lib/supabase/browser';
 import { isEventDatePast } from '@/lib/event-status';
 import { EVENT_CATEGORIES, normalizeEventCategory, type EventCategoryId } from '@/lib/event-categories';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 const supabase = getSupabaseBrowserClient();
 
@@ -54,6 +75,7 @@ type InitialEventData = {
   status?: 'pending' | 'approved' | 'rejected';
   rejection_reason?: string | null;
   affiliates_enabled?: boolean;
+  is_featured?: boolean;
 };
 
 type InitialTicketTypeData = {
@@ -155,11 +177,11 @@ const STEP_COPY: Record<WizardStep, { title: string; description: string }> = {
   },
   sponsors: {
     title: 'Sponsors',
-    description: 'Optional. Add partners now, or skip and do it later.',
+    description: 'Optional. Add up to 5 partners now, or skip and do it later.',
   },
   review: {
     title: 'Review & submit',
-    description: 'Double-check the details before you publish.',
+    description: 'Double-check every detail before saving.',
   },
 };
 
@@ -248,17 +270,6 @@ export function EventCreationWizard({
     setEventMinute(String(rounded === 60 ? 0 : rounded).padStart(2, '0'));
   }, [eventMinute]);
 
-  // Open the first unfinished ticket for editing so create isn’t a dead end.
-  useEffect(() => {
-    if (step !== 'pricing' || editingTicketType) return;
-    const unfinished = ticketTypes.find(
-      (ticketType) => !ticketType.price || Number(ticketType.quantity) <= 0
-    );
-    if (unfinished) {
-      setEditingTicketType({ ...unfinished });
-    }
-  }, [step]); // eslint-disable-line react-hooks/exhaustive-deps
-
   const [formData, setFormData] = useState({
     name: initialEvent?.name || '',
     description: initialEvent?.description || '',
@@ -302,22 +313,22 @@ export function EventCreationWizard({
         id: `ticket_type_${Date.now()}_0`,
         name: 'General Admission',
         description: '',
-        price: '',
+        price: '0',
         quantity: '100',
       },
     ];
   });
-  const [newTicketType, setNewTicketType] = useState<Omit<WizardTicketType, 'id'>>({
-    name: '',
-    description: '',
-    price: '',
-    quantity: '',
-  });
-  const [editingTicketType, setEditingTicketType] = useState<WizardTicketType | null>(null);
-  const [ticketTypeError, setTicketTypeError] = useState('');
   const [affiliatesEnabled, setAffiliatesEnabled] = useState(
     Boolean(initialEvent?.affiliates_enabled)
   );
+  const [isFeatured, setIsFeatured] = useState(Boolean(initialEvent?.is_featured));
+  const [eventStatus, setEventStatus] = useState<'pending' | 'approved' | 'rejected'>(() => {
+    if (initialEvent?.status === 'approved' || initialEvent?.status === 'rejected') {
+      return initialEvent.status;
+    }
+    return 'pending';
+  });
+  const [rejectionReason, setRejectionReason] = useState(initialEvent?.rejection_reason || '');
   const selectedDateTimePreview = useMemo(() => {
     if (!formData.date) return '';
     const dt = new Date(formData.date);
@@ -494,6 +505,10 @@ export function EventCreationWizard({
 
   const handleAddSponsor = () => {
     if (!newSponsor.name.trim()) return;
+    if (sponsors.length >= MAX_EVENT_SPONSORS) {
+      setError(`You can add up to ${MAX_EVENT_SPONSORS} sponsors`);
+      return;
+    }
     const sponsorFileInput = document.getElementById('new-sponsor-logo-file') as HTMLInputElement | null;
     const sponsorFile = (sponsorFileInput as any)?._file as File | undefined;
 
@@ -504,6 +519,7 @@ export function EventCreationWizard({
       logoFile: sponsorFile,
     };
     setSponsors([...sponsors, sponsor]);
+    setError('');
     setNewSponsor({ name: '', logo: '' });
     if (sponsorFileInput) {
       sponsorFileInput.value = '';
@@ -546,11 +562,12 @@ export function EventCreationWizard({
             (ticketType) =>
               ticketType.name.trim() &&
               ticketType.price !== '' &&
+              !Number.isNaN(Number(ticketType.price)) &&
               Number(ticketType.price) >= 0 &&
               Number(ticketType.quantity) > 0
           )
         ) {
-          errors.tickets = 'Each ticket needs a name, price (0+), and quantity above 0';
+          errors.tickets = 'Each ticket needs a name, price (0 for free), and quantity above 0';
         }
         break;
       }
@@ -635,82 +652,116 @@ export function EventCreationWizard({
   const isTicketTypeValid = (ticketType: Omit<WizardTicketType, 'id'> | WizardTicketType) => {
     return (
       ticketType.name.trim().length > 0 &&
+      ticketType.price !== '' &&
+      !Number.isNaN(Number(ticketType.price)) &&
       Number(ticketType.price) >= 0 &&
       Number(ticketType.quantity) > 0
     );
   };
 
-  const addTicketType = () => {
-    if (!isTicketTypeValid(newTicketType)) {
-      setTicketTypeError('Add a name, price of 0 or more, and quantity above 0.');
-      return;
-    }
-
+  const addEmptyTicketType = () => {
     setTicketTypes((prev) => [
       ...prev,
       {
         id: `ticket_type_${Date.now()}_${prev.length}`,
-        name: newTicketType.name.trim(),
-        description: newTicketType.description?.trim() || '',
-        price: newTicketType.price,
-        quantity: newTicketType.quantity,
+        name: '',
+        description: '',
+        price: '',
+        quantity: '50',
       },
     ]);
-    setTicketTypeError('');
-    setNewTicketType({ name: '', description: '', price: '', quantity: '' });
+    clearFieldError('tickets');
+  };
+
+  const applyTicketPreset = (name: string, price: string, quantity = '100') => {
+    const emptySlot = ticketTypes.find(
+      (ticketType) => !ticketType.name.trim() || ticketType.price === ''
+    );
+
+    if (emptySlot) {
+      setTicketTypes((prev) =>
+        prev.map((ticketType) =>
+          ticketType.id === emptySlot.id
+            ? {
+                ...ticketType,
+                name,
+                price,
+                quantity: ticketType.quantity || quantity,
+              }
+            : ticketType
+        )
+      );
+    } else {
+      setTicketTypes((prev) => [
+        ...prev,
+        {
+          id: `ticket_type_${Date.now()}_${prev.length}`,
+          name,
+          description: '',
+          price,
+          quantity,
+        },
+      ]);
+    }
+    clearFieldError('tickets');
   };
 
   const updateTicketType = (id: string, field: keyof WizardTicketType, value: string) => {
     setTicketTypes((prev) =>
       prev.map((ticketType) => (ticketType.id === id ? { ...ticketType, [field]: value } : ticketType))
     );
+    clearFieldError('tickets');
   };
 
   const removeTicketType = (id: string) => {
     setTicketTypes((prev) => prev.filter((ticketType) => ticketType.id !== id));
+    clearFieldError('tickets');
   };
 
-  const beginEditTicketType = (ticketType: WizardTicketType) => {
-    setEditingTicketType({ ...ticketType });
-    setTicketTypeError('');
+  const formatTicketPriceLabel = (price: number) => {
+    if (price <= 0) return 'Free';
+    return `${formData.currency} ${price.toLocaleString(undefined, {
+      maximumFractionDigits: formData.currency === 'UGX' ? 0 : 2,
+    })}`;
   };
 
-  const saveEditedTicketType = () => {
-    if (!editingTicketType) return;
-    if (!isTicketTypeValid(editingTicketType)) {
-      setTicketTypeError('Name, price (0+), and quantity are required for each ticket type.');
-      return;
-    }
-
-    setTicketTypes((prev) =>
-      prev.map((ticketType) =>
-        ticketType.id === editingTicketType.id
-          ? {
-              ...ticketType,
-              name: editingTicketType.name.trim(),
-              description: editingTicketType.description?.trim() || '',
-              price: editingTicketType.price,
-              quantity: editingTicketType.quantity,
-            }
-          : ticketType
-      )
+  const initialTicketTypeMap = useMemo(() => {
+    return new Map(
+      (initialTicketTypes || [])
+        .filter((ticketType) => ticketType.id)
+        .map((ticketType) => [ticketType.id as string, ticketType])
     );
-    setEditingTicketType(null);
-    setTicketTypeError('');
-  };
+  }, [initialTicketTypes]);
 
   const normalizedTicketTypes = useMemo(() => {
     return ticketTypes
-      .map((ticketType, idx) => ({
-        name: ticketType.name.trim(),
-        description: ticketType.description?.trim() || undefined,
-        price: Number(ticketType.price) || 0,
-        total_quantity: Number(ticketType.quantity) || 0,
-        available_quantity: Number(ticketType.quantity) || 0,
-        order_index: idx,
-      }))
-      .filter((ticketType) => ticketType.name && ticketType.price >= 0 && ticketType.total_quantity > 0);
-  }, [ticketTypes]);
+      .map((ticketType, idx) => {
+        const totalQuantity = Number(ticketType.quantity) || 0;
+        const initialTicketType = initialTicketTypeMap.get(ticketType.id);
+        const soldCount = initialTicketType
+          ? Math.max(
+              0,
+              (initialTicketType.total_quantity ?? 0) - (initialTicketType.available_quantity ?? 0)
+            )
+          : 0;
+        const availableQuantity =
+          mode === 'edit' && initialTicketType
+            ? Math.max(0, totalQuantity - soldCount)
+            : totalQuantity;
+
+        return {
+          name: ticketType.name.trim(),
+          description: ticketType.description?.trim() || undefined,
+          price: Number(ticketType.price) || 0,
+          total_quantity: totalQuantity,
+          available_quantity: availableQuantity,
+          order_index: idx,
+        };
+      })
+      .filter(
+        (ticketType) => ticketType.name && ticketType.price >= 0 && ticketType.total_quantity > 0
+      );
+  }, [ticketTypes, mode, initialTicketTypeMap]);
 
   const totalTicketsFromTypes = useMemo(
     () => normalizedTicketTypes.reduce((sum, ticketType) => sum + ticketType.total_quantity, 0),
@@ -870,8 +921,11 @@ export function EventCreationWizard({
         }
 
         const desiredTotal = totalTicketsFromTypes;
-        const currentAvailable = initialEvent?.tickets_available ?? desiredTotal;
-        const nextAvailable = Math.min(currentAvailable, desiredTotal);
+        const soldEventTickets = Math.max(
+          0,
+          (initialEvent?.total_tickets ?? desiredTotal) - (initialEvent?.tickets_available ?? desiredTotal)
+        );
+        const nextAvailable = Math.max(0, desiredTotal - soldEventTickets);
         const nextTicketPrice = minTicketPrice;
         let organizerLogoUrl = organizer.logo;
 
@@ -882,33 +936,6 @@ export function EventCreationWizard({
           });
           organizerLogoUrl = uploadedOrganizerLogo || organizer.logo;
         }
-
-        setLoadingMessage('Saving event changes...');
-        const shouldResubmitForApproval =
-          !isAdminContext &&
-          initialEvent?.status === 'approved' &&
-          initialEvent.date &&
-          isEventDatePast(initialEvent.date) &&
-          !isEventDatePast(formData.date);
-
-        await updateEvent(targetId, {
-          name: formData.name,
-          description: formData.description,
-          date: formData.date,
-          venue: formData.venue,
-          currency: formData.currency,
-          category: formData.category,
-          ticket_price: nextTicketPrice,
-          total_tickets: desiredTotal,
-          tickets_available: nextAvailable,
-          organizer_name: organizer.name,
-          organizer_phone: organizer.phone.trim(),
-          organizer_logo_url: organizerLogoUrl,
-          image_url: primaryImageUrl || undefined,
-          image_urls: allUrls,
-          affiliates_enabled: affiliatesEnabled,
-          ...(shouldResubmitForApproval ? { status: 'pending', rejection_reason: null } : {}),
-        });
 
         const sponsorsWithUploadedLogos = [];
         for (const sponsor of sponsors) {
@@ -926,29 +953,88 @@ export function EventCreationWizard({
           });
         }
 
-        setLoadingMessage('Updating sponsors...');
-        await replaceEventSponsors(
-          targetId,
-          sponsorsWithUploadedLogos.map((s, idx) => ({
-            event_id: targetId,
-            name: s.name,
-            logo_url: s.logo,
-            order_index: idx,
-          }))
-        );
+        const shouldResubmitForApproval =
+          !isAdminContext &&
+          initialEvent?.status === 'approved' &&
+          initialEvent.date &&
+          isEventDatePast(initialEvent.date) &&
+          !isEventDatePast(formData.date);
 
-        setLoadingMessage('Updating ticket types...');
-        await replaceEventTicketTypes(
-          targetId,
-          normalizedTicketTypes.map((ticketType) => ({
-            name: ticketType.name,
-            description: ticketType.description,
-            price: ticketType.price,
-            total_quantity: ticketType.total_quantity,
-            available_quantity: ticketType.available_quantity,
-            order_index: ticketType.order_index,
-          }))
-        );
+        const eventPayload = {
+          name: formData.name,
+          description: formData.description,
+          date: formData.date,
+          venue: formData.venue,
+          currency: formData.currency,
+          category: formData.category,
+          ticket_price: nextTicketPrice,
+          total_tickets: desiredTotal,
+          tickets_available: nextAvailable,
+          organizer_name: organizer.name,
+          organizer_phone: organizer.phone.trim(),
+          organizer_logo_url: organizerLogoUrl,
+          image_url: primaryImageUrl || undefined,
+          image_urls: allUrls,
+          affiliates_enabled: affiliatesEnabled,
+          ...(shouldResubmitForApproval ? { status: 'pending' as const, rejection_reason: null } : {}),
+          ...(isAdminContext
+            ? {
+                is_featured: isFeatured,
+                status: eventStatus,
+                rejection_reason: eventStatus === 'rejected' ? rejectionReason.trim() || null : null,
+              }
+            : {}),
+        };
+
+        if (isAdminContext) {
+          setLoadingMessage('Saving event changes...');
+          const response = await fetch(`/api/admin/events/${targetId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              eventData: eventPayload,
+              ticketTypes: normalizedTicketTypes,
+              sponsors: sponsorsWithUploadedLogos.map((sponsor, idx) => ({
+                event_id: targetId,
+                name: sponsor.name,
+                logo_url: sponsor.logo,
+                order_index: idx,
+              })),
+            }),
+          });
+
+          const payload = await response.json();
+          if (!response.ok) {
+            throw new Error(payload.error || 'Failed to update event');
+          }
+        } else {
+          setLoadingMessage('Saving event changes...');
+          await updateEvent(targetId, eventPayload);
+
+          setLoadingMessage('Updating sponsors...');
+          await replaceEventSponsors(
+            targetId,
+            sponsorsWithUploadedLogos.map((s, idx) => ({
+              event_id: targetId,
+              name: s.name,
+              logo_url: s.logo,
+              order_index: idx,
+            }))
+          );
+
+          setLoadingMessage('Updating ticket types...');
+          await replaceEventTicketTypes(
+            targetId,
+            normalizedTicketTypes.map((ticketType) => ({
+              name: ticketType.name,
+              description: ticketType.description,
+              price: ticketType.price,
+              total_quantity: ticketType.total_quantity,
+              available_quantity: ticketType.available_quantity,
+              order_index: ticketType.order_index,
+            }))
+          );
+        }
       }
 
       setSuccess(true);
@@ -967,297 +1053,267 @@ export function EventCreationWizard({
     }
   };
 
+  const isEmbedded = context === 'organizer';
+
+  const wizardFooter = (
+    <WizardFooterNav
+      canGoBack={canGoBack}
+      canGoForward={canGoForward}
+      loading={loading}
+      isReview={step === 'review'}
+      mode={mode}
+      isAdminContext={isAdminContext}
+      nextLabel={NEXT_LABELS[step] || 'Next'}
+      onBack={goToPreviousStep}
+      onNext={goToNextStep}
+      onSubmit={handleSubmit}
+    />
+  );
+
+  if (success) {
+    return <WizardSuccessState mode={mode} isAdminContext={isAdminContext} />;
+  }
+
   return (
-    <div className="space-y-5">
-      {isAdminContext ? (
-        <div>
-          {onCancel ? (
-            <Button variant="ghost" size="sm" className="mb-3 h-8 px-0" onClick={onCancel}>
-              <ArrowLeft className="mr-1 h-4 w-4" />
-              Back
-            </Button>
-          ) : null}
-          <h1 className="text-2xl font-semibold tracking-tight">
-            {mode === 'edit' ? 'Edit event' : 'Create event'}
-          </h1>
-        </div>
-      ) : null}
+    <div className="space-y-6">
+      <WizardPageHeader mode={mode} isAdminContext={isAdminContext} onCancel={onCancel} />
 
-      <div className="space-y-3">
-        <div className="flex gap-1.5 sm:gap-2">
-          {steps.map((s, idx) => {
-            const active = step === s.key;
-            const done = idx < currentStepIndex && isStepValid(s.key);
-            return (
-              <button
-                type="button"
-                key={s.key}
-                onClick={() => goToStep(s.key)}
-                disabled={loading}
-                className={`flex min-w-0 flex-1 flex-col items-center gap-1.5 rounded-xl px-1 py-2 transition-colors ${
-                  active ? 'bg-primary/10' : 'hover:bg-muted/50'
-                } ${loading ? 'cursor-not-allowed opacity-60' : ''}`}
-                aria-current={active ? 'step' : undefined}
-                aria-label={s.title}
-              >
-                <span
-                  className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold ${
-                    active || done
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-muted text-muted-foreground'
-                  }`}
-                >
-                  {done ? <CheckCircle2 className="h-4 w-4" /> : idx + 1}
-                </span>
-                <span className="hidden truncate text-[11px] font-medium sm:block">{s.title}</span>
-              </button>
-            );
-          })}
-        </div>
-        <div className="h-1 w-full overflow-hidden rounded-full bg-muted">
-          <div
-            className="h-full rounded-full bg-primary transition-all"
-            style={{ width: `${((currentStepIndex + 1) / steps.length) * 100}%` }}
-          />
-        </div>
-        <div>
-          <h2 className="text-lg font-semibold tracking-tight">{STEP_COPY[step].title}</h2>
-          <p className="mt-0.5 text-sm text-muted-foreground">{STEP_COPY[step].description}</p>
-        </div>
-      </div>
-
-        <div className="relative">
-        {loading && (
-          <div className="absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-background/80 p-6 backdrop-blur-sm">
-            <div className="w-full max-w-xs text-center">
-              {uploadComplete ? (
-                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/10">
-                  <CheckCircle2 className="h-6 w-6 text-emerald-500" />
-                </div>
-              ) : (
-                <div className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-              )}
-              <p className="mt-3 text-sm font-medium">
-                {loadingMessage || (mode === 'edit' ? 'Saving…' : 'Creating…')}
-              </p>
-              <p className="mt-1 text-xs tabular-nums text-muted-foreground">{uploadProgress}%</p>
-              <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-muted">
-                <div
-                  className="h-full rounded-full bg-primary transition-all duration-300"
-                  style={{ width: `${uploadProgress}%` }}
-                />
-              </div>
-            </div>
+      <div className="lg:grid lg:grid-cols-[minmax(0,13rem)_1fr] lg:gap-8 xl:grid-cols-[minmax(0,15rem)_1fr]">
+        <aside className="hidden lg:block">
+          <div className="sticky top-4">
+            <WizardStepSidebar
+              steps={steps}
+              currentStepIndex={currentStepIndex}
+              step={step}
+              loading={loading}
+              onStepClick={goToStep}
+              isStepValid={isStepValid}
+            />
           </div>
-        )}
+        </aside>
 
-        <div>
-          {error ? (
-            <div className="mb-5 flex items-center gap-2 rounded-xl bg-destructive/10 px-3 py-2.5 text-sm text-destructive">
-              <AlertCircle className="h-4 w-4 shrink-0" />
-              {error}
-            </div>
-          ) : null}
+        <div className="min-w-0 space-y-4">
+          <WizardMobileStepper
+            steps={steps}
+            currentStepIndex={currentStepIndex}
+            step={step}
+            loading={loading}
+            onStepClick={goToStep}
+            isStepValid={isStepValid}
+          />
+
+          <WizardPanel
+            embedded={isEmbedded}
+            stepTitle={STEP_COPY[step].title}
+            stepDescription={STEP_COPY[step].description}
+            footer={wizardFooter}
+          >
+            <WizardLoadingOverlay
+              loading={loading}
+              uploadComplete={uploadComplete}
+              loadingMessage={loadingMessage}
+              mode={mode}
+              uploadProgress={uploadProgress}
+            />
+
+            {error ? (
+              <div className="mb-5 flex items-center gap-2 rounded-xl border border-destructive/30 bg-destructive/5 px-3 py-2.5 text-sm text-destructive">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                {error}
+              </div>
+            ) : null}
 
             {step === 'basic' && (
               <div className="space-y-5">
-                <div>
-                  <label className="text-sm font-medium" htmlFor="event-name">
-                    Event name *
-                  </label>
-                  <Input
-                    id="event-name"
-                    type="text"
-                    name="name"
-                    placeholder="e.g. Kampala Jazz Night"
-                    value={formData.name}
-                    onChange={(e) => {
-                      handleChange(e);
-                      clearFieldError('name');
-                    }}
-                    aria-invalid={!!fieldErrors.name}
-                    className={`mt-1.5 ${fieldErrors.name ? 'border-destructive' : ''}`}
-                  />
-                  {fieldErrors.name ? (
-                    <p className="mt-1 text-xs text-destructive">{fieldErrors.name}</p>
-                  ) : null}
-                </div>
-
-                <div>
-                  <p className="text-sm font-medium">Category *</p>
-                  <div className="mt-1.5 grid grid-cols-2 gap-2 sm:grid-cols-4">
-                    {EVENT_CATEGORIES.map((category) => {
-                      const selected = formData.category === category.id;
-                      return (
-                        <button
-                          key={category.id}
-                          type="button"
-                          onClick={() => {
-                            setFormData((prev) => ({ ...prev, category: category.id }));
-                            clearFieldError('category');
-                          }}
-                          className={`rounded-xl border px-3 py-2.5 text-sm font-medium transition-colors ${
-                            selected
-                              ? 'border-primary bg-primary text-primary-foreground'
-                              : fieldErrors.category
-                                ? 'border-destructive bg-background hover:bg-muted/40'
-                                : 'border-border bg-background hover:bg-muted/40'
-                          }`}
-                        >
-                          {category.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  {fieldErrors.category ? (
-                    <p className="mt-1 text-xs text-destructive">{fieldErrors.category}</p>
-                  ) : null}
-                </div>
-
-                <div>
-                  <label className="text-sm font-medium" htmlFor="event-description">
-                    Description
-                  </label>
-                  <Textarea
-                    id="event-description"
-                    name="description"
-                    placeholder="What’s this event about? (optional)"
-                    value={formData.description}
-                    onChange={handleChange}
-                    className="mt-1.5 resize-none"
-                    rows={3}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Date & time *</label>
-                  <div className="grid gap-2 sm:grid-cols-[1fr_90px_90px_80px]">
+                <WizardSection title="About the event" description="Give attendees a clear idea of what to expect.">
+                  <WizardField label="Event name" htmlFor="event-name" required error={fieldErrors.name}>
                     <Input
-                      type="date"
-                      value={eventDate}
+                      id="event-name"
+                      type="text"
+                      name="name"
+                      placeholder="e.g. Kampala Jazz Night"
+                      value={formData.name}
                       onChange={(e) => {
-                        setEventDate(e.target.value);
-                        clearFieldError('date');
+                        handleChange(e);
+                        clearFieldError('name');
                       }}
-                      aria-invalid={!!fieldErrors.date}
-                      className={fieldErrors.date ? 'border-destructive' : ''}
+                      aria-invalid={!!fieldErrors.name}
+                      className={fieldErrors.name ? 'border-destructive' : ''}
                     />
-                    <select
-                      value={eventHour}
-                      onChange={(e) => {
-                        setEventHour(e.target.value);
-                        clearFieldError('date');
-                      }}
-                      aria-label="Hour"
-                      className={`h-10 rounded-md border bg-background px-3 text-sm ${
-                        fieldErrors.date ? 'border-destructive' : 'border-input'
-                      }`}
-                    >
-                      {Array.from({ length: 12 }).map((_, idx) => {
-                        const value = String(idx + 1);
+                  </WizardField>
+
+                  <WizardField label="Category" required error={fieldErrors.category}>
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                      {EVENT_CATEGORIES.map((category) => {
+                        const selected = formData.category === category.id;
                         return (
-                          <option key={value} value={value}>
-                            {value}
-                          </option>
+                          <button
+                            key={category.id}
+                            type="button"
+                            onClick={() => {
+                              setFormData((prev) => ({ ...prev, category: category.id }));
+                              clearFieldError('category');
+                            }}
+                            className={`rounded-xl border px-3 py-2.5 text-sm font-medium transition-all ${
+                              selected
+                                ? 'border-primary bg-primary text-primary-foreground shadow-sm'
+                                : fieldErrors.category
+                                  ? 'border-destructive bg-background hover:bg-muted/40'
+                                  : 'border-border bg-background hover:border-primary/40 hover:bg-muted/40'
+                            }`}
+                          >
+                            {category.label}
+                          </button>
                         );
                       })}
-                    </select>
-                    <select
-                      value={eventMinute}
-                      onChange={(e) => {
-                        setEventMinute(e.target.value);
-                        clearFieldError('date');
-                      }}
-                      aria-label="Minute"
-                      className={`h-10 rounded-md border bg-background px-3 text-sm ${
-                        fieldErrors.date ? 'border-destructive' : 'border-input'
-                      }`}
-                    >
-                      {MINUTE_OPTIONS.map((value) => (
-                        <option key={value} value={value}>
-                          {value}
-                        </option>
-                      ))}
-                    </select>
-                    <select
-                      value={timePeriod}
-                      onChange={(e) => {
-                        setTimePeriod(e.target.value as TimePeriod);
-                        clearFieldError('date');
-                      }}
-                      aria-label="AM or PM"
-                      className={`h-10 rounded-md border bg-background px-3 text-sm ${
-                        fieldErrors.date ? 'border-destructive' : 'border-input'
-                      }`}
-                    >
-                      <option value="AM">AM</option>
-                      <option value="PM">PM</option>
-                    </select>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-8 rounded-xl text-xs"
-                      onClick={() => {
-                        setEventDate(toDateInputValue(new Date()));
-                        clearFieldError('date');
-                      }}
-                    >
-                      Today
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-8 rounded-xl text-xs"
-                      onClick={() => {
-                        const tomorrow = new Date();
-                        tomorrow.setDate(tomorrow.getDate() + 1);
-                        setEventDate(toDateInputValue(tomorrow));
-                        clearFieldError('date');
-                      }}
-                    >
-                      Tomorrow
-                    </Button>
-                  </div>
-                  {fieldErrors.date ? (
-                    <p className="text-xs text-destructive">{fieldErrors.date}</p>
-                  ) : selectedDateTimePreview ? (
-                    <p className="text-xs text-muted-foreground">Starts {selectedDateTimePreview}</p>
-                  ) : null}
-                </div>
+                    </div>
+                  </WizardField>
 
-                <div>
-                  <label className="text-sm font-medium" htmlFor="event-venue">
-                    Venue *
-                  </label>
-                  <Input
-                    id="event-venue"
-                    type="text"
-                    name="venue"
-                    placeholder="e.g. National Theatre, Kampala"
-                    value={formData.venue}
-                    onChange={(e) => {
-                      handleChange(e);
-                      clearFieldError('venue');
-                    }}
-                    aria-invalid={!!fieldErrors.venue}
-                    className={`mt-1.5 ${fieldErrors.venue ? 'border-destructive' : ''}`}
-                  />
-                  {fieldErrors.venue ? (
-                    <p className="mt-1 text-xs text-destructive">{fieldErrors.venue}</p>
-                  ) : null}
-                </div>
+                  <WizardField
+                    label="Description"
+                    htmlFor="event-description"
+                    hint="Optional — helps buyers decide before they purchase."
+                  >
+                    <Textarea
+                      id="event-description"
+                      name="description"
+                      placeholder="What is this event about?"
+                      value={formData.description}
+                      onChange={handleChange}
+                      className="resize-none"
+                      rows={4}
+                    />
+                  </WizardField>
+                </WizardSection>
 
-                <div>
-                  <p className="text-sm font-medium">Event photos *</p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">
-                    Add at least one. Tap the star to choose the cover image.
-                  </p>
+                <WizardSection
+                  icon={MapPin}
+                  title="Date, time & venue"
+                  description="When and where people should show up."
+                >
+                  <WizardField label="Date & time" required error={fieldErrors.date}>
+                    <div className="space-y-2">
+                      <div className="grid gap-2 sm:grid-cols-[1fr_90px_90px_80px]">
+                        <Input
+                          type="date"
+                          value={eventDate}
+                          onChange={(e) => {
+                            setEventDate(e.target.value);
+                            clearFieldError('date');
+                          }}
+                          aria-invalid={!!fieldErrors.date}
+                          className={fieldErrors.date ? 'border-destructive' : ''}
+                        />
+                        <select
+                          value={eventHour}
+                          onChange={(e) => {
+                            setEventHour(e.target.value);
+                            clearFieldError('date');
+                          }}
+                          aria-label="Hour"
+                          className={`h-10 rounded-md border bg-background px-3 text-sm ${
+                            fieldErrors.date ? 'border-destructive' : 'border-input'
+                          }`}
+                        >
+                          {Array.from({ length: 12 }).map((_, idx) => {
+                            const value = String(idx + 1);
+                            return (
+                              <option key={value} value={value}>
+                                {value}
+                              </option>
+                            );
+                          })}
+                        </select>
+                        <select
+                          value={eventMinute}
+                          onChange={(e) => {
+                            setEventMinute(e.target.value);
+                            clearFieldError('date');
+                          }}
+                          aria-label="Minute"
+                          className={`h-10 rounded-md border bg-background px-3 text-sm ${
+                            fieldErrors.date ? 'border-destructive' : 'border-input'
+                          }`}
+                        >
+                          {MINUTE_OPTIONS.map((value) => (
+                            <option key={value} value={value}>
+                              {value}
+                            </option>
+                          ))}
+                        </select>
+                        <select
+                          value={timePeriod}
+                          onChange={(e) => {
+                            setTimePeriod(e.target.value as TimePeriod);
+                            clearFieldError('date');
+                          }}
+                          aria-label="AM or PM"
+                          className={`h-10 rounded-md border bg-background px-3 text-sm ${
+                            fieldErrors.date ? 'border-destructive' : 'border-input'
+                          }`}
+                        >
+                          <option value="AM">AM</option>
+                          <option value="PM">PM</option>
+                        </select>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-8 rounded-full text-xs"
+                          onClick={() => {
+                            setEventDate(toDateInputValue(new Date()));
+                            clearFieldError('date');
+                          }}
+                        >
+                          Today
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-8 rounded-full text-xs"
+                          onClick={() => {
+                            const tomorrow = new Date();
+                            tomorrow.setDate(tomorrow.getDate() + 1);
+                            setEventDate(toDateInputValue(tomorrow));
+                            clearFieldError('date');
+                          }}
+                        >
+                          Tomorrow
+                        </Button>
+                      </div>
+                      {!fieldErrors.date && selectedDateTimePreview ? (
+                        <p className="text-xs text-muted-foreground">Starts {selectedDateTimePreview}</p>
+                      ) : null}
+                    </div>
+                  </WizardField>
+
+                  <WizardField label="Venue" htmlFor="event-venue" required error={fieldErrors.venue}>
+                    <Input
+                      id="event-venue"
+                      type="text"
+                      name="venue"
+                      placeholder="e.g. National Theatre, Kampala"
+                      value={formData.venue}
+                      onChange={(e) => {
+                        handleChange(e);
+                        clearFieldError('venue');
+                      }}
+                      aria-invalid={!!fieldErrors.venue}
+                      className={fieldErrors.venue ? 'border-destructive' : ''}
+                    />
+                  </WizardField>
+                </WizardSection>
+
+                <WizardSection
+                  icon={ImageIcon}
+                  title="Event photos"
+                  description="Add at least one image. Tap the star on a photo to set the cover."
+                >
                   <div
-                    className={`mt-1.5 rounded-xl border border-dashed bg-muted/20 p-4 ${
+                    className={`rounded-xl border border-dashed bg-background p-4 ${
                       fieldErrors.images ? 'border-destructive' : 'border-border/70'
                     }`}
                   >
@@ -1316,18 +1372,51 @@ export function EventCreationWizard({
                     ) : null}
                   </div>
                   {fieldErrors.images ? (
-                    <p className="mt-1 text-xs text-destructive">{fieldErrors.images}</p>
+                    <p className="text-xs text-destructive">{fieldErrors.images}</p>
                   ) : null}
-                </div>
+                </WizardSection>
               </div>
             )}
 
             {step === 'pricing' && (
-              <div className="space-y-4">
-                <div>
-                  <label className="text-sm font-medium" htmlFor="event-currency">
-                    Currency *
-                  </label>
+              <div className="space-y-5">
+                <div className="rounded-2xl border border-border/70 bg-muted/20 p-4">
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                      <Ticket className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0 space-y-1">
+                      <p className="text-sm font-medium">Ticket types</p>
+                      <p className="text-xs text-muted-foreground">
+                        Add one or more ticket options. Use price <span className="font-medium">0</span> for
+                        free events — attendees can claim tickets without payment.
+                      </p>
+                    </div>
+                  </div>
+
+                  {normalizedTicketTypes.length > 0 ? (
+                    <div className="mt-4 grid grid-cols-3 gap-3 border-t border-border/60 pt-4 text-center">
+                      <div>
+                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Types</p>
+                        <p className="mt-0.5 text-lg font-semibold tabular-nums">
+                          {normalizedTicketTypes.length}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Total seats</p>
+                        <p className="mt-0.5 text-lg font-semibold tabular-nums">{totalTicketsFromTypes}</p>
+                      </div>
+                      <div>
+                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Starting at</p>
+                        <p className="mt-0.5 text-lg font-semibold tabular-nums">
+                          {formatTicketPriceLabel(minTicketPrice)}
+                        </p>
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+
+                <WizardField label="Currency" htmlFor="event-currency" error={fieldErrors.currency}>
                   <select
                     id="event-currency"
                     name="currency"
@@ -1336,7 +1425,7 @@ export function EventCreationWizard({
                       setFormData((prev) => ({ ...prev, currency: e.target.value }));
                       clearFieldError('currency');
                     }}
-                    className={`mt-1.5 h-10 w-full rounded-md border bg-background px-3 text-sm ${
+                    className={`h-10 w-full rounded-md border bg-background px-3 text-sm ${
                       fieldErrors.currency ? 'border-destructive' : 'border-input'
                     }`}
                   >
@@ -1346,414 +1435,437 @@ export function EventCreationWizard({
                       </option>
                     ))}
                   </select>
-                  {fieldErrors.currency ? (
-                    <p className="mt-1 text-xs text-destructive">{fieldErrors.currency}</p>
-                  ) : null}
+                </WizardField>
+
+                <div className="space-y-2">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Quick start
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-8 rounded-full"
+                      onClick={() => applyTicketPreset('General Admission', '0')}
+                    >
+                      General · Free
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-8 rounded-full"
+                      onClick={() => applyTicketPreset('General Admission', '25000')}
+                    >
+                      General · Paid
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-8 rounded-full"
+                      onClick={() => applyTicketPreset('VIP', '75000')}
+                    >
+                      VIP
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-8 rounded-full"
+                      onClick={() => applyTicketPreset('Early Bird', '15000', '50')}
+                    >
+                      Early Bird
+                    </Button>
+                  </div>
                 </div>
 
-                {ticketTypes.length > 0 ? (
-                  <div className="space-y-2">
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between gap-2">
                     <p className="text-sm font-medium">Your ticket types</p>
-                    {ticketTypes.map((ticketType) => (
+                    <span className="text-xs text-muted-foreground">
+                      {ticketTypes.length} {ticketTypes.length === 1 ? 'type' : 'types'}
+                    </span>
+                  </div>
+
+                  {ticketTypes.map((ticketType, index) => {
+                    const priceValue = ticketType.price === '' ? null : Number(ticketType.price);
+                    const isValid = isTicketTypeValid(ticketType);
+
+                    return (
                       <div
                         key={ticketType.id}
-                        className={`space-y-3 rounded-xl border p-3 ${
-                          fieldErrors.tickets ? 'border-destructive/50' : 'border-border/70'
+                        className={`space-y-4 rounded-2xl border p-4 ${
+                          fieldErrors.tickets && !isValid
+                            ? 'border-destructive/50 bg-destructive/5'
+                            : 'border-border/70 bg-card'
                         }`}
                       >
-                        {editingTicketType?.id === ticketType.id ? (
-                          <>
-                            <div className="flex items-center justify-end gap-1">
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                className="h-8 rounded-xl"
-                                onClick={() => setEditingTicketType(null)}
-                              >
-                                Cancel
-                              </Button>
-                              <Button
-                                type="button"
-                                size="sm"
-                                className="h-8 rounded-xl"
-                                onClick={saveEditedTicketType}
-                              >
-                                Save
-                              </Button>
-                            </div>
-                            <Input
-                              type="text"
-                              placeholder="Ticket name"
-                              value={editingTicketType.name}
-                              onChange={(e) =>
-                                setEditingTicketType((prev) =>
-                                  prev ? { ...prev, name: e.target.value } : prev
-                                )
-                              }
-                            />
-                            <Input
-                              type="text"
-                              placeholder="Description (optional)"
-                              value={editingTicketType.description || ''}
-                              onChange={(e) =>
-                                setEditingTicketType((prev) =>
-                                  prev ? { ...prev, description: e.target.value } : prev
-                                )
-                              }
-                            />
-                            <div className="grid grid-cols-2 gap-2">
-                              <Input
-                                type="number"
-                                min="0"
-                                step="0.01"
-                                placeholder="Price"
-                                value={editingTicketType.price}
-                                onChange={(e) =>
-                                  setEditingTicketType((prev) =>
-                                    prev ? { ...prev, price: e.target.value } : prev
-                                  )
-                                }
-                              />
-                              <Input
-                                type="number"
-                                min="1"
-                                placeholder="Quantity"
-                                value={editingTicketType.quantity}
-                                onChange={(e) =>
-                                  setEditingTicketType((prev) =>
-                                    prev ? { ...prev, quantity: e.target.value } : prev
-                                  )
-                                }
-                              />
-                            </div>
-                          </>
-                        ) : (
-                          <>
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="min-w-0">
-                                <p className="truncate text-sm font-medium">{ticketType.name}</p>
-                                {ticketType.description?.trim() ? (
-                                  <p className="truncate text-xs text-muted-foreground">
-                                    {ticketType.description}
-                                  </p>
-                                ) : null}
-                                {!ticketType.price ? (
-                                  <p className="mt-1 text-xs text-amber-600">Set a price to continue</p>
-                                ) : null}
-                              </div>
-                              <p className="shrink-0 text-sm tabular-nums text-muted-foreground">
-                                {ticketType.price
-                                  ? `${formData.currency} ${Number(ticketType.price || 0).toFixed(2)}`
-                                  : 'No price'}{' '}
-                                · {Number(ticketType.quantity || 0)} seats
-                              </p>
-                            </div>
-                            <div className="flex justify-end gap-2">
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                className="h-8 rounded-xl"
-                                onClick={() => {
-                                  beginEditTicketType(ticketType);
-                                  clearFieldError('tickets');
-                                }}
-                              >
-                                Edit
-                              </Button>
-                              {ticketTypes.length > 1 ? (
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-8 rounded-xl text-destructive"
-                                  onClick={() => removeTicketType(ticketType.id)}
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              ) : null}
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                ) : null}
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-2">
+                            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-muted text-[11px] font-semibold tabular-nums">
+                              {index + 1}
+                            </span>
+                            <p className="text-sm font-medium">
+                              {ticketType.name.trim() || `Ticket type ${index + 1}`}
+                            </p>
+                          </div>
+                          {ticketTypes.length > 1 ? (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 shrink-0 rounded-full p-0 text-muted-foreground hover:text-destructive"
+                              onClick={() => removeTicketType(ticketType.id)}
+                              aria-label={`Remove ${ticketType.name || 'ticket type'}`}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          ) : null}
+                        </div>
 
-                <div className="space-y-3 rounded-xl border border-border/70 p-4">
-                  <p className="text-sm font-medium">Add another ticket type</p>
-                  <Input
-                    type="text"
-                    placeholder="Name (e.g. VIP, Early Bird)"
-                    value={newTicketType.name}
-                    onChange={(e) =>
-                      setNewTicketType((prev) => ({ ...prev, name: e.target.value }))
-                    }
-                  />
-                  <Input
-                    type="text"
-                    placeholder="What’s included? (optional)"
-                    value={newTicketType.description || ''}
-                    onChange={(e) =>
-                      setNewTicketType((prev) => ({ ...prev, description: e.target.value }))
-                    }
-                  />
-                  <div className="grid grid-cols-2 gap-2">
-                    <Input
-                      type="number"
-                      placeholder={`Price (${formData.currency})`}
-                      min="0"
-                      step="0.01"
-                      value={newTicketType.price}
-                      onChange={(e) =>
-                        setNewTicketType((prev) => ({ ...prev, price: e.target.value }))
-                      }
-                    />
-                    <Input
-                      type="number"
-                      placeholder="How many available"
-                      min="1"
-                      value={newTicketType.quantity}
-                      onChange={(e) =>
-                        setNewTicketType((prev) => ({ ...prev, quantity: e.target.value }))
-                      }
-                    />
-                  </div>
-                  <Button
-                    type="button"
-                    size="sm"
-                    className="rounded-xl"
-                    onClick={() => {
-                      addTicketType();
-                      clearFieldError('tickets');
-                    }}
-                  >
-                    <Plus className="mr-1 h-4 w-4" />
-                    Add ticket type
-                  </Button>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <div className="space-y-1.5 sm:col-span-2">
+                            <label
+                              className="text-xs font-medium text-muted-foreground"
+                              htmlFor={`ticket-name-${ticketType.id}`}
+                            >
+                              Name
+                            </label>
+                            <Input
+                              id={`ticket-name-${ticketType.id}`}
+                              type="text"
+                              placeholder="e.g. General Admission, VIP"
+                              value={ticketType.name}
+                              onChange={(e) => updateTicketType(ticketType.id, 'name', e.target.value)}
+                            />
+                          </div>
+
+                          <div className="space-y-1.5 sm:col-span-2">
+                            <label
+                              className="text-xs font-medium text-muted-foreground"
+                              htmlFor={`ticket-desc-${ticketType.id}`}
+                            >
+                              Description <span className="font-normal">(optional)</span>
+                            </label>
+                            <Input
+                              id={`ticket-desc-${ticketType.id}`}
+                              type="text"
+                              placeholder="What is included with this ticket?"
+                              value={ticketType.description || ''}
+                              onChange={(e) =>
+                                updateTicketType(ticketType.id, 'description', e.target.value)
+                              }
+                            />
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <label
+                              className="text-xs font-medium text-muted-foreground"
+                              htmlFor={`ticket-price-${ticketType.id}`}
+                            >
+                              Price ({formData.currency})
+                            </label>
+                            <Input
+                              id={`ticket-price-${ticketType.id}`}
+                              type="number"
+                              min="0"
+                              step={formData.currency === 'UGX' ? '1' : '0.01'}
+                              placeholder="0 for free"
+                              value={ticketType.price}
+                              onChange={(e) => updateTicketType(ticketType.id, 'price', e.target.value)}
+                            />
+                            <p className="text-[11px] text-muted-foreground">
+                              {priceValue === null
+                                ? 'Enter a price or use 0 for free tickets'
+                                : priceValue <= 0
+                                  ? 'Free — no payment at checkout'
+                                  : `Buyers pay ${formatTicketPriceLabel(priceValue)}`}
+                            </p>
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <label
+                              className="text-xs font-medium text-muted-foreground"
+                              htmlFor={`ticket-qty-${ticketType.id}`}
+                            >
+                              Quantity available
+                            </label>
+                            <Input
+                              id={`ticket-qty-${ticketType.id}`}
+                              type="number"
+                              min="1"
+                              placeholder="100"
+                              value={ticketType.quantity}
+                              onChange={(e) => updateTicketType(ticketType.id, 'quantity', e.target.value)}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
 
-                {ticketTypeError ? (
-                  <div className="rounded-xl border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
-                    {ticketTypeError}
-                  </div>
-                ) : null}
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full rounded-xl border-dashed"
+                  onClick={addEmptyTicketType}
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add another ticket type
+                </Button>
 
                 {fieldErrors.tickets ? (
-                  <p className="text-xs text-destructive">{fieldErrors.tickets}</p>
-                ) : null}
-
-                {normalizedTicketTypes.length > 0 ? (
-                  <div className="grid grid-cols-3 gap-2 rounded-xl bg-muted/40 p-3 text-center text-xs">
-                    <div>
-                      <p className="text-muted-foreground">Types</p>
-                      <p className="mt-0.5 font-semibold tabular-nums">{normalizedTicketTypes.length}</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">Total seats</p>
-                      <p className="mt-0.5 font-semibold tabular-nums">{totalTicketsFromTypes}</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">From</p>
-                      <p className="mt-0.5 font-semibold tabular-nums">
-                        {formData.currency} {minTicketPrice.toFixed(2)}
-                      </p>
-                    </div>
+                  <div className="rounded-xl border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+                    {fieldErrors.tickets}
                   </div>
                 ) : null}
               </div>
             )}
 
             {step === 'organizer' && (
-              <div className="space-y-4">
-                <div>
-                  <label className="text-sm font-medium" htmlFor="organizer-name">
-                    Organizer name *
-                  </label>
-                  <Input
-                    id="organizer-name"
-                    type="text"
-                    name="name"
-                    placeholder="Your name or organization"
-                    value={organizer.name}
-                    onChange={(e) => {
-                      handleOrganizerChange(e);
-                      clearFieldError('organizerName');
-                    }}
-                    aria-invalid={!!fieldErrors.organizerName}
-                    className={`mt-1.5 ${fieldErrors.organizerName ? 'border-destructive' : ''}`}
-                  />
-                  {fieldErrors.organizerName ? (
-                    <p className="mt-1 text-xs text-destructive">{fieldErrors.organizerName}</p>
-                  ) : null}
-                </div>
-
-                <div>
-                  <label className="text-sm font-medium" htmlFor="organizer-phone">
-                    Contact phone *
-                  </label>
-                  <Input
-                    id="organizer-phone"
-                    type="tel"
-                    name="phone"
-                    placeholder="+256 700 000000"
-                    value={organizer.phone}
-                    onChange={(e) => {
-                      handleOrganizerChange(e);
-                      clearFieldError('organizerPhone');
-                    }}
-                    aria-invalid={!!fieldErrors.organizerPhone}
-                    className={`mt-1.5 ${fieldErrors.organizerPhone ? 'border-destructive' : ''}`}
-                  />
-                  {fieldErrors.organizerPhone ? (
-                    <p className="mt-1 text-xs text-destructive">{fieldErrors.organizerPhone}</p>
-                  ) : (
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      Shown to buyers if they need help with their tickets.
-                    </p>
-                  )}
-                </div>
-
-                <div>
-                  <label className="text-sm font-medium" htmlFor="organizer-logo">
-                    Logo (optional)
-                  </label>
-                  <Input
-                    id="organizer-logo"
-                    type="file"
-                    accept="image/*"
-                    onChange={handleOrganizerLogoFileChange}
-                    className="mt-1.5"
-                  />
-                </div>
-
-                {(organizerLogoPreview || organizer.logo) && (
-                  <div className="rounded-xl bg-muted/40 p-3">
-                    <img
-                      src={organizerLogoPreview || organizer.logo}
-                      alt=""
-                      className="h-12 object-contain"
-                      onError={() => {}}
+              <div className="space-y-5">
+                <WizardSection
+                  icon={WIZARD_STEP_ICONS.organizer}
+                  title="Organizer contact"
+                  description="Shown on the event page and used if buyers need help."
+                >
+                  <WizardField
+                    label="Organizer name"
+                    htmlFor="organizer-name"
+                    required
+                    error={fieldErrors.organizerName}
+                  >
+                    <Input
+                      id="organizer-name"
+                      type="text"
+                      name="name"
+                      placeholder="Your name or organization"
+                      value={organizer.name}
+                      onChange={(e) => {
+                        handleOrganizerChange(e);
+                        clearFieldError('organizerName');
+                      }}
+                      aria-invalid={!!fieldErrors.organizerName}
+                      className={fieldErrors.organizerName ? 'border-destructive' : ''}
                     />
-                  </div>
-                )}
+                  </WizardField>
+
+                  <WizardField
+                    label="Contact phone"
+                    htmlFor="organizer-phone"
+                    required
+                    error={fieldErrors.organizerPhone}
+                    hint="Include country code so buyers can reach you."
+                  >
+                    <Input
+                      id="organizer-phone"
+                      type="tel"
+                      name="phone"
+                      placeholder="+256 700 000000"
+                      value={organizer.phone}
+                      onChange={(e) => {
+                        handleOrganizerChange(e);
+                        clearFieldError('organizerPhone');
+                      }}
+                      aria-invalid={!!fieldErrors.organizerPhone}
+                      className={fieldErrors.organizerPhone ? 'border-destructive' : ''}
+                    />
+                  </WizardField>
+
+                  <WizardField
+                    label="Logo"
+                    htmlFor="organizer-logo"
+                    hint="Optional — appears on tickets and your event page."
+                  >
+                    <div className="rounded-xl border border-dashed border-border/70 bg-background p-4">
+                      <Input
+                        id="organizer-logo"
+                        type="file"
+                        accept="image/*"
+                        onChange={handleOrganizerLogoFileChange}
+                        className="cursor-pointer"
+                      />
+                      {(organizerLogoPreview || organizer.logo) && (
+                        <div className="mt-3 rounded-lg border border-border/60 bg-muted/30 p-3">
+                          <img
+                            src={organizerLogoPreview || organizer.logo}
+                            alt=""
+                            className="mx-auto h-14 object-contain"
+                            onError={() => {}}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </WizardField>
+                </WizardSection>
               </div>
             )}
 
             {step === 'sponsors' && (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between gap-2 rounded-xl border border-border/70 bg-muted/30 px-3 py-2.5">
-                  <p className="text-sm text-muted-foreground">No sponsors? You can skip this step.</p>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="secondary"
-                    className="h-8 shrink-0 rounded-xl px-3 text-xs"
-                    onClick={() => {
-                      setError('');
-                      setFieldErrors({});
-                      setStep('review');
-                    }}
-                  >
-                    Skip for now
-                  </Button>
-                </div>
+              <div className="space-y-5">
+                <WizardSection
+                  icon={Award}
+                  title="Event sponsors"
+                  description={`Optional partners displayed on your event page and tickets (up to ${MAX_EVENT_SPONSORS}).`}
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/60 bg-muted/20 px-3 py-2.5">
+                    <p className="text-sm text-muted-foreground">
+                      {sponsors.length >= MAX_EVENT_SPONSORS
+                        ? `Maximum of ${MAX_EVENT_SPONSORS} sponsors reached.`
+                        : 'No sponsors yet? You can skip this step.'}
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-medium tabular-nums text-muted-foreground">
+                        {sponsors.length}/{MAX_EVENT_SPONSORS}
+                      </span>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="secondary"
+                        className="h-8 shrink-0 rounded-full px-3 text-xs"
+                        onClick={() => {
+                          setError('');
+                          setFieldErrors({});
+                          setStep('review');
+                        }}
+                      >
+                        Skip for now
+                      </Button>
+                    </div>
+                  </div>
 
-                <div className="space-y-2">
-                  <Input
-                    type="text"
-                    placeholder="Sponsor name"
-                    value={newSponsor.name}
-                    onChange={(e) => setNewSponsor((prev) => ({ ...prev, name: e.target.value }))}
-                  />
-                  <Input
-                    id="new-sponsor-logo-file"
-                    type="file"
-                    accept="image/*"
-                    onChange={handleNewSponsorLogoFileChange}
-                  />
-                  {newSponsor.logo ? (
-                    <div className="rounded-xl border border-border/70 p-2">
-                      <img src={newSponsor.logo} alt="" className="h-10 object-contain" />
+                  <div className="space-y-3 rounded-xl border border-border/70 bg-background p-4">
+                    <WizardField label="Sponsor name">
+                      <Input
+                        type="text"
+                        placeholder="Company or partner name"
+                        value={newSponsor.name}
+                        onChange={(e) => setNewSponsor((prev) => ({ ...prev, name: e.target.value }))}
+                        disabled={sponsors.length >= MAX_EVENT_SPONSORS}
+                      />
+                    </WizardField>
+                    <WizardField label="Logo" htmlFor="new-sponsor-logo-file" hint="Optional">
+                      <Input
+                        id="new-sponsor-logo-file"
+                        type="file"
+                        accept="image/*"
+                        onChange={handleNewSponsorLogoFileChange}
+                        className="cursor-pointer"
+                        disabled={sponsors.length >= MAX_EVENT_SPONSORS}
+                      />
+                    </WizardField>
+                    {newSponsor.logo ? (
+                      <div className="rounded-lg border border-border/60 bg-muted/20 p-2">
+                        <img src={newSponsor.logo} alt="" className="mx-auto h-10 object-contain" />
+                      </div>
+                    ) : null}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full rounded-xl"
+                      onClick={handleAddSponsor}
+                      disabled={!newSponsor.name.trim() || sponsors.length >= MAX_EVENT_SPONSORS}
+                    >
+                      <Plus className="mr-1 h-4 w-4" />
+                      Add sponsor
+                    </Button>
+                  </div>
+
+                  {sponsors.length > 0 ? (
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {sponsors.map((sponsor) => (
+                        <div
+                          key={sponsor.id}
+                          className="flex items-center justify-between gap-3 rounded-xl border border-border/60 bg-background p-3"
+                        >
+                          <div className="flex min-w-0 items-center gap-3">
+                            {sponsor.logo ? (
+                              <img
+                                src={sponsor.logo}
+                                alt=""
+                                className="h-10 w-10 shrink-0 rounded-lg border border-border/60 bg-muted/20 object-contain p-1"
+                                onError={() => {}}
+                              />
+                            ) : (
+                              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted text-xs font-semibold">
+                                {sponsor.name.slice(0, 2).toUpperCase()}
+                              </div>
+                            )}
+                            <p className="truncate font-medium">{sponsor.name}</p>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 shrink-0 p-0 text-muted-foreground hover:text-destructive"
+                            onClick={() => handleRemoveSponsor(sponsor.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))}
                     </div>
                   ) : null}
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="w-full rounded-xl"
-                    onClick={handleAddSponsor}
-                    disabled={!newSponsor.name.trim()}
-                  >
-                    <Plus className="mr-1 h-4 w-4" />
-                    Add sponsor
-                  </Button>
-                </div>
-
-                {sponsors.length > 0 ? (
-                  <div className="space-y-2">
-                    {sponsors.map((sponsor) => (
-                      <div
-                        key={sponsor.id}
-                        className="flex items-center justify-between rounded-xl bg-muted/40 p-3"
-                      >
-                        <div className="min-w-0">
-                          <p className="truncate font-medium">{sponsor.name}</p>
-                          {sponsor.logo ? (
-                            <img
-                              src={sponsor.logo}
-                              alt=""
-                              className="mt-1 h-6 object-contain"
-                              onError={() => {}}
-                            />
-                          ) : null}
-                        </div>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleRemoveSponsor(sponsor.id)}
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                ) : null}
+                </WizardSection>
               </div>
             )}
 
             {step === 'review' && (
-              <div className="space-y-3">
+              <div className="space-y-5">
+                {galleryImages.length > 0 ? (
+                  <div className="overflow-hidden rounded-2xl border border-border/70 bg-muted/20">
+                    <div className="relative h-36 sm:h-44">
+                      <img
+                        src={galleryImages[coverImageIndex]?.src || galleryImages[0]?.src}
+                        alt=""
+                        className="h-full w-full object-cover"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+                      <div className="absolute inset-x-0 bottom-0 p-4 text-white">
+                        <p className="text-xs font-medium uppercase tracking-wide text-white/80">Preview</p>
+                        <p className="mt-0.5 text-lg font-semibold leading-tight">
+                          {formData.name || 'Untitled event'}
+                        </p>
+                        {selectedDateTimePreview ? (
+                          <p className="mt-1 text-sm text-white/85">{selectedDateTimePreview}</p>
+                        ) : null}
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <ReviewItem
+                  <WizardReviewItem
                     label="Event"
                     value={formData.name || '—'}
                     onEdit={() => goToStep('basic')}
                   />
-                  <ReviewItem
+                  <WizardReviewItem
                     label="Category"
                     value={
                       EVENT_CATEGORIES.find((c) => c.id === formData.category)?.label || 'Other'
                     }
                     onEdit={() => goToStep('basic')}
                   />
-                  <ReviewItem
+                  <WizardReviewItem
                     label="When"
                     value={selectedDateTimePreview || '—'}
                     onEdit={() => goToStep('basic')}
                   />
-                  <ReviewItem
+                  <WizardReviewItem
                     label="Where"
                     value={formData.venue || '—'}
                     onEdit={() => goToStep('basic')}
                   />
-                  <ReviewItem
+                  <WizardReviewItem
                     label="Tickets from"
-                    value={`${formData.currency} ${minTicketPrice.toFixed(2)}`}
+                    value={formatTicketPriceLabel(minTicketPrice)}
                     onEdit={() => goToStep('pricing')}
                   />
-                  <ReviewItem
+                  <WizardReviewItem
                     label="Organizer"
                     value={organizer.name || '—'}
                     onEdit={() => goToStep('organizer')}
@@ -1761,10 +1873,10 @@ export function EventCreationWizard({
                 </div>
 
                 {organizer.phone ? (
-                  <p className="text-xs text-muted-foreground">Phone: {organizer.phone}</p>
+                  <p className="text-xs text-muted-foreground">Contact: {organizer.phone}</p>
                 ) : null}
 
-                {galleryImages.length > 0 ? (
+                {galleryImages.length > 1 ? (
                   <div className="flex gap-2 overflow-x-auto pb-1">
                     {galleryImages.map(({ src, index }) => (
                       <div
@@ -1779,17 +1891,37 @@ export function EventCreationWizard({
                   </div>
                 ) : null}
 
+                {normalizedTicketTypes.length > 0 ? (
+                  <WizardSection title="Ticket types" description="What buyers can purchase.">
+                    <div className="divide-y divide-border/60 overflow-hidden rounded-xl border border-border/60 bg-background">
+                      {normalizedTicketTypes.map((ticketType) => (
+                        <div
+                          key={ticketType.order_index}
+                          className="flex items-center justify-between gap-3 px-3 py-2.5 text-sm"
+                        >
+                          <span className="font-medium">{ticketType.name}</span>
+                          <span className="shrink-0 tabular-nums text-muted-foreground">
+                            {formatTicketPriceLabel(ticketType.price)} · {ticketType.total_quantity} seats
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </WizardSection>
+                ) : null}
+
                 {sponsors.length > 0 ? (
-                  <div className="flex flex-wrap gap-2">
-                    {sponsors.map((sponsor) => (
-                      <span
-                        key={sponsor.id}
-                        className="rounded-full bg-muted px-3 py-1 text-sm"
-                      >
-                        {sponsor.name}
-                      </span>
-                    ))}
-                  </div>
+                  <WizardSection title="Sponsors">
+                    <div className="flex flex-wrap gap-2">
+                      {sponsors.map((sponsor) => (
+                        <span
+                          key={sponsor.id}
+                          className="rounded-full border border-border/60 bg-background px-3 py-1 text-sm"
+                        >
+                          {sponsor.name}
+                        </span>
+                      ))}
+                    </div>
+                  </WizardSection>
                 ) : (
                   <button
                     type="button"
@@ -1800,112 +1932,91 @@ export function EventCreationWizard({
                   </button>
                 )}
 
-                {normalizedTicketTypes.length > 0 ? (
-                  <div className="space-y-1.5 rounded-xl border border-border/70 p-3">
-                    {normalizedTicketTypes.map((ticketType) => (
-                      <div
-                        key={ticketType.order_index}
-                        className="flex items-center justify-between text-sm"
-                      >
-                        <span>{ticketType.name}</span>
-                        <span className="tabular-nums text-muted-foreground">
-                          {formData.currency} {ticketType.price.toFixed(2)} ·{' '}
-                          {ticketType.total_quantity} seats
-                        </span>
+                <WizardSection title="Publishing options">
+                  <div className="flex items-start justify-between gap-3 rounded-xl border border-border/60 bg-background px-3 py-3">
+                    <div className="space-y-1">
+                      <Label htmlFor="affiliates-enabled" className="text-sm font-medium">
+                        Allow affiliates
+                      </Label>
+                      <p className="text-xs text-muted-foreground">
+                        Let Ticket95 account holders share your event and earn a platform commission on
+                        sales they refer.
+                      </p>
+                    </div>
+                    <Switch
+                      id="affiliates-enabled"
+                      checked={affiliatesEnabled}
+                      onCheckedChange={setAffiliatesEnabled}
+                    />
+                  </div>
+
+                  {isAdminContext ? (
+                    <div className="space-y-4 rounded-xl border border-border/60 bg-background p-4">
+                      <p className="text-sm font-semibold">Admin settings</p>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="space-y-1">
+                          <Label htmlFor="featured-event" className="text-sm font-medium">
+                            Featured event
+                          </Label>
+                          <p className="text-xs text-muted-foreground">
+                            Highlight this event on the homepage and discovery surfaces.
+                          </p>
+                        </div>
+                        <Switch
+                          id="featured-event"
+                          checked={isFeatured}
+                          onCheckedChange={setIsFeatured}
+                        />
                       </div>
-                    ))}
-                  </div>
-                ) : null}
+                      <div className="space-y-2">
+                        <Label htmlFor="event-status" className="text-sm font-medium">
+                          Approval status
+                        </Label>
+                        <Select
+                          value={eventStatus}
+                          onValueChange={(value: 'pending' | 'approved' | 'rejected') =>
+                            setEventStatus(value)
+                          }
+                        >
+                          <SelectTrigger id="event-status" className="w-full">
+                            <SelectValue placeholder="Select status" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="pending">Pending review</SelectItem>
+                            <SelectItem value="approved">Approved</SelectItem>
+                            <SelectItem value="rejected">Rejected</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      {eventStatus === 'rejected' ? (
+                        <div className="space-y-2">
+                          <Label htmlFor="rejection-reason" className="text-sm font-medium">
+                            Rejection note
+                          </Label>
+                          <Textarea
+                            id="rejection-reason"
+                            value={rejectionReason}
+                            onChange={(e) => setRejectionReason(e.target.value)}
+                            placeholder="Optional note for the organizer"
+                            rows={3}
+                            className="resize-none"
+                          />
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
 
-                <div className="flex items-start justify-between gap-3 rounded-xl border border-border/70 px-3 py-3">
-                  <div className="space-y-1">
-                    <Label htmlFor="affiliates-enabled" className="text-sm font-medium">
-                      Allow affiliates
-                    </Label>
-                    <p className="text-xs text-muted-foreground">
-                      Let Ticket95 account holders share your event and earn a platform commission
-                      on sales they refer.
+                  {!isAdminContext ? (
+                    <p className="rounded-xl border border-border/60 bg-muted/20 px-3 py-2.5 text-xs text-muted-foreground">
+                      After you submit, an admin reviews the event before it goes live on Ticket95.
                     </p>
-                  </div>
-                  <Switch
-                    id="affiliates-enabled"
-                    checked={affiliatesEnabled}
-                    onCheckedChange={setAffiliatesEnabled}
-                  />
-                </div>
-
-                {!isAdminContext ? (
-                  <p className="rounded-xl bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-                    After you submit, an admin reviews the event before it goes live.
-                  </p>
-                ) : null}
+                  ) : null}
+                </WizardSection>
               </div>
             )}
-
-            <div className="mt-8 flex gap-3 border-t border-border/70 pt-5">
-              <Button
-                variant="outline"
-                onClick={goToPreviousStep}
-                disabled={!canGoBack || loading}
-                className="flex-1 rounded-xl"
-              >
-                <ChevronLeft className="mr-1 h-4 w-4" />
-                Back
-              </Button>
-
-              {step === 'review' ? (
-                <Button onClick={handleSubmit} disabled={loading} className="flex-1 rounded-xl">
-                  {loading
-                    ? mode === 'edit'
-                      ? 'Saving…'
-                      : 'Creating…'
-                    : mode === 'edit'
-                      ? 'Save changes'
-                      : isAdminContext
-                        ? 'Create event'
-                        : 'Submit for approval'}
-                </Button>
-              ) : (
-                <Button
-                  onClick={goToNextStep}
-                  disabled={!canGoForward || loading}
-                  className="flex-1 rounded-xl"
-                >
-                  {NEXT_LABELS[step] || 'Next'}
-                  <ChevronRight className="ml-1 h-4 w-4" />
-                </Button>
-              )}
-            </div>
+          </WizardPanel>
         </div>
       </div>
-    </div>
-  );
-}
-
-function ReviewItem({
-  label,
-  value,
-  onEdit,
-}: {
-  label: string;
-  value: string;
-  onEdit?: () => void;
-}) {
-  return (
-    <div className="rounded-xl bg-muted/40 p-3">
-      <div className="flex items-start justify-between gap-2">
-        <p className="text-xs text-muted-foreground">{label}</p>
-        {onEdit ? (
-          <button
-            type="button"
-            onClick={onEdit}
-            className="text-[11px] font-medium text-primary hover:underline"
-          >
-            Edit
-          </button>
-        ) : null}
-      </div>
-      <p className="mt-0.5 font-medium leading-snug">{value}</p>
     </div>
   );
 }

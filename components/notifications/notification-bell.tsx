@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Bell } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -12,6 +12,9 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import type { AppNotification } from '@/lib/notifications';
+
+const POLL_MS = 45_000;
+const FETCH_TIMEOUT_MS = 10_000;
 
 function relativeTime(value: string) {
   const then = new Date(value).getTime();
@@ -27,30 +30,70 @@ function relativeTime(value: string) {
   return new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
+function isBenignFetchError(error: unknown) {
+  if (!(error instanceof Error)) return false;
+  const name = error.name;
+  const message = error.message.toLowerCase();
+  return (
+    name === 'AbortError' ||
+    message.includes('failed to fetch') ||
+    message.includes('networkerror') ||
+    message.includes('load failed') ||
+    message.includes('aborted')
+  );
+}
+
 export function NotificationBell() {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const abortRef = useRef<AbortController | null>(null);
 
   const refresh = useCallback(async () => {
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    const timeoutId = window.setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+
     try {
-      const res = await fetch('/api/notifications?limit=30', { cache: 'no-store' });
+      const res = await fetch('/api/notifications?limit=30', {
+        cache: 'no-store',
+        signal: controller.signal,
+      });
       if (!res.ok) return;
       const data = await res.json();
       setNotifications(data.notifications ?? []);
       setUnreadCount(data.unreadCount ?? 0);
     } catch (error) {
-      console.error('Failed to load notifications:', error);
+      // Transient network / abort / HMR — don't surface as a console TypeError overlay.
+      if (!isBenignFetchError(error)) {
+        console.warn('Failed to load notifications:', error);
+      }
+    } finally {
+      window.clearTimeout(timeoutId);
     }
   }, []);
 
   useEffect(() => {
     void refresh();
-    const id = window.setInterval(() => {
+
+    const tick = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
       void refresh();
-    }, 45000);
-    return () => window.clearInterval(id);
+    };
+
+    const id = window.setInterval(tick, POLL_MS);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void refresh();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener('visibilitychange', onVisible);
+      abortRef.current?.abort();
+    };
   }, [refresh]);
 
   useEffect(() => {
@@ -70,7 +113,9 @@ export function NotificationBell() {
     try {
       await fetch(`/api/notifications/${notification.id}/read`, { method: 'PATCH' });
     } catch (error) {
-      console.error('Failed to mark notification read:', error);
+      if (!isBenignFetchError(error)) {
+        console.warn('Failed to mark notification read:', error);
+      }
       void refresh();
     }
   };
@@ -84,7 +129,9 @@ export function NotificationBell() {
     try {
       await fetch('/api/notifications/read-all', { method: 'POST' });
     } catch (error) {
-      console.error('Failed to mark all notifications read:', error);
+      if (!isBenignFetchError(error)) {
+        console.warn('Failed to mark all notifications read:', error);
+      }
       void refresh();
     }
   };

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { completePaidOrder } from '@/lib/complete-paid-order';
+import { getPaymentOrderTicketsPayload } from '@/lib/payment-order-tickets';
 import { getPaytotaPurchaseStatus, isPaytotaPaymentSuccessful } from '@/lib/paytota';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 
@@ -25,6 +26,22 @@ function getOrderCustomerEmail(order: { payment_metadata?: Record<string, unknow
   return metadata.customer?.email || null;
 }
 
+async function ticketsResponseForOrder(order: {
+  id: string;
+  user_id: string | null;
+  payment_provider?: string | null;
+  payment_metadata?: Record<string, unknown> | null;
+  event_id: string;
+}) {
+  return getPaymentOrderTicketsPayload({
+    orderId: order.id,
+    userId: order.user_id,
+    paymentProvider: order.payment_provider,
+    paymentMetadata: order.payment_metadata as Record<string, unknown> | null,
+    eventId: order.event_id,
+  });
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -41,12 +58,16 @@ export async function POST(request: NextRequest) {
     }
 
     if (order.status === 'completed') {
+      const ticketsPayload = await ticketsResponseForOrder(order);
       return NextResponse.json({
         success: true,
         status: 'completed',
         orderId: order.id,
         isGuest: !order.user_id,
         customerEmail: getOrderCustomerEmail(order),
+        tickets: ticketsPayload.tickets,
+        event: ticketsPayload.event,
+        order: ticketsPayload.order,
       });
     }
 
@@ -85,17 +106,23 @@ export async function POST(request: NextRequest) {
 
     await completePaidOrder(order);
 
-    await supabaseAdmin
-      .from('orders')
-      .update({
-        payment_tracking_id: trackingId,
-        payment_merchant_reference: order.id,
-        payment_metadata: {
-          ...(order.payment_metadata || {}),
-          verification: purchaseStatus,
-        },
-      })
-      .eq('id', order.id);
+    const [, ticketsPayload] = await Promise.all([
+      supabaseAdmin
+        .from('orders')
+        .update({
+          payment_tracking_id: trackingId,
+          payment_merchant_reference: order.id,
+          payment_metadata: {
+            ...(order.payment_metadata || {}),
+            verification: purchaseStatus,
+          },
+        })
+        .eq('id', order.id),
+      ticketsResponseForOrder({
+        ...order,
+        payment_provider: order.payment_provider,
+      }),
+    ]);
 
     return NextResponse.json({
       success: true,
@@ -103,6 +130,9 @@ export async function POST(request: NextRequest) {
       orderId: order.id,
       isGuest: !order.user_id,
       customerEmail: getOrderCustomerEmail(order),
+      tickets: ticketsPayload.tickets,
+      event: ticketsPayload.event,
+      order: ticketsPayload.order,
     });
   } catch (error: unknown) {
     console.error('Payment verify error:', error);

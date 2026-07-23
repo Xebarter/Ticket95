@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { requireAdmin } from '@/lib/session';
+import { deleteAdminEvent } from '@/lib/admin-event-details';
 
 export async function GET(
   _request: NextRequest,
@@ -34,6 +35,27 @@ export async function GET(
   }
 }
 
+export async function DELETE(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    await requireAdmin();
+    const { id: eventId } = await params;
+
+    const result = await deleteAdminEvent(eventId);
+    if (!result.ok) {
+      const status = result.error === 'Event not found' ? 404 : 500;
+      return NextResponse.json({ error: result.error }, { status });
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('Error in DELETE /api/admin/events/[id]:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}
+
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -42,17 +64,49 @@ export async function PUT(
     await requireAdmin();
 
     const body = await request.json();
-    console.log('Update request body:', JSON.stringify(body, null, 2));
-    
     const { eventData, ticketTypes, sponsors } = body;
     const { id: eventId } = await params;
-    
-    console.log('Updating event:', eventId);
 
-    // Update event using admin client (bypasses RLS)
+    if (!eventData || typeof eventData !== 'object') {
+      return NextResponse.json({ error: 'eventData is required' }, { status: 400 });
+    }
+
+    // Only persist real event columns — ignore client-only fields like lifecycleStatus.
+    const allowedFields = [
+      'name',
+      'description',
+      'date',
+      'venue',
+      'currency',
+      'category',
+      'ticket_price',
+      'total_tickets',
+      'tickets_available',
+      'organizer_name',
+      'organizer_phone',
+      'organizer_logo_url',
+      'image_url',
+      'image_urls',
+      'status',
+      'rejection_reason',
+      'is_featured',
+      'affiliates_enabled',
+    ] as const;
+
+    const sanitizedEventData: Record<string, unknown> = {};
+    for (const key of allowedFields) {
+      if (Object.prototype.hasOwnProperty.call(eventData, key) && eventData[key] !== undefined) {
+        sanitizedEventData[key] = eventData[key];
+      }
+    }
+
+    if (Object.keys(sanitizedEventData).length === 0) {
+      return NextResponse.json({ error: 'No valid event fields to update' }, { status: 400 });
+    }
+
     const { data: updatedEvent, error: eventError } = await supabaseAdmin
       .from('events')
-      .update(eventData)
+      .update(sanitizedEventData)
       .eq('id', eventId)
       .select()
       .single();
@@ -64,11 +118,8 @@ export async function PUT(
         { status: 500 }
       );
     }
-    
-    console.log('Event updated successfully:', updatedEvent.id);
 
     // Delete existing ticket types for this event
-    console.log('Deleting old ticket types for event:', eventId);
     const { error: deleteTicketTypesError } = await supabaseAdmin
       .from('ticket_types')
       .delete()
@@ -76,9 +127,6 @@ export async function PUT(
 
     if (deleteTicketTypesError) {
       console.error('Error deleting old ticket types:', deleteTicketTypesError);
-      // Continue anyway, we'll try to insert new ones
-    } else {
-      console.log('Old ticket types deleted successfully');
     }
 
     // Insert new ticket types
@@ -88,7 +136,6 @@ export async function PUT(
         event_id: eventId,
       }));
 
-      console.log('Inserting new ticket types:', ticketTypesWithEventId);
       const { error: ticketTypesError } = await supabaseAdmin
         .from('ticket_types')
         .insert(ticketTypesWithEventId);
@@ -100,7 +147,6 @@ export async function PUT(
           { status: 500 }
         );
       }
-      console.log('Ticket types inserted successfully');
     }
 
     // Delete existing sponsors for this event
@@ -111,7 +157,6 @@ export async function PUT(
 
     if (deleteSponsorsError) {
       console.error('Error deleting old sponsors:', deleteSponsorsError);
-      // Continue anyway
     }
 
     // Insert new sponsors (if any)
@@ -127,7 +172,6 @@ export async function PUT(
 
       if (sponsorsError) {
         console.error('Error inserting sponsors:', sponsorsError);
-        // Sponsors are optional, so we don't fail the whole update
       }
     }
 

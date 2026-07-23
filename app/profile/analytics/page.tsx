@@ -8,7 +8,6 @@ import {
   Cell,
   Pie,
   PieChart,
-  ResponsiveContainer,
   XAxis,
   YAxis,
 } from 'recharts';
@@ -17,8 +16,13 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart';
-import { AlertTriangle, CalendarClock } from 'lucide-react';
+import { AlertTriangle, CalendarClock, DollarSign, ShoppingBag, Ticket, TrendingUp } from 'lucide-react';
 import { getEventLifecycleStatus } from '@/lib/event-status';
+import {
+  ProfileLoadingState,
+  ProfileMetric,
+  ProfilePageHeader,
+} from '@/components/profile/profile-ui';
 
 const formatMoney = (amount: number, currency = 'USD') =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(amount);
@@ -137,54 +141,53 @@ export default function ProfileAnalyticsPage() {
     revenue: { label: 'Revenue', color: 'hsl(var(--primary))' },
   } satisfies ChartConfig;
 
+  const ordersChartConfig = {
+    value: { label: 'Orders' },
+    completed: { label: 'Completed', color: '#10b981' },
+    pending: { label: 'Pending', color: '#f59e0b' },
+    failed: { label: 'Failed', color: '#ef4444' },
+    refunded: { label: 'Refunded', color: '#6366f1' },
+  } satisfies ChartConfig;
+
   if (loading) {
-    return (
-      <div className="flex min-h-[280px] items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-      </div>
-    );
+    return <ProfileLoadingState label="Loading analytics…" />;
   }
 
   return (
     <div className="space-y-5">
-      <header className="flex items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold tracking-tight">Analytics</h1>
-        <span className="text-sm tabular-nums text-muted-foreground">{myEvents.length}</span>
-      </header>
+      <ProfilePageHeader
+        title="Analytics"
+        description="Revenue, sell-through, and performance across your events."
+        actions={
+          <span className="rounded-full border border-border/70 bg-muted/40 px-3 py-1 text-xs tabular-nums text-muted-foreground">
+            {myEvents.length} event{myEvents.length === 1 ? '' : 's'}
+          </span>
+        }
+      />
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Card className="border-border/70">
-          <CardContent className="p-4">
-            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Net revenue</p>
-            <p className="mt-1.5 text-2xl font-semibold tracking-tight">
-              {formatMoney(analytics.netRevenue, analytics.currency)}
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-border/70">
-          <CardContent className="p-4">
-            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Avg order</p>
-            <p className="mt-1.5 text-2xl font-semibold tracking-tight">
-              {formatMoney(analytics.averageOrderValue, analytics.currency)}
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-border/70">
-          <CardContent className="p-4">
-            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Sold</p>
-            <p className="mt-1.5 text-2xl font-semibold tracking-tight">{analytics.totalTicketsSold}</p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-border/70">
-          <CardContent className="p-4">
-            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Sell-through</p>
-            <p className="mt-1.5 text-2xl font-semibold tracking-tight">{analytics.sellThrough.toFixed(1)}%</p>
-            <Progress value={analytics.sellThrough} className="mt-3 h-2" />
-          </CardContent>
-        </Card>
+        <ProfileMetric
+          label="Net revenue"
+          value={formatMoney(analytics.netRevenue, analytics.currency)}
+          icon={DollarSign}
+          accent="emerald"
+        />
+        <ProfileMetric
+          label="Avg order"
+          value={formatMoney(analytics.averageOrderValue, analytics.currency)}
+          icon={TrendingUp}
+        />
+        <ProfileMetric
+          label="Tickets sold"
+          value={String(analytics.totalTicketsSold)}
+          icon={ShoppingBag}
+        />
+        <ProfileMetric
+          label="Sell-through"
+          value={`${analytics.sellThrough.toFixed(0)}%`}
+          icon={Ticket}
+          accent="amber"
+        />
       </div>
 
       <div className="grid gap-3 xl:grid-cols-3">
@@ -218,25 +221,23 @@ export default function ProfileAnalyticsPage() {
               <p className="py-8 text-center text-sm text-muted-foreground">None</p>
             ) : (
               <div className="space-y-4">
-                <div className="h-[180px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={analytics.orderStatusData}
-                        dataKey="value"
-                        nameKey="label"
-                        innerRadius={50}
-                        outerRadius={75}
-                        paddingAngle={3}
-                      >
-                        {analytics.orderStatusData.map((segment) => (
-                          <Cell key={segment.status} fill={segment.color} />
-                        ))}
-                      </Pie>
-                      <ChartTooltip content={<ChartTooltipContent />} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
+                <ChartContainer config={ordersChartConfig} className="mx-auto h-[180px] w-full">
+                  <PieChart>
+                    <Pie
+                      data={analytics.orderStatusData}
+                      dataKey="value"
+                      nameKey="label"
+                      innerRadius={50}
+                      outerRadius={75}
+                      paddingAngle={3}
+                    >
+                      {analytics.orderStatusData.map((segment) => (
+                        <Cell key={segment.status} fill={segment.color} />
+                      ))}
+                    </Pie>
+                    <ChartTooltip content={<ChartTooltipContent nameKey="label" hideLabel />} />
+                  </PieChart>
+                </ChartContainer>
 
                 <div className="space-y-2">
                   {analytics.orderStatusData.map((item) => (

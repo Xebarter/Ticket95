@@ -18,6 +18,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { getSupabaseBrowserClient } from '@/lib/supabase/browser';
+import { MAX_EVENT_SPONSORS } from '@/lib/event-sponsors';
 
 const supabase = getSupabaseBrowserClient();
 
@@ -324,6 +325,10 @@ export default function AdminEventCreate({ onCreatedAction }: { onCreatedAction:
 
   const addSponsor = () => {
     if (!newSponsor.name.trim()) return;
+    if (sponsors.length >= MAX_EVENT_SPONSORS) {
+      setError(`You can add up to ${MAX_EVENT_SPONSORS} sponsors`);
+      return;
+    }
     const sponsorIndex = sponsors.length;
     setSponsors([...sponsors, { ...newSponsor }]);
 
@@ -337,6 +342,7 @@ export default function AdminEventCreate({ onCreatedAction }: { onCreatedAction:
     }
 
     setNewSponsor({ name: '', logo_url: '' });
+    setError('');
   };
 
   const removeSponsor = (index: number) => {
@@ -785,14 +791,26 @@ export default function AdminEventCreate({ onCreatedAction }: { onCreatedAction:
 
               {/* SPONSORS TAB */}
               <TabsContent value="sponsors" className="space-y-4 mt-0 data-[state=inactive]:hidden">
+                <div className="flex items-center justify-between text-sm text-muted-foreground">
+                  <span>Optional partners shown on the event and tickets</span>
+                  <span className="tabular-nums font-medium">
+                    {sponsors.length}/{MAX_EVENT_SPONSORS}
+                  </span>
+                </div>
                 <div className="space-y-2">
                   <div className="grid grid-cols-[1fr_auto] gap-2">
                     <Input
                       placeholder="Sponsor name"
                       value={newSponsor.name}
                       onChange={(e) => setNewSponsor((prev) => ({ ...prev, name: e.target.value }))}
+                      disabled={sponsors.length >= MAX_EVENT_SPONSORS}
                     />
-                    <Button type="button" variant="outline" onClick={addSponsor} disabled={!newSponsor.name.trim()}>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={addSponsor}
+                      disabled={!newSponsor.name.trim() || sponsors.length >= MAX_EVENT_SPONSORS}
+                    >
                       <Plus className="w-4 h-4" />
                     </Button>
                   </div>

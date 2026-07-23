@@ -1,10 +1,12 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import QRCode from 'qrcode';
 import { getEventById } from '@/lib/supabase-db';
 import type { Event, Ticket } from '@/lib/supabase-client';
+import { getEventImages } from '@/lib/event-display';
 import { useProfileData } from '../use-profile-data';
 import { downloadTicketAsPdf } from '@/lib/ticket-download';
 import { Badge } from '@/components/ui/badge';
@@ -26,6 +28,12 @@ import {
   QrCode,
   Ticket as TicketIcon,
 } from 'lucide-react';
+import {
+  ProfileEmptyState,
+  ProfileFilterChips,
+  ProfileLoadingState,
+  ProfilePageHeader,
+} from '@/components/profile/profile-ui';
 
 type FilterKey = 'upcoming' | 'used' | 'other' | 'all';
 
@@ -155,8 +163,9 @@ export default function ProfileTicketsPage() {
     } else {
       try {
         const qrDataUrl = await QRCode.toDataURL(ticket.qr_code || 'ticket', {
-          margin: 1,
-          width: 320,
+          margin: 2,
+          width: 400,
+          errorCorrectionLevel: 'H',
           color: { dark: '#0f172a', light: '#ffffff' },
         });
         setSelectedTicketQrSrc(qrDataUrl);
@@ -191,81 +200,47 @@ export default function ProfileTicketsPage() {
   };
 
   if (loading) {
-    return (
-      <div className="space-y-5">
-        <div className="space-y-2">
-          <div className="h-7 w-36 animate-pulse rounded-md bg-muted" />
-          <div className="h-4 w-56 animate-pulse rounded-md bg-muted" />
-        </div>
-        <div className="h-8 w-full max-w-md animate-pulse rounded-full bg-muted" />
-        <div className="space-y-3">
-          <div className="h-28 animate-pulse rounded-2xl bg-muted" />
-          <div className="h-28 animate-pulse rounded-2xl bg-muted" />
-        </div>
-      </div>
-    );
+    return <ProfileLoadingState label="Loading tickets…" />;
   }
 
   const selectedEvent = selectedTicket ? eventsById[selectedTicket.event_id] : null;
 
   return (
     <div className="space-y-5">
-      <header className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">My tickets</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {myTickets.length === 0
-              ? 'Your entry passes will appear here after purchase.'
-              : buckets.upcoming.length > 0
-                ? `${buckets.upcoming.length} ready for entry`
-                : `${myTickets.length} ticket${myTickets.length === 1 ? '' : 's'} in your wallet`}
-          </p>
-        </div>
-      </header>
+      <ProfilePageHeader
+        title="My tickets"
+        description={
+          myTickets.length === 0
+            ? 'Your entry passes will appear here after purchase.'
+            : buckets.upcoming.length > 0
+              ? `${buckets.upcoming.length} ready for entry`
+              : `${myTickets.length} ticket${myTickets.length === 1 ? '' : 's'} in your wallet`
+        }
+      />
 
       {myTickets.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/70 px-6 py-16 text-center">
-          <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-            <TicketIcon className="h-5 w-5 text-muted-foreground" />
-          </div>
-          <p className="font-medium">No tickets yet</p>
-          <p className="mt-1 max-w-sm text-sm text-muted-foreground">
-            Browse events and buy tickets. Your QR codes and downloads will show up here.
-          </p>
-          <Button asChild className="mt-5 rounded-xl">
-            <Link href="/events">Browse events</Link>
-          </Button>
-        </div>
+        <ProfileEmptyState
+          icon={TicketIcon}
+          title="No tickets yet"
+          description="Browse events and buy tickets. Your QR codes and downloads will show up here."
+          action={
+            <Button asChild className="rounded-xl">
+              <Link href="/events">Browse events</Link>
+            </Button>
+          }
+        />
       ) : (
         <>
-          <div className="flex flex-wrap gap-1.5">
-            {(
-              [
-                { key: 'upcoming', label: 'Ready', count: buckets.upcoming.length },
-                { key: 'used', label: 'Used', count: buckets.used.length },
-                { key: 'other', label: 'Inactive', count: buckets.other.length },
-                { key: 'all', label: 'All', count: myTickets.length },
-              ] as const
-            ).map((item) => {
-              const active = filter === item.key;
-              return (
-                <button
-                  key={item.key}
-                  type="button"
-                  onClick={() => setFilter(item.key)}
-                  className={cn(
-                    'inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-medium transition-colors',
-                    active
-                      ? 'bg-foreground text-background'
-                      : 'bg-muted/70 text-muted-foreground hover:bg-muted hover:text-foreground'
-                  )}
-                >
-                  {item.label}
-                  <span className="tabular-nums opacity-70">{item.count}</span>
-                </button>
-              );
-            })}
-          </div>
+          <ProfileFilterChips
+            value={filter}
+            onChange={setFilter}
+            items={[
+              { key: 'upcoming', label: 'Ready', count: buckets.upcoming.length },
+              { key: 'used', label: 'Used', count: buckets.used.length },
+              { key: 'other', label: 'Inactive', count: buckets.other.length },
+              { key: 'all', label: 'All', count: myTickets.length },
+            ]}
+          />
 
           {groups.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-border/70 px-6 py-12 text-center">
@@ -315,37 +290,55 @@ export default function ProfileTicketsPage() {
                       </Button>
                     </div>
 
-                    <div className="divide-y divide-border/60 overflow-hidden rounded-2xl border border-border/70">
+                    <div className="space-y-3">
                       {group.tickets.map((ticket) => {
                         const canDownload = ticket.status === 'valid';
                         const isDownloading = downloadingTicketId === ticket.id;
+                        const eventImage = event ? getEventImages(event)[0] : undefined;
                         return (
                           <div
                             key={ticket.id}
-                            className="flex flex-col gap-3 bg-card px-3 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-4"
+                            className="flex flex-col gap-3 rounded-2xl border border-border/70 bg-card px-3 py-3.5 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:px-4"
                           >
-                            <div className="min-w-0 space-y-1.5">
-                              <div className="flex flex-wrap items-center gap-2">
-                                <Badge
-                                  variant="outline"
-                                  className={cn('rounded-full text-[10px]', statusClass(ticket.status))}
-                                >
-                                  {statusLabel(ticket.status)}
-                                </Badge>
-                                {ticket.ticket_type_name ? (
-                                  <span className="text-sm font-medium">{ticket.ticket_type_name}</span>
+                            <div className="flex min-w-0 items-start gap-3">
+                              <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-xl border border-border/70 bg-muted sm:h-[4.5rem] sm:w-[4.5rem]">
+                                {eventImage ? (
+                                  <Image
+                                    src={eventImage}
+                                    alt=""
+                                    fill
+                                    className="object-cover"
+                                    sizes="72px"
+                                  />
                                 ) : (
-                                  <span className="text-sm font-medium">General admission</span>
+                                  <div className="flex h-full w-full items-center justify-center text-muted-foreground">
+                                    <TicketIcon className="h-6 w-6" />
+                                  </div>
                                 )}
                               </div>
-                              <p className="text-xs text-muted-foreground">
-                                #{shortId(ticket.id)}
-                                <span className="mx-1.5 text-border">·</span>
-                                Bought {formatDate(ticket.created_at)}
-                              </p>
+                              <div className="min-w-0 space-y-1.5">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <Badge
+                                    variant="outline"
+                                    className={cn('rounded-full text-[10px]', statusClass(ticket.status))}
+                                  >
+                                    {statusLabel(ticket.status)}
+                                  </Badge>
+                                  {ticket.ticket_type_name ? (
+                                    <span className="text-sm font-medium">{ticket.ticket_type_name}</span>
+                                  ) : (
+                                    <span className="text-sm font-medium">General admission</span>
+                                  )}
+                                </div>
+                                <p className="text-xs text-muted-foreground">
+                                  #{shortId(ticket.id)}
+                                  <span className="mx-1.5 text-border">·</span>
+                                  Bought {formatDate(ticket.created_at)}
+                                </p>
+                              </div>
                             </div>
 
-                            <div className="flex flex-wrap gap-2">
+                            <div className="flex flex-wrap gap-2 sm:pl-0 pl-[4.75rem]">
                               <Button
                                 size="sm"
                                 className="h-9 rounded-xl"
@@ -386,49 +379,104 @@ export default function ProfileTicketsPage() {
           }
         }}
       >
-        <DialogContent className="max-w-md gap-0 overflow-hidden p-0 sm:rounded-2xl">
-          <DialogHeader className="space-y-1 border-b border-border/60 px-5 py-4 text-left">
-            <DialogTitle className="pr-6 text-lg leading-snug">
-              {selectedTicket?.event_name || 'Ticket'}
-            </DialogTitle>
-            <DialogDescription>
-              Present this code at the entrance. Keep brightness up.
-            </DialogDescription>
-          </DialogHeader>
-
+        <DialogContent className="max-w-md gap-0 overflow-hidden border-0 p-0 shadow-2xl sm:rounded-2xl">
           {selectedTicket ? (
-            <div className="space-y-4 px-5 py-5">
-              <div className="rounded-2xl border border-border/70 bg-white p-5">
-                {selectedTicketQrSrc ? (
-                  <img
-                    src={selectedTicketQrSrc}
-                    alt="Ticket QR code"
-                    className="mx-auto h-52 w-52"
-                  />
-                ) : (
-                  <div className="mx-auto flex h-52 w-52 items-center justify-center rounded-xl border border-dashed border-border bg-muted/30 text-xs text-muted-foreground">
-                    QR unavailable
+            <div className="overflow-hidden bg-[#f4f6f9]">
+              <div className="relative overflow-hidden bg-[#0a0e1a] px-5 pb-6 pt-5 text-white">
+                <div className="absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-[#9A7B2F] via-[#d4b46a] to-[#9A7B2F]" />
+                <div className="pointer-events-none absolute -right-8 -top-10 h-32 w-32 rounded-full bg-[#9A7B2F]/10 blur-2xl" />
+                <div className="pointer-events-none absolute -left-6 bottom-0 h-20 w-20 rounded-full bg-[#d4b46a]/10 blur-xl" />
+
+                <div className="relative flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[#d4b46a]">
+                        Ticket95
+                      </p>
+                      <span className="h-px w-6 bg-[#9A7B2F]/70" />
+                    </div>
+                    <DialogTitle className="mt-2.5 pr-0 text-xl font-bold leading-snug tracking-tight text-white">
+                      {selectedTicket.event_name}
+                    </DialogTitle>
+                    <DialogDescription className="mt-1.5 text-[13px] text-slate-300">
+                      Organized by {selectedTicket.organizer_name}
+                    </DialogDescription>
                   </div>
-                )}
+                  <div className="flex shrink-0 flex-col items-end gap-2">
+                    <span className="rounded-md bg-gradient-to-b from-[#d4b46a] to-[#9A7B2F] px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-[#0a0e1a] shadow-sm">
+                      Admit one
+                    </span>
+                    {selectedTicket.organizer_logo_url ? (
+                      <div className="relative h-11 w-11 overflow-hidden rounded-full border-2 border-[#d4b46a]/80 bg-white shadow-md">
+                        <img
+                          src={selectedTicket.organizer_logo_url}
+                          alt=""
+                          className="h-full w-full object-cover"
+                        />
+                      </div>
+                    ) : (
+                      <div className="flex h-11 w-11 items-center justify-center rounded-full border-2 border-[#d4b46a]/80 bg-[#1c2438] text-sm font-bold text-[#d4b46a]">
+                        {(selectedTicket.organizer_name || 'O').charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="relative mt-4 flex items-center gap-2">
+                  <span className="inline-flex rounded-full bg-white px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-[#0a0e1a]">
+                    {selectedTicket.ticket_type_name || 'General admission'}
+                  </span>
+                  <span className="h-px flex-1 bg-gradient-to-r from-[#9A7B2F]/50 to-transparent" />
+                </div>
               </div>
 
-              <div className="grid gap-3 text-sm sm:grid-cols-2">
-                <Detail label="Status" value={statusLabel(selectedTicket.status)} />
-                <Detail
-                  label="Type"
-                  value={selectedTicket.ticket_type_name || 'General admission'}
-                />
-                <Detail label="Ticket ID" value={`#${shortId(selectedTicket.id)}`} mono />
-                {selectedEvent?.date ? (
-                  <Detail label="When" value={formatDateTime(selectedEvent.date)} />
-                ) : null}
-                {selectedEvent?.venue ? (
-                  <Detail label="Where" value={selectedEvent.venue} />
-                ) : null}
-                <Detail label="Organizer" value={selectedTicket.organizer_name} />
+              <div className="relative px-5 py-4">
+                <div className="absolute -left-2.5 top-1/2 h-5 w-5 -translate-y-1/2 rounded-full bg-[#f4f6f9]" />
+                <div className="absolute -right-2.5 top-1/2 h-5 w-5 -translate-y-1/2 rounded-full bg-[#f4f6f9]" />
+                <div className="border-t border-dashed border-slate-300" />
+              </div>
+
+              <div className="space-y-4 px-5 pb-5">
+                <div className="rounded-2xl border border-[#9A7B2F]/30 bg-white p-4 shadow-sm">
+                  {selectedTicketQrSrc ? (
+                    <img
+                      src={selectedTicketQrSrc}
+                      alt="Ticket QR code"
+                      className="mx-auto h-52 w-52"
+                    />
+                  ) : (
+                    <div className="mx-auto flex h-52 w-52 items-center justify-center rounded-xl border border-dashed border-border bg-muted/30 text-xs text-muted-foreground">
+                      QR unavailable
+                    </div>
+                  )}
+                  <p className="mt-3 text-center text-[11px] font-medium uppercase tracking-[0.14em] text-slate-500">
+                    Scan at entry
+                  </p>
+                  <p className="text-center font-mono text-sm font-bold text-slate-900">
+                    #{shortId(selectedTicket.id)}
+                  </p>
+                </div>
+
+                <div className="grid gap-3 rounded-xl border border-slate-200 bg-white p-4 text-sm sm:grid-cols-2">
+                  <Detail label="Status" value={statusLabel(selectedTicket.status)} />
+                  <Detail
+                    label="Type"
+                    value={selectedTicket.ticket_type_name || 'General admission'}
+                  />
+                  {selectedEvent?.date ? (
+                    <Detail label="When" value={formatDateTime(selectedEvent.date)} />
+                  ) : null}
+                  {selectedEvent?.venue ? (
+                    <Detail label="Where" value={selectedEvent.venue} />
+                  ) : null}
+                </div>
               </div>
             </div>
-          ) : null}
+          ) : (
+            <DialogHeader className="px-5 py-4">
+              <DialogTitle>Ticket</DialogTitle>
+            </DialogHeader>
+          )}
 
           <DialogFooter className="gap-2 border-t border-border/60 bg-muted/20 px-5 py-4 sm:justify-between">
             <Button variant="outline" className="rounded-xl" onClick={() => setSelectedTicket(null)}>

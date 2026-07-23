@@ -58,7 +58,13 @@ export default function SupportMessagesClient({
               {messages.map((m: SupportMessage) => (
                 <TableRow key={m.id} className="align-top">
                   <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
-                    {new Date(m.created_at).toLocaleString()}
+                    {new Date(m.created_at).toLocaleString('en-US', {
+                      month: 'short',
+                      day: 'numeric',
+                      year: 'numeric',
+                      hour: 'numeric',
+                      minute: '2-digit',
+                    })}
                   </TableCell>
                   <TableCell className="min-w-[140px]">
                     <p className="font-medium">{m.name || '—'}</p>

@@ -4,6 +4,7 @@ import { Analytics } from '@vercel/analytics/next'
 import { AuthProvider } from '@/lib/supabase-auth-context'
 import { EventSearchProvider } from '@/lib/event-search-context'
 import { BRAND_ICON_PATHS, brandAssetUrl } from '@/lib/brand-assets'
+import { getSiteUrl } from '@/lib/site-url'
 import './globals.css'
 
 const lexend = Lexend({
@@ -14,6 +15,7 @@ const lexend = Lexend({
 })
 
 export const metadata: Metadata = {
+  metadataBase: new URL(getSiteUrl()),
   title: 'Ticket95.com - Event Ticketing Platform',
   description: 'Buy and sell event tickets online. Create events, manage approvals, and discover amazing events.',
   generator: 'v0.app',
