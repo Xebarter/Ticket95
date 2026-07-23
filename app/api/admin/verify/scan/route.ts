@@ -2,11 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { getServerAuthUser } from '@/lib/server-auth';
 import { parseTicketQr, normalizeQrValue } from '@/lib/ticket-verification';
+import { evaluateTicketEntry } from '@/lib/ticket-check-in';
 
 type EventRecord = {
   id: string;
   name: string;
   date: string;
+  end_date: string | null;
   venue: string;
   organizer_id: string;
 };
@@ -14,7 +16,7 @@ type EventRecord = {
 async function getAccessibleEvent(eventId: string, userId: string, role: 'admin' | 'organizer' | 'customer') {
   const { data, error } = await supabaseAdmin
     .from('events')
-    .select('id, name, date, venue, organizer_id')
+    .select('id, name, date, end_date, venue, organizer_id')
     .eq('id', eventId)
     .single<EventRecord>();
 
@@ -53,7 +55,8 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const ticketSelect = 'id, event_id, event_name, ticket_type_name, status, created_at, updated_at, qr_code';
+    const ticketSelect =
+      'id, event_id, event_name, ticket_type_name, status, created_at, updated_at, qr_code, checked_in_at';
 
     let ticket: any = null;
     if (parsed.kind === 'ticket-id') {
@@ -93,35 +96,20 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    if (ticket.event_id !== event.id) {
+    const evaluation = await evaluateTicketEntry(ticket, event);
+
+    if (!evaluation.ok) {
       return NextResponse.json({
         valid: false,
-        reason: 'wrong_event',
-        message: `This ticket does not belong to "${event.name}".`,
-        ticket: {
-          id: ticket.id,
-          eventName: ticket.event_name,
-          status: ticket.status,
-        },
-      });
-    }
-
-    if (ticket.status !== 'valid') {
-      const message =
-        ticket.status === 'used'
-          ? 'Ticket already used.'
-          : `Ticket is not valid for entry (${ticket.status}).`;
-
-      return NextResponse.json({
-        valid: false,
-        reason: ticket.status === 'used' ? 'already_used' : 'invalid_status',
-        message,
+        reason: evaluation.reason,
+        message: evaluation.message,
         ticket: {
           id: ticket.id,
           eventName: ticket.event_name,
           ticketTypeName: ticket.ticket_type_name,
           status: ticket.status,
           updatedAt: ticket.updated_at,
+          checkedInToday: evaluation.checkedInToday,
         },
       });
     }
@@ -129,7 +117,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       valid: true,
       reason: 'ok',
-      message: 'Valid ticket.',
+      message: evaluation.isMultiDay ? 'Valid ticket for today.' : 'Valid ticket.',
       ticket: {
         id: ticket.id,
         eventName: ticket.event_name,
@@ -137,6 +125,7 @@ export async function POST(request: NextRequest) {
         status: ticket.status,
         createdAt: ticket.created_at,
         updatedAt: ticket.updated_at,
+        checkedInToday: false,
       },
       event: {
         id: event.id,

@@ -124,6 +124,8 @@ export type VerifierTicketRow = {
   checked_in_at: string | null
   checked_in_by: string | null
   updated_at: string
+  /** Present on API responses: already admitted on today's UTC calendar day */
+  checked_in_today?: boolean
 }
 
 export const VERIFIER_TICKET_SELECT =

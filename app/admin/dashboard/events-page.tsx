@@ -12,6 +12,7 @@ import { useToast } from '@/hooks/use-toast';
 import { getEventLifecycleStatus, type EventLifecycleStatus } from '@/lib/event-status';
 import { FeaturedToggle } from '@/components/admin/featured-toggle';
 import type { AdminEventRow } from '@/lib/admin-dashboard-data';
+import type { Event } from '@/lib/supabase-client';
 import { cn } from '@/lib/utils';
 import {
   Calendar,
@@ -53,7 +54,11 @@ export default function AdminEventsPage({
     () =>
       events.map((event: AdminEventRow) => ({
         ...event,
-        lifecycleStatus: getEventLifecycleStatus(event) as EventLifecycleStatus,
+        lifecycleStatus: getEventLifecycleStatus({
+          status: event.status as Event['status'],
+          date: event.date,
+          end_date: event.end_date,
+        }) as EventLifecycleStatus,
       })),
     [events]
   );

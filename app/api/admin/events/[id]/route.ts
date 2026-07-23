@@ -77,6 +77,7 @@ export async function PUT(
       'name',
       'description',
       'date',
+      'end_date',
       'venue',
       'currency',
       'category',

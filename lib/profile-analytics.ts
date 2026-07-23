@@ -279,17 +279,25 @@ export function resolveAnalyticsRange(
   return { from: null, to: null };
 }
 
-export function isEventLive(event: Pick<Event, 'status' | 'date'>, now = new Date()): boolean {
+export function isEventLive(
+  event: Pick<Event, 'status' | 'date' | 'end_date'>,
+  now = new Date()
+): boolean {
   if (event.status !== 'approved') return false;
   const eventDate = new Date(event.date);
   if (Number.isNaN(eventDate.getTime())) return false;
+
+  const endSource = event.end_date ? new Date(event.end_date) : eventDate;
+  if (Number.isNaN(endSource.getTime())) return false;
+
   const start = new Date(eventDate);
   start.setHours(0, 0, 0, 0);
-  const end = new Date(eventDate);
+  const end = new Date(endSource);
   end.setHours(23, 59, 59, 999);
-  // Also treat as live if within 6h before / 12h after exact event time
+
+  // Also treat as live if within 6h before start / 12h after end timestamp
   const looseStart = new Date(eventDate.getTime() - 6 * 60 * 60 * 1000);
-  const looseEnd = new Date(eventDate.getTime() + 12 * 60 * 60 * 1000);
+  const looseEnd = new Date(endSource.getTime() + 12 * 60 * 60 * 1000);
   const t = now.getTime();
   return (t >= start.getTime() && t <= end.getTime()) || (t >= looseStart.getTime() && t <= looseEnd.getTime());
 }

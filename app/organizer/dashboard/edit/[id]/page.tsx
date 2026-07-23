@@ -30,6 +30,7 @@ export default function EditEventPage() {
         name: string;
         description?: string;
         date: string;
+        end_date?: string | null;
         venue: string;
         currency?: string;
         category?: EventCategoryId;
@@ -97,6 +98,7 @@ export default function EditEventPage() {
           name: event.name,
           description: event.description,
           date: event.date,
+          end_date: event.end_date,
           venue: event.venue,
           currency: event.currency,
           category: event.category,

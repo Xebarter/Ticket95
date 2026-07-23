@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { getServerAuthUser } from '@/lib/server-auth';
+import { performTicketCheckIn } from '@/lib/ticket-check-in';
 
 type EventRecord = {
   id: string;
@@ -38,45 +39,31 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid verification link.' }, { status: 404 });
     }
 
-    const { data: ticket, error: ticketError } = await supabaseAdmin
-      .from('tickets')
-      .select('id, event_id, status')
-      .eq('id', ticketId)
-      .single();
+    const result = await performTicketCheckIn({
+      ticketId,
+      eventId,
+      verifierSessionId: null,
+    });
 
-    if (ticketError || !ticket) {
-      return NextResponse.json({ error: 'Ticket not found' }, { status: 404 });
-    }
-
-    if (ticket.event_id !== event.id) {
-      return NextResponse.json({ error: 'Ticket does not belong to this event' }, { status: 400 });
-    }
-
-    if (ticket.status !== 'valid') {
-      return NextResponse.json({ error: `Ticket cannot be marked used (${ticket.status})` }, { status: 400 });
-    }
-
-    const nowIso = new Date().toISOString();
-    const { data: updated, error: updateError } = await supabaseAdmin
-      .from('tickets')
-      .update({
-        status: 'used',
-        checked_in_at: nowIso,
-      })
-      .eq('id', ticketId)
-      .eq('event_id', event.id)
-      .eq('status', 'valid')
-      .select('id, status, updated_at, checked_in_at')
-      .single();
-
-    if (updateError || !updated) {
-      return NextResponse.json({ error: 'Ticket was already updated. Please scan again.' }, { status: 409 });
+    if (!result.success) {
+      return NextResponse.json(
+        {
+          error: result.message,
+          reason: result.reason,
+          ticket: result.ticket,
+        },
+        { status: result.statusCode }
+      );
     }
 
     return NextResponse.json({
       success: true,
-      message: 'Ticket marked as used.',
-      ticket: updated,
+      message: result.markedUsed
+        ? 'Ticket marked as used.'
+        : 'Ticket checked in for today.',
+      ticket: result.ticket,
+      checkInDay: result.checkInDay,
+      markedUsed: result.markedUsed,
     });
   } catch (error: any) {
     return NextResponse.json({ error: error?.message || 'Internal server error' }, { status: 500 });

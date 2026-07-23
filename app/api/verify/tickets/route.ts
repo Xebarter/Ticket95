@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase-admin'
+import { calendarDayUtc } from '@/lib/multi-day-events'
+import { getCheckedInTicketIdsForDay, withCheckedInTodayFlag } from '@/lib/ticket-check-in'
 import { VERIFIER_TICKET_SELECT } from '@/lib/verifier-auth'
 import { getVerifierSession } from '@/lib/verifier-session'
 
@@ -12,7 +14,7 @@ export async function GET(request: NextRequest) {
 
     const { data: event } = await supabaseAdmin
       .from('events')
-      .select('id, name, date, venue, image_url, verify_slug')
+      .select('id, name, date, end_date, venue, image_url, verify_slug')
       .eq('id', session.eventId)
       .maybeSingle()
 
@@ -30,15 +32,20 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    const rows = tickets || []
-    const checkedIn = rows.filter((t) => t.status === 'used').length
-    const valid = rows.filter((t) => t.status === 'valid').length
+    const today = calendarDayUtc()
+    const checkedInTodayIds = await getCheckedInTicketIdsForDay(session.eventId, today)
+    const rows = withCheckedInTodayFlag(tickets || [], checkedInTodayIds)
+    const checkedInToday = rows.filter((t) => t.checked_in_today).length
+    const remainingToday = rows.filter(
+      (t) => t.status === 'valid' && !t.checked_in_today
+    ).length
 
     return NextResponse.json({
       event: {
         id: event.id,
         name: event.name,
         date: event.date,
+        endDate: event.end_date || null,
         venue: event.venue,
         slug: event.verify_slug,
         imageUrl: event.image_url || null,
@@ -47,8 +54,8 @@ export async function GET(request: NextRequest) {
       tickets: rows,
       stats: {
         loaded: rows.length,
-        checkedIn,
-        remaining: valid,
+        checkedIn: checkedInToday,
+        remaining: remainingToday,
       },
       syncedAt: new Date().toISOString(),
     })

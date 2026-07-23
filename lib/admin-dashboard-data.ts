@@ -2,20 +2,21 @@ import { supabaseAdmin } from '@/lib/supabase-admin';
 import { getNowIso } from '@/lib/event-status';
 
 const ADMIN_EVENT_FIELDS =
-  'id,name,description,date,venue,image_url,total_tickets,ticket_price,organizer_name,organizer_phone,status,created_at,is_featured' as const;
+  'id,name,description,date,end_date,venue,image_url,total_tickets,ticket_price,organizer_name,organizer_phone,status,created_at,is_featured' as const;
 
 export type AdminEventRow = {
   id: string;
   name: string;
   description: string | null;
   date: string;
+  end_date?: string | null;
   venue: string;
   image_url: string | null;
   total_tickets: number;
   ticket_price: number;
   organizer_name: string;
   organizer_phone: string | null;
-  status: string;
+  status: 'pending' | 'approved' | 'rejected' | string;
   created_at: string;
   is_featured: boolean | null;
 };

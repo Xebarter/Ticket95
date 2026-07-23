@@ -28,6 +28,7 @@ type EventSummary = Pick<
   | 'id'
   | 'name'
   | 'date'
+  | 'end_date'
   | 'venue'
   | 'organizer_name'
   | 'organizer_logo_url'

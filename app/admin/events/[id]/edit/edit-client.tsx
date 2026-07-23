@@ -18,6 +18,7 @@ export default function AdminEditEventClient({ event }: { event: AdminEventDetai
         name: event.name,
         description: event.description,
         date: event.date,
+        end_date: event.end_date,
         venue: event.venue,
         currency: event.currency,
         category: event.category,

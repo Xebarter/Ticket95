@@ -19,6 +19,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { getSupabaseBrowserClient } from '@/lib/supabase/browser';
 import { MAX_EVENT_SPONSORS } from '@/lib/event-sponsors';
+import { endDateFromDateInput } from '@/lib/multi-day-events';
 
 const supabase = getSupabaseBrowserClient();
 
@@ -65,6 +66,7 @@ export default function AdminEventCreate({ onCreatedAction }: { onCreatedAction:
 
   // Separate state for 12-hour time format
   const [eventDate, setEventDate] = useState('');
+  const [eventEndDate, setEventEndDate] = useState('');
   const [eventTime, setEventTime] = useState('');
   const [timePeriod, setTimePeriod] = useState<'AM' | 'PM'>('PM');
 
@@ -85,6 +87,9 @@ export default function AdminEventCreate({ onCreatedAction }: { onCreatedAction:
 
     if (!form.name.trim()) newErrors.name = 'Event name is required';
     if (!eventDate) newErrors.date = 'Event date is required';
+    if (eventEndDate && eventDate && eventEndDate < eventDate) {
+      newErrors.end_date = 'End date must be on or after the start date';
+    }
     if (!eventTime) newErrors.time = 'Event time is required';
     if (!form.venue.trim()) newErrors.venue = 'Venue is required';
     if (!form.organizer_name.trim()) newErrors.organizer = 'Organizer name is required';
@@ -265,6 +270,7 @@ export default function AdminEventCreate({ onCreatedAction }: { onCreatedAction:
             ...form,
             organizer_id: user.id,  // Add organizer_id here
             date: combinedDateTime,
+            end_date: eventEndDate ? endDateFromDateInput(eventEndDate) : null,
             organizer_logo_url: organizerLogoUrl,
             image_url: primaryImageUrl,
             image_urls: uploadedImageUrls
@@ -279,6 +285,7 @@ export default function AdminEventCreate({ onCreatedAction }: { onCreatedAction:
       setOpen(false);
       setForm({ name: '', date: '', venue: '', organizer_name: '', organizer_logo_url: '', currency: 'USD', is_featured: false });
       setEventDate('');
+      setEventEndDate('');
       setEventTime('');
       setTimePeriod('PM');
       setTicketTypes([{ name: 'General', price: 0, total_quantity: 100, order_index: 0, description: '' }]);
@@ -418,7 +425,7 @@ export default function AdminEventCreate({ onCreatedAction }: { onCreatedAction:
 
                   <div className="grid grid-cols-2 gap-3">
                     <div className="grid gap-2">
-                      <Label htmlFor="date">Date *</Label>
+                      <Label htmlFor="date">Start date *</Label>
                       <Input
                         id="date"
                         type="date"
@@ -427,6 +434,23 @@ export default function AdminEventCreate({ onCreatedAction }: { onCreatedAction:
                       />
                       {errors.date && <p className="text-xs text-destructive">{errors.date}</p>}
                     </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="end_date">End date</Label>
+                      <Input
+                        id="end_date"
+                        type="date"
+                        value={eventEndDate}
+                        min={eventDate || undefined}
+                        onChange={(e) => setEventEndDate(e.target.value)}
+                      />
+                      {errors.end_date && <p className="text-xs text-destructive">{errors.end_date}</p>}
+                      <p className="text-[11px] text-muted-foreground">
+                        Optional. Blank = single day.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
                     <div className="grid grid-cols-2 gap-2">
                       <div className="grid gap-2">
                         <Label htmlFor="time">Time *</Label>

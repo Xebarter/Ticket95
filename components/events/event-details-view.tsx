@@ -23,7 +23,7 @@ import {
 import { getEventCategoryLabel } from '@/lib/event-categories';
 import {
   formatDisplayPrice,
-  formatEventDateLong,
+  formatEventDateRange,
   formatEventTime,
   getEventImages,
   getStartingPrice,
@@ -117,7 +117,7 @@ export function EventDetailsView({
               <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-slate-600">
                 <span className="inline-flex items-center gap-2">
                   <Calendar className="h-4 w-4 text-slate-400" />
-                  {formatEventDateLong(event.date)}
+                  {formatEventDateRange(event)}
                 </span>
                 <span className="inline-flex items-center gap-2">
                   <Clock3 className="h-4 w-4 text-slate-400" />

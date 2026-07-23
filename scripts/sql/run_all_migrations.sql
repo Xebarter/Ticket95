@@ -912,6 +912,55 @@ CREATE INDEX IF NOT EXISTS idx_tickets_event_updated_at
   ON tickets (event_id, updated_at);
 
 -- =====================================================
+-- 024: Multi-day events + per-day check-ins
+-- =====================================================
+ALTER TABLE events
+  ADD COLUMN IF NOT EXISTS end_date TIMESTAMPTZ;
+
+ALTER TABLE events
+  DROP CONSTRAINT IF EXISTS events_end_date_after_start;
+
+ALTER TABLE events
+  ADD CONSTRAINT events_end_date_after_start
+  CHECK (end_date IS NULL OR end_date >= date);
+
+CREATE TABLE IF NOT EXISTS ticket_check_ins (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  ticket_id UUID NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
+  event_id UUID NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+  check_in_day DATE NOT NULL,
+  checked_in_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  checked_in_by UUID REFERENCES verifier_sessions(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT ticket_check_ins_unique_day UNIQUE (ticket_id, check_in_day)
+);
+
+CREATE INDEX IF NOT EXISTS idx_ticket_check_ins_event_day
+  ON ticket_check_ins (event_id, check_in_day);
+
+CREATE INDEX IF NOT EXISTS idx_ticket_check_ins_ticket
+  ON ticket_check_ins (ticket_id);
+
+ALTER TABLE ticket_check_ins ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Organizers can view check-ins for their events" ON ticket_check_ins;
+DROP POLICY IF EXISTS "Admins can view all check-ins" ON ticket_check_ins;
+
+CREATE POLICY "Organizers can view check-ins for their events" ON ticket_check_ins
+  FOR SELECT USING (
+    EXISTS (
+      SELECT 1 FROM events
+      WHERE events.id = ticket_check_ins.event_id
+      AND auth.uid() = events.organizer_id
+    )
+  );
+
+CREATE POLICY "Admins can view all check-ins" ON ticket_check_ins
+  FOR SELECT USING (
+    (SELECT role FROM users WHERE id = auth.uid()) = 'admin'
+  );
+
+-- =====================================================
 -- SETUP COMPLETE
 -- =====================================================
 -- All tables, indexes, triggers, and RLS policies have been created.

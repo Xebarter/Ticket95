@@ -34,6 +34,7 @@ import {
 import { FeaturedToggle } from '@/components/admin/featured-toggle';
 import { useToast } from '@/hooks/use-toast';
 import { getEventCategoryLabel } from '@/lib/event-categories';
+import { formatEventDateRange } from '@/lib/event-display';
 import { cn } from '@/lib/utils';
 import type { AdminEventDetails, AdminEventStats } from '@/lib/admin-event-details';
 import type { Order } from '@/lib/supabase-client';
@@ -366,7 +367,11 @@ export default function AdminEventDetailsClient({
           <DetailRow
             icon={<CalendarDays className="h-4 w-4" />}
             label="When"
-            value={formatDateTime(event.date)}
+            value={
+              event.end_date
+                ? formatEventDateRange(event)
+                : formatDateTime(event.date)
+            }
           />
           <DetailRow icon={<MapPin className="h-4 w-4" />} label="Venue" value={event.venue} />
           <DetailRow

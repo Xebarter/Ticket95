@@ -15,7 +15,7 @@ export async function GET(
 
     const { data: event, error } = await supabaseAdmin
       .from('events')
-      .select('id, name, date, venue, image_url, verify_slug, status, verifier_code_hash')
+      .select('id, name, date, end_date, venue, image_url, verify_slug, status, verifier_code_hash')
       .eq('verify_slug', safeSlug)
       .maybeSingle()
 
@@ -30,6 +30,7 @@ export async function GET(
       slug: event.verify_slug,
       name: event.name,
       date: event.date,
+      endDate: event.end_date || null,
       venue: event.venue,
       imageUrl: event.image_url || null,
       hasCode: Boolean(event.verifier_code_hash),

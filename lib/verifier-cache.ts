@@ -6,6 +6,8 @@ export type CachedVerifierTicket = {
   checked_in_at: string | null
   checked_in_by: string | null
   updated_at: string
+  /** Already admitted on today's UTC calendar day (multi-day events) */
+  checked_in_today?: boolean
 }
 
 export type PendingCheckIn = {

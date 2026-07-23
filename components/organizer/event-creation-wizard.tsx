@@ -24,6 +24,7 @@ import { createEvent, createSponsor, createTicketTypes, updateEvent, replaceEven
 import { MAX_EVENT_SPONSORS } from '@/lib/event-sponsors';
 import { getSupabaseBrowserClient } from '@/lib/supabase/browser';
 import { isEventDatePast } from '@/lib/event-status';
+import { dateInputFromIso, endDateFromDateInput } from '@/lib/multi-day-events';
 import { EVENT_CATEGORIES, normalizeEventCategory, type EventCategoryId } from '@/lib/event-categories';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
@@ -67,6 +68,7 @@ type InitialEventData = {
   name?: string;
   description?: string;
   date?: string;
+  end_date?: string | null;
   venue?: string;
   currency?: string;
   ticket_price?: number;
@@ -257,6 +259,9 @@ export function EventCreationWizard({
 
   const initialDateTime = useMemo(() => getInitialDateTimeParts(initialEvent?.date), [initialEvent?.date]);
   const [eventDate, setEventDate] = useState(initialDateTime.eventDate);
+  const [eventEndDate, setEventEndDate] = useState(
+    initialEvent?.end_date ? dateInputFromIso(initialEvent.end_date) : ''
+  );
   const [eventHour, setEventHour] = useState(initialDateTime.eventHour);
   const [eventMinute, setEventMinute] = useState(initialDateTime.eventMinute);
   const [timePeriod, setTimePeriod] = useState<TimePeriod>(initialDateTime.timePeriod);
@@ -560,6 +565,8 @@ export function EventCreationWizard({
           errors.date = 'Set the date and time';
         } else if (mode === 'create' && isEventDatePast(formData.date)) {
           errors.date = 'Choose a date and time in the future';
+        } else if (eventEndDate && eventEndDate < eventDate) {
+          errors.end_date = 'End date must be on or after the start date';
         }
         if (!formData.venue.trim()) errors.venue = 'Enter the venue or location';
         if (existingImageUrls.length + eventImages.length === 0) {
@@ -881,6 +888,7 @@ export function EventCreationWizard({
           name: formData.name,
           description: formData.description,
           date: formData.date,
+          end_date: eventEndDate ? endDateFromDateInput(eventEndDate) : null,
           venue: formData.venue,
           currency: formData.currency,
           category: formData.category,
@@ -979,6 +987,7 @@ export function EventCreationWizard({
           name: formData.name,
           description: formData.description,
           date: formData.date,
+          end_date: eventEndDate ? endDateFromDateInput(eventEndDate) : null,
           venue: formData.venue,
           currency: formData.currency,
           category: formData.category,
@@ -1304,6 +1313,26 @@ export function EventCreationWizard({
                         <p className="text-xs text-muted-foreground">Starts {selectedDateTimePreview}</p>
                       ) : null}
                     </div>
+                  </WizardField>
+
+                  <WizardField
+                    label="End date"
+                    htmlFor="event-end-date"
+                    hint="Optional — leave blank for a single-day event. Tickets stay valid through this day (one entry per day)."
+                    error={fieldErrors.end_date}
+                  >
+                    <Input
+                      id="event-end-date"
+                      type="date"
+                      value={eventEndDate}
+                      min={eventDate || undefined}
+                      onChange={(e) => {
+                        setEventEndDate(e.target.value);
+                        clearFieldError('end_date');
+                      }}
+                      aria-invalid={!!fieldErrors.end_date}
+                      className={fieldErrors.end_date ? 'border-destructive' : ''}
+                    />
                   </WizardField>
 
                   <WizardField label="Venue" htmlFor="event-venue" required error={fieldErrors.venue}>
@@ -1868,7 +1897,11 @@ export function EventCreationWizard({
                   />
                   <WizardReviewItem
                     label="When"
-                    value={selectedDateTimePreview || '—'}
+                    value={
+                      eventEndDate && eventEndDate !== eventDate
+                        ? `${selectedDateTimePreview || '—'} → ${eventEndDate}`
+                        : selectedDateTimePreview || '—'
+                    }
                     onEdit={() => goToStep('basic')}
                   />
                   <WizardReviewItem

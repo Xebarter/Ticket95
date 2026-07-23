@@ -36,6 +36,8 @@ export interface Event {
   name: string;
   description?: string;
   date: string;
+  /** Optional last day for multi-day events; null/undefined = single-day */
+  end_date?: string | null;
   venue: string;
   ticket_price: number;
   total_tickets: number;

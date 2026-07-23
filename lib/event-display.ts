@@ -1,4 +1,5 @@
 import type { Event, TicketType } from '@/lib/supabase-client';
+import { getEventEndDay, getEventStartDay, isMultiDayEvent } from '@/lib/multi-day-events';
 
 export function formatEventDateLong(dateString: string) {
   return new Date(dateString).toLocaleDateString('en-US', {
@@ -7,6 +8,47 @@ export function formatEventDateLong(dateString: string) {
     day: 'numeric',
     year: 'numeric',
   });
+}
+
+/** Formats a single day or a start–end range for multi-day events. */
+export function formatEventDateRange(
+  event: Pick<Event, 'date' | 'end_date'>,
+  style: 'long' | 'short' = 'long'
+) {
+  if (!isMultiDayEvent(event)) {
+    return style === 'long' ? formatEventDateLong(event.date) : formatEventDateTime(event.date);
+  }
+
+  const start = new Date(event.date);
+  const endDay = getEventEndDay(event);
+  const end = new Date(`${endDay}T12:00:00.000Z`);
+
+  if (style === 'short') {
+    const opts: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' };
+    return `${start.toLocaleDateString('en-US', opts)} – ${end.toLocaleDateString('en-US', {
+      ...opts,
+      year: 'numeric',
+    })}`;
+  }
+
+  const sameMonth =
+    start.getUTCFullYear() === end.getUTCFullYear() && start.getUTCMonth() === end.getUTCMonth();
+
+  if (sameMonth) {
+    return `${start.toLocaleDateString('en-US', {
+      month: 'long',
+      day: 'numeric',
+      timeZone: 'UTC',
+    })} – ${end.toLocaleDateString('en-US', {
+      day: 'numeric',
+      year: 'numeric',
+      timeZone: 'UTC',
+    })}`;
+  }
+
+  return `${formatEventDateLong(`${getEventStartDay(event)}T12:00:00.000Z`)} – ${formatEventDateLong(
+    `${endDay}T12:00:00.000Z`
+  )}`;
 }
 
 export function formatEventTime(dateString: string) {

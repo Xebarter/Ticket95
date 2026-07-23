@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/dialog'
 import { Calendar, MapPin } from 'lucide-react'
 import { getEventCategoryLabel } from '@/lib/event-categories'
+import { formatEventDateRange } from '@/lib/event-display'
 import type { Event, TicketType } from '@/lib/supabase-client'
 import {
   TicketPurchaseCheckoutBar,
@@ -77,17 +78,7 @@ export function TicketPurchaseDialog({
     }
   }, [defaultOpen, isControlled])
 
-  const formatEventDateTime = () => {
-    const date = new Date(event.date)
-    return date.toLocaleString('en-US', {
-      weekday: 'short',
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-    })
-  }
+  const formatEventDateTime = () => formatEventDateRange(event, 'short')
 
   const isDisabled = purchase.isSoldOut
 

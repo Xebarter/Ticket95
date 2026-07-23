@@ -70,6 +70,11 @@ type EventMeta = {
   venue?: string | null
   imageUrl?: string | null
   date?: string | null
+  endDate?: string | null
+}
+
+function isCheckedInToday(ticket: CachedVerifierTicket): boolean {
+  return Boolean(ticket.checked_in_today) || ticket.status === 'used'
 }
 
 const LAST_SLUG_KEY = 'ticket95.lastVerifySlug'
@@ -208,7 +213,7 @@ export function VerifierApp({ slug }: { slug: string }) {
   }, [tickets])
 
   const checkedIn = useMemo(
-    () => tickets.filter((t) => t.status === 'used').length,
+    () => tickets.filter((t) => isCheckedInToday(t)).length,
     [tickets]
   )
 
@@ -399,6 +404,7 @@ export function VerifierApp({ slug }: { slug: string }) {
           venue: data.venue,
           imageUrl: data.imageUrl,
           date: data.date,
+          endDate: data.endDate || null,
         })
       } catch {
         // ignore
@@ -576,7 +582,23 @@ export function VerifierApp({ slug }: { slug: string }) {
         return
       }
 
-      if (ticket.status === 'used') {
+      if (ticket.status === 'refunded') {
+        playTone(false)
+        showFlash({ kind: 'refunded', title: 'REFUNDED', at: now })
+        return
+      }
+
+      if (ticket.status === 'expired') {
+        playTone(false)
+        showFlash({
+          kind: 'cancelled',
+          title: 'EXPIRED',
+          at: now,
+        })
+        return
+      }
+
+      if (isCheckedInToday(ticket)) {
         playTone(false)
         showFlash({
           kind: 'used',
@@ -586,12 +608,6 @@ export function VerifierApp({ slug }: { slug: string }) {
             : ticket.ticket_type_name || undefined,
           at: now,
         })
-        return
-      }
-
-      if (ticket.status === 'refunded') {
-        playTone(false)
-        showFlash({ kind: 'refunded', title: 'REFUNDED', at: now })
         return
       }
 
@@ -607,7 +623,8 @@ export function VerifierApp({ slug }: { slug: string }) {
 
       const optimistic: CachedVerifierTicket = {
         ...ticket,
-        status: 'used',
+        // Keep valid for multi-day until server marks used on last/single day
+        checked_in_today: true,
         checked_in_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       }
@@ -653,8 +670,11 @@ export function VerifierApp({ slug }: { slug: string }) {
           }
           showFlash({
             kind: 'conflict',
-            title: 'CONFLICT',
-            subtitle: 'Already checked in elsewhere',
+            title: data?.reason === 'already_checked_in_today' ? 'ALREADY TODAY' : 'CONFLICT',
+            subtitle:
+              data?.reason === 'already_checked_in_today'
+                ? 'Already checked in today'
+                : data?.error || 'Already checked in elsewhere',
             at: Date.now(),
           })
           return
@@ -1039,7 +1059,7 @@ export function VerifierApp({ slug }: { slug: string }) {
             </div>
             <h1 className="truncate text-base font-semibold leading-tight">{heroName}</h1>
             <p className="truncate text-xs text-slate-400">
-              {checkedIn} checked in
+              {checkedIn} checked in today
               {session?.deviceName ? ` · ${session.deviceName}` : ''}
             </p>
           </div>

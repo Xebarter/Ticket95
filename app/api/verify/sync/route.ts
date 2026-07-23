@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase-admin'
+import { calendarDayUtc } from '@/lib/multi-day-events'
+import { getCheckedInTicketIdsForDay, withCheckedInTodayFlag } from '@/lib/ticket-check-in'
 import { VERIFIER_TICKET_SELECT } from '@/lib/verifier-auth'
 import { getVerifierSession } from '@/lib/verifier-session'
 
@@ -26,8 +28,11 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
+    const today = calendarDayUtc()
+    const checkedInTodayIds = await getCheckedInTicketIdsForDay(session.eventId, today)
+
     return NextResponse.json({
-      tickets: tickets || [],
+      tickets: withCheckedInTodayFlag(tickets || [], checkedInTodayIds),
       syncedAt: new Date().toISOString(),
     })
   } catch (error: unknown) {

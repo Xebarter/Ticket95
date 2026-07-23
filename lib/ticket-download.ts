@@ -2,6 +2,7 @@ import QRCode from 'qrcode';
 import type { Event, Ticket } from '@/lib/supabase-client';
 import { downloadTicketPDF, downloadTicketsPDF, type TicketPDFData } from '@/lib/pdf-generator';
 import { getSponsorsByEvent } from '@/lib/supabase-db';
+import { formatEventDateRange } from '@/lib/event-display';
 
 const DEFAULT_EVENT_DATE = 'Date to be announced';
 const DEFAULT_EVENT_VENUE = 'Venue to be announced';
@@ -15,7 +16,25 @@ type SponsorLike = {
 
 type NormalizedSponsor = { name: string; logoUrl?: string };
 
-function formatEventDate(value?: string): string {
+/** Minimal event shape needed for ticket PDFs (supports multi-day ranges). */
+export type TicketEventInfo = Pick<
+  Event,
+  | 'id'
+  | 'name'
+  | 'date'
+  | 'end_date'
+  | 'venue'
+  | 'organizer_name'
+  | 'organizer_logo_url'
+  | 'image_url'
+  | 'image_urls'
+  | 'sponsors'
+>;
+
+function formatEventDate(value?: string, event?: Pick<Event, 'date' | 'end_date'> | null): string {
+  if (event?.date) {
+    return formatEventDateRange(event, 'short');
+  }
   if (!value) return DEFAULT_EVENT_DATE;
 
   const parsed = new Date(value);
@@ -132,7 +151,7 @@ async function resolveTicketSponsors(
 
 function buildTicketPdfData(options: {
   ticket: Ticket;
-  event?: Event | null;
+  event?: TicketEventInfo | null;
   qrCodeDataUrl: string;
   sponsors: NormalizedSponsor[];
   ticketIndex: number;
@@ -152,7 +171,7 @@ function buildTicketPdfData(options: {
 
   return {
     eventName,
-    eventDate: formatEventDate(event?.date),
+    eventDate: formatEventDate(event?.date, event),
     eventVenue: firstNonEmpty(event?.venue) || DEFAULT_EVENT_VENUE,
     organizerName,
     organizerLogoUrl,
@@ -173,7 +192,7 @@ type DownloadOptions = {
 
 export async function downloadTicketAsPdf(
   ticket: Ticket,
-  event?: Event | null,
+  event?: TicketEventInfo | null,
   options?: DownloadOptions
 ): Promise<void> {
   const [qrCodeDataUrl, sponsors] = await Promise.all([
@@ -208,23 +227,12 @@ export async function downloadTicketAsPdf(
  */
 export async function downloadTicketsAsPdfs(
   tickets: Ticket[],
-  event?: Pick<
-    Event,
-    | 'name'
-    | 'date'
-    | 'venue'
-    | 'organizer_name'
-    | 'organizer_logo_url'
-    | 'image_url'
-    | 'image_urls'
-    | 'sponsors'
-    | 'id'
-  > | null
+  event?: TicketEventInfo | null
 ): Promise<void> {
   if (tickets.length === 0) return;
 
   if (tickets.length === 1) {
-    await downloadTicketAsPdf(tickets[0], event as Event | null);
+    await downloadTicketAsPdf(tickets[0], event);
     return;
   }
 
@@ -234,7 +242,7 @@ export async function downloadTicketsAsPdfs(
       ? normalizeSponsors(event?.sponsors)
       : normalizeSponsors(tickets[0]?.sponsors).length > 0
         ? normalizeSponsors(tickets[0].sponsors)
-        : await resolveTicketSponsors(tickets[0], event as Event | null);
+        : await resolveTicketSponsors(tickets[0], event);
 
   const qrCodes = await Promise.all(
     tickets.map((ticket) => resolveQrCodeDataUrl(ticket.qr_code))
@@ -243,7 +251,7 @@ export async function downloadTicketsAsPdfs(
   const pages = tickets.map((ticket, index) =>
     buildTicketPdfData({
       ticket,
-      event: event as Event | null,
+      event,
       qrCodeDataUrl: qrCodes[index],
       sponsors: sharedSponsors,
       ticketIndex: index + 1,
