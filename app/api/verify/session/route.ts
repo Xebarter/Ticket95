@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
 
     const { data: event, error: eventError } = await supabaseAdmin
       .from('events')
-      .select('id, name, date, venue, status, verify_slug, verifier_code_hash')
+      .select('id, name, date, venue, image_url, status, verify_slug, verifier_code_hash')
       .eq('verify_slug', slug)
       .maybeSingle()
 
@@ -80,6 +80,7 @@ export async function POST(request: NextRequest) {
         date: event.date,
         venue: event.venue,
         slug: event.verify_slug,
+        imageUrl: event.image_url || null,
       },
       session: {
         id: session.id,

@@ -12,8 +12,6 @@ export const metadata: Metadata = {
 
 export default function VerifyLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-[100dvh] bg-[#0a0e1a] text-white antialiased">
-      {children}
-    </div>
+    <div className="min-h-[100dvh] bg-[#0a0e1a] text-white antialiased">{children}</div>
   )
 }

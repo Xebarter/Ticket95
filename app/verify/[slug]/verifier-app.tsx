@@ -8,6 +8,7 @@ import {
   useRef,
   useState,
 } from 'react'
+import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase-client'
 import { normalizeQrValue } from '@/lib/ticket-verification'
 import {
@@ -64,6 +65,15 @@ type ScanFlash =
     }
   | null
 
+type EventMeta = {
+  name: string
+  venue?: string | null
+  imageUrl?: string | null
+  date?: string | null
+}
+
+const LAST_SLUG_KEY = 'ticket95.lastVerifySlug'
+
 function authHeaders(token: string) {
   return {
     Authorization: `Bearer ${token}`,
@@ -71,7 +81,78 @@ function authHeaders(token: string) {
   }
 }
 
+function isStandaloneDisplay() {
+  if (typeof window === 'undefined') return false
+  const mq = window.matchMedia('(display-mode: standalone)').matches
+  // iOS Safari
+  const ios = Boolean((navigator as Navigator & { standalone?: boolean }).standalone)
+  return mq || ios
+}
+
+function rememberSlug(slug: string) {
+  try {
+    localStorage.setItem(LAST_SLUG_KEY, slug)
+  } catch {
+    // ignore
+  }
+  if (navigator.serviceWorker?.controller) {
+    navigator.serviceWorker.controller.postMessage({ type: 'SET_LAST_SLUG', slug })
+  }
+}
+
+function createScanAudio() {
+  let ctx: AudioContext | null = null
+
+  const ensure = async () => {
+    if (!ctx) {
+      ctx = new AudioContext()
+    }
+    if (ctx.state === 'suspended') {
+      await ctx.resume()
+    }
+    return ctx
+  }
+
+  const tone = async (
+    frequencies: number[],
+    opts: { duration: number; peak: number; type?: OscillatorType }
+  ) => {
+    try {
+      const audio = await ensure()
+      const now = audio.currentTime
+      const master = audio.createGain()
+      master.gain.setValueAtTime(0.0001, now)
+      master.gain.exponentialRampToValueAtTime(opts.peak, now + 0.02)
+      master.gain.exponentialRampToValueAtTime(0.0001, now + opts.duration)
+      master.connect(audio.destination)
+
+      frequencies.forEach((freq, index) => {
+        const osc = audio.createOscillator()
+        const gain = audio.createGain()
+        osc.type = opts.type || (index === 0 ? 'sine' : 'triangle')
+        osc.frequency.setValueAtTime(freq, now)
+        gain.gain.setValueAtTime(index === 0 ? 1 : 0.35, now)
+        osc.connect(gain)
+        gain.connect(master)
+        osc.start(now + index * 0.07)
+        osc.stop(now + opts.duration)
+      })
+    } catch {
+      // ignore audio failures
+    }
+  }
+
+  return {
+    unlock: () => void ensure(),
+    playValid: () =>
+      void tone([660, 880], { duration: 0.32, peak: 0.48, type: 'sine' }),
+    playInvalid: () =>
+      void tone([320, 180], { duration: 0.4, peak: 0.42, type: 'sine' }),
+  }
+}
+
 export function VerifierApp({ slug }: { slug: string }) {
+  const router = useRouter()
   const safeSlug = slug.toLowerCase().trim()
 
   const [phase, setPhase] = useState<'boot' | 'login' | 'loading' | 'ready'>('boot')
@@ -79,6 +160,7 @@ export function VerifierApp({ slug }: { slug: string }) {
   const [deviceName, setDeviceName] = useState('Door device')
   const [session, setSession] = useState<VerifierLocalSession | null>(null)
   const [tickets, setTickets] = useState<CachedVerifierTicket[]>([])
+  const [eventMeta, setEventMeta] = useState<EventMeta | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [online, setOnline] = useState(true)
   const [pendingCount, setPendingCount] = useState(0)
@@ -89,6 +171,8 @@ export function VerifierApp({ slug }: { slug: string }) {
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null)
   const [iosHint, setIosHint] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [switchOpen, setSwitchOpen] = useState(false)
+  const [switchSlug, setSwitchSlug] = useState('')
 
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
@@ -101,6 +185,8 @@ export function VerifierApp({ slug }: { slug: string }) {
   const mapsRef = useRef(buildTicketMaps([]))
   const sessionRef = useRef<VerifierLocalSession | null>(null)
   const flushingRef = useRef(false)
+  const audioRef = useRef(createScanAudio())
+  const cameraStartedRef = useRef(false)
 
   useEffect(() => {
     sessionRef.current = session
@@ -110,11 +196,15 @@ export function VerifierApp({ slug }: { slug: string }) {
     mapsRef.current = buildTicketMaps(tickets)
   }, [tickets])
 
-  const stats = useMemo(() => {
-    const checkedIn = tickets.filter((t) => t.status === 'used').length
-    const remaining = tickets.filter((t) => t.status === 'valid').length
-    return { loaded: tickets.length, checkedIn, remaining }
-  }, [tickets])
+  const checkedIn = useMemo(
+    () => tickets.filter((t) => t.status === 'used').length,
+    [tickets]
+  )
+
+  const heroImage =
+    session?.eventImageUrl || eventMeta?.imageUrl || null
+  const heroName = session?.eventName || eventMeta?.name || 'Ticket95 Verifier'
+  const heroVenue = session?.eventVenue || eventMeta?.venue || null
 
   const applyTickets = useCallback((next: CachedVerifierTicket[]) => {
     setTickets(next)
@@ -126,90 +216,144 @@ export function VerifierApp({ slug }: { slug: string }) {
     setPendingCount(pending.length)
   }, [safeSlug])
 
-  const flushPending = useCallback(async (active: VerifierLocalSession) => {
-    if (flushingRef.current || !navigator.onLine) return
-    flushingRef.current = true
-    try {
-      const pending = await listPending(safeSlug)
-      for (const item of pending) {
-        const res = await fetch('/api/verify/check-in', {
-          method: 'POST',
-          headers: authHeaders(active.token),
-          body: JSON.stringify({ ticketId: item.ticketId }),
-        })
-        if (res.ok || res.status === 409) {
-          const data = await res.json().catch(() => ({}))
-          if (data?.ticket) {
-            await upsertTickets(safeSlug, [data.ticket])
-            setTickets((prev) => {
-              const map = new Map(prev.map((t) => [t.id, t]))
-              map.set(data.ticket.id, data.ticket)
-              return Array.from(map.values())
-            })
+  const flushPending = useCallback(
+    async (active: VerifierLocalSession) => {
+      if (flushingRef.current || !navigator.onLine) return
+      flushingRef.current = true
+      try {
+        const pending = await listPending(safeSlug)
+        for (const item of pending) {
+          const res = await fetch('/api/verify/check-in', {
+            method: 'POST',
+            headers: authHeaders(active.token),
+            body: JSON.stringify({ ticketId: item.ticketId }),
+          })
+          if (res.ok || res.status === 409) {
+            const data = await res.json().catch(() => ({}))
+            if (data?.ticket) {
+              await upsertTickets(safeSlug, [data.ticket])
+              setTickets((prev) => {
+                const map = new Map(prev.map((t) => [t.id, t]))
+                map.set(data.ticket.id, data.ticket)
+                return Array.from(map.values())
+              })
+            }
+            await removePending(item.ticketId)
           }
-          await removePending(item.ticketId)
         }
+        await refreshPendingCount()
+      } finally {
+        flushingRef.current = false
       }
-      await refreshPendingCount()
-    } finally {
-      flushingRef.current = false
-    }
-  }, [refreshPendingCount, safeSlug])
+    },
+    [refreshPendingCount, safeSlug]
+  )
 
-  const pullSync = useCallback(async (active: VerifierLocalSession) => {
-    const since = active.syncedAt || ''
-    const url = since
-      ? `/api/verify/sync?since=${encodeURIComponent(since)}`
-      : '/api/verify/sync'
-    const res = await fetch(url, { headers: authHeaders(active.token) })
-    if (!res.ok) return
-    const data = await res.json()
-    const rows = (data.tickets || []) as CachedVerifierTicket[]
-    if (rows.length) {
-      await upsertTickets(safeSlug, rows)
-      setTickets((prev) => {
-        const map = new Map(prev.map((t) => [t.id, t]))
-        for (const row of rows) map.set(row.id, row)
-        return Array.from(map.values())
+  const pullSync = useCallback(
+    async (active: VerifierLocalSession) => {
+      const since = active.syncedAt || ''
+      const url = since
+        ? `/api/verify/sync?since=${encodeURIComponent(since)}`
+        : '/api/verify/sync'
+      const res = await fetch(url, { headers: authHeaders(active.token) })
+      if (!res.ok) return
+      const data = await res.json()
+      const rows = (data.tickets || []) as CachedVerifierTicket[]
+      if (rows.length) {
+        await upsertTickets(safeSlug, rows)
+        setTickets((prev) => {
+          const map = new Map(prev.map((t) => [t.id, t]))
+          for (const row of rows) map.set(row.id, row)
+          return Array.from(map.values())
+        })
+      }
+      const nextSession = {
+        ...active,
+        syncedAt: data.syncedAt || new Date().toISOString(),
+      }
+      setSession(nextSession)
+      sessionRef.current = nextSession
+      await saveSession(nextSession)
+    },
+    [safeSlug]
+  )
+
+  const bootstrap = useCallback(
+    async (active: VerifierLocalSession) => {
+      setPhase('loading')
+      setError(null)
+      const res = await fetch('/api/verify/tickets', {
+        headers: authHeaders(active.token),
       })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data?.error || 'Failed to download tickets')
+      }
+      const data = await res.json()
+      const rows = (data.tickets || []) as CachedVerifierTicket[]
+      await replaceTickets(safeSlug, rows)
+      applyTickets(rows)
+      const nextSession: VerifierLocalSession = {
+        ...active,
+        eventName: data.event?.name || active.eventName,
+        eventImageUrl: data.event?.imageUrl ?? active.eventImageUrl ?? null,
+        eventVenue: data.event?.venue ?? active.eventVenue ?? null,
+        syncedAt: data.syncedAt || new Date().toISOString(),
+      }
+      await saveSession(nextSession)
+      setSession(nextSession)
+      sessionRef.current = nextSession
+      rememberSlug(safeSlug)
+      await refreshPendingCount()
+      setPhase('ready')
+    },
+    [applyTickets, refreshPendingCount, safeSlug]
+  )
+
+  // Standalone: if somehow on wrong path, bounce to last slug
+  useEffect(() => {
+    if (!isStandaloneDisplay()) return
+    const path = window.location.pathname
+    if (path.startsWith('/verify/')) {
+      rememberSlug(safeSlug)
+      return
     }
-    const nextSession = { ...active, syncedAt: data.syncedAt || new Date().toISOString() }
-    setSession(nextSession)
-    sessionRef.current = nextSession
-    await saveSession(nextSession)
+    const last = localStorage.getItem(LAST_SLUG_KEY)
+    if (last) {
+      window.location.replace(`/verify/${last}?source=pwa`)
+    }
   }, [safeSlug])
 
-  const bootstrap = useCallback(async (active: VerifierLocalSession) => {
-    setPhase('loading')
-    setError(null)
-    const res = await fetch('/api/verify/tickets', {
-      headers: authHeaders(active.token),
-    })
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}))
-      throw new Error(data?.error || 'Failed to download tickets')
-    }
-    const data = await res.json()
-    const rows = (data.tickets || []) as CachedVerifierTicket[]
-    await replaceTickets(safeSlug, rows)
-    applyTickets(rows)
-    const nextSession: VerifierLocalSession = {
-      ...active,
-      eventName: data.event?.name || active.eventName,
-      syncedAt: data.syncedAt || new Date().toISOString(),
-    }
-    await saveSession(nextSession)
-    setSession(nextSession)
-    sessionRef.current = nextSession
-    await refreshPendingCount()
-    setPhase('ready')
-  }, [applyTickets, refreshPendingCount, safeSlug])
-
-  // Boot: restore session or show login
+  // Public event meta for lock-screen hero
   useEffect(() => {
     let cancelled = false
     ;(async () => {
       try {
+        const res = await fetch(`/api/verify/meta/${encodeURIComponent(safeSlug)}`)
+        if (!res.ok) return
+        const data = await res.json()
+        if (cancelled) return
+        setEventMeta({
+          name: data.name,
+          venue: data.venue,
+          imageUrl: data.imageUrl,
+          date: data.date,
+        })
+      } catch {
+        // ignore
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [safeSlug])
+
+  // Boot session
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        rememberSlug(safeSlug)
         const stored = await loadSession(safeSlug)
         if (cancelled) return
         if (stored && new Date(stored.expiresAt).getTime() > Date.now()) {
@@ -256,30 +400,23 @@ export function VerifierApp({ slug }: { slug: string }) {
 
     const ua = navigator.userAgent || ''
     const isIos = /iphone|ipad|ipod/i.test(ua)
-    const isStandalone =
-      window.matchMedia('(display-mode: standalone)').matches ||
-      // @ts-expect-error iOS Safari
-      navigator.standalone === true
-    setIosHint(isIos && !isStandalone)
+    setIosHint(isIos && !isStandaloneDisplay())
 
     if ('serviceWorker' in navigator) {
-      void navigator.serviceWorker.register('/verify-sw.js').catch(() => undefined)
+      void navigator.serviceWorker
+        .register('/verify-sw.js', { scope: '/verify/' })
+        .then(() => rememberSlug(safeSlug))
+        .catch(() => undefined)
     }
-
-    const link = document.createElement('link')
-    link.rel = 'manifest'
-    link.href = `/api/verify/manifest/${encodeURIComponent(safeSlug)}`
-    document.head.appendChild(link)
 
     return () => {
       window.removeEventListener('online', onOnline)
       window.removeEventListener('offline', onOffline)
       window.removeEventListener('beforeinstallprompt', onBip)
-      link.remove()
     }
   }, [flushPending, safeSlug])
 
-  // Sync poll + realtime broadcast
+  // Sync poll + realtime
   useEffect(() => {
     if (phase !== 'ready' || !session) return
 
@@ -310,24 +447,9 @@ export function VerifierApp({ slug }: { slug: string }) {
   }, [flushPending, phase, pullSync, safeSlug, session])
 
   const playTone = (ok: boolean) => {
-    try {
-      const ctx = new AudioContext()
-      const osc = ctx.createOscillator()
-      const gain = ctx.createGain()
-      osc.type = 'sine'
-      osc.frequency.value = ok ? 880 : 220
-      gain.gain.value = 0.05
-      osc.connect(gain)
-      gain.connect(ctx.destination)
-      osc.start()
-      window.setTimeout(() => {
-        osc.stop()
-        void ctx.close()
-      }, 120)
-    } catch {
-      // ignore
-    }
-    if (navigator.vibrate) navigator.vibrate(ok ? 40 : [40, 40, 40])
+    if (ok) audioRef.current.playValid()
+    else audioRef.current.playInvalid()
+    if (navigator.vibrate) navigator.vibrate(ok ? [30, 20, 40] : [50, 40, 50, 40, 80])
   }
 
   const showFlash = (next: Exclude<ScanFlash, null>) => {
@@ -397,7 +519,6 @@ export function VerifierApp({ slug }: { slug: string }) {
         return
       }
 
-      // Optimistic local mark
       const optimistic: CachedVerifierTicket = {
         ...ticket,
         status: 'used',
@@ -487,14 +608,17 @@ export function VerifierApp({ slug }: { slug: string }) {
     streamRef.current?.getTracks().forEach((t) => t.stop())
     streamRef.current = null
     setCameraActive(false)
+    cameraStartedRef.current = false
   }, [])
 
   const startScanner = useCallback(async () => {
     setError(null)
+    void audioRef.current.unlock()
     try {
       if (!barcodeDetectorRef.current && 'BarcodeDetector' in window) {
-        const Detector = (window as unknown as { BarcodeDetector: BarcodeDetectorConstructor })
-          .BarcodeDetector
+        const Detector = (
+          window as unknown as { BarcodeDetector: BarcodeDetectorConstructor }
+        ).BarcodeDetector
         barcodeDetectorRef.current = new Detector({ formats: ['qr_code'] })
       }
       if (!jsQrDecoderRef.current) {
@@ -512,6 +636,7 @@ export function VerifierApp({ slug }: { slug: string }) {
         await videoRef.current.play()
       }
       setCameraActive(true)
+      cameraStartedRef.current = true
 
       scanTimerRef.current = window.setInterval(async () => {
         const video = videoRef.current
@@ -532,7 +657,7 @@ export function VerifierApp({ slug }: { slug: string }) {
             const codes = await barcodeDetectorRef.current.detect(canvas)
             value = codes[0]?.rawValue || ''
           } catch {
-            // fall through to jsqr
+            // fall through
           }
         }
         if (!value && jsQrDecoderRef.current) {
@@ -546,15 +671,26 @@ export function VerifierApp({ slug }: { slug: string }) {
       const message = err instanceof Error ? err.message : 'Camera unavailable'
       setError(message)
       setCameraActive(false)
+      cameraStartedRef.current = false
     }
   }, [handlePayload])
 
   useEffect(() => () => stopScanner(), [stopScanner])
 
+  // Auto-start camera when ready
+  useEffect(() => {
+    if (phase !== 'ready' || cameraStartedRef.current) return
+    const t = window.setTimeout(() => {
+      void startScanner()
+    }, 350)
+    return () => window.clearTimeout(t)
+  }, [phase, startScanner])
+
   const onLogin = async (e: FormEvent) => {
     e.preventDefault()
     setBusy(true)
     setError(null)
+    void audioRef.current.unlock()
     try {
       const res = await fetch('/api/verify/session', {
         method: 'POST',
@@ -573,6 +709,8 @@ export function VerifierApp({ slug }: { slug: string }) {
         token: data.token,
         eventId: data.event.id,
         eventName: data.event.name,
+        eventImageUrl: data.event.imageUrl || null,
+        eventVenue: data.event.venue || null,
         deviceName: data.session.deviceName,
         expiresAt: data.expiresAt,
         syncedAt: null,
@@ -580,6 +718,7 @@ export function VerifierApp({ slug }: { slug: string }) {
       await saveSession(next)
       setSession(next)
       sessionRef.current = next
+      rememberSlug(safeSlug)
       await bootstrap(next)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Login failed')
@@ -598,6 +737,34 @@ export function VerifierApp({ slug }: { slug: string }) {
     setIosHint(true)
   }
 
+  const onSwitchEvent = async (e: FormEvent) => {
+    e.preventDefault()
+    let next = switchSlug.trim().toLowerCase()
+    try {
+      if (next.includes('/verify/')) {
+        const url = new URL(next, window.location.origin)
+        next = url.pathname.split('/verify/')[1]?.split(/[?#]/)[0] || ''
+      }
+    } catch {
+      // treat as raw slug
+    }
+    next = next.replace(/[^a-z0-9-]/g, '')
+    if (!next) return
+    await clearSession(safeSlug)
+    rememberSlug(next)
+    router.push(`/verify/${next}`)
+  }
+
+  const lockOut = async () => {
+    stopScanner()
+    await clearSession(safeSlug)
+    setSession(null)
+    sessionRef.current = null
+    setTickets([])
+    setPhase('login')
+    setCode('')
+  }
+
   if (phase === 'boot') {
     return (
       <div className="flex min-h-[100dvh] items-center justify-center">
@@ -608,57 +775,133 @@ export function VerifierApp({ slug }: { slug: string }) {
 
   if (phase === 'login') {
     return (
-      <div className="mx-auto flex min-h-[100dvh] w-full max-w-md flex-col justify-center px-5 py-10">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#d4b46a]">
-          Ticket95 Verifier
-        </p>
-        <h1 className="mt-2 text-3xl font-semibold tracking-tight">Enter access code</h1>
-        <p className="mt-2 text-sm text-slate-400">
-          Use the code from the organizer. No Ticket95 account needed.
-        </p>
-        <form onSubmit={onLogin} className="mt-8 space-y-4">
-          <label className="block space-y-1.5">
-            <span className="text-xs font-medium text-slate-400">6-digit code</span>
-            <input
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              pattern="[0-9]*"
-              maxLength={6}
-              value={code}
-              onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-              className="h-14 w-full rounded-xl border border-white/15 bg-white/5 px-4 text-center text-2xl tracking-[0.4em] text-white outline-none focus:border-[#d4b46a]"
-              placeholder="••••••"
-              required
-            />
-          </label>
-          <label className="block space-y-1.5">
-            <span className="text-xs font-medium text-slate-400">Device name</span>
-            <input
-              value={deviceName}
-              onChange={(e) => setDeviceName(e.target.value)}
-              className="h-11 w-full rounded-xl border border-white/15 bg-white/5 px-3 text-sm text-white outline-none focus:border-[#d4b46a]"
-              placeholder="Gate A"
-            />
-          </label>
-          {error ? <p className="text-sm text-rose-400">{error}</p> : null}
-          <button
-            type="submit"
-            disabled={busy || code.length < 6}
-            className="flex h-12 w-full items-center justify-center rounded-xl bg-white text-sm font-semibold text-slate-900 disabled:opacity-50"
+      <div className="relative mx-auto flex min-h-[100dvh] w-full max-w-lg flex-col overflow-hidden">
+        <div className="absolute inset-0">
+          {heroImage ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={heroImage} alt="" className="h-full w-full object-cover" />
+          ) : (
+            <div className="h-full w-full bg-[radial-gradient(ellipse_at_top,#1e293b,transparent_55%),linear-gradient(160deg,#0a0e1a,#111827_50%,#0a0e1a)]" />
+          )}
+          <div className="absolute inset-0 bg-gradient-to-b from-black/55 via-[#0a0e1a]/88 to-[#0a0e1a]" />
+        </div>
+
+        <div className="relative z-10 flex flex-1 flex-col justify-end px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-[max(2rem,env(safe-area-inset-top))]">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#d4b46a]">
+            Door verifier
+          </p>
+          <h1 className="mt-2 text-3xl font-semibold tracking-tight text-white drop-shadow">
+            {heroName}
+          </h1>
+          {heroVenue ? (
+            <p className="mt-1 text-sm text-white/70">{heroVenue}</p>
+          ) : (
+            <p className="mt-1 text-sm text-white/60">Enter the organizer access code</p>
+          )}
+
+          <form
+            onSubmit={onLogin}
+            className="mt-8 space-y-3 rounded-2xl border border-white/10 bg-black/35 p-4 backdrop-blur-md"
           >
-            {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Unlock verifier'}
-          </button>
-        </form>
+            <label className="block space-y-1.5">
+              <span className="text-xs font-medium text-slate-300">Access code</span>
+              <input
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                pattern="[0-9]*"
+                maxLength={6}
+                value={code}
+                onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                className="h-14 w-full rounded-xl border border-white/15 bg-white/10 px-4 text-center text-2xl tracking-[0.45em] text-white outline-none focus:border-[#d4b46a]"
+                placeholder="••••••"
+                required
+              />
+            </label>
+            <label className="block space-y-1.5">
+              <span className="text-xs font-medium text-slate-300">Device name</span>
+              <input
+                value={deviceName}
+                onChange={(e) => setDeviceName(e.target.value)}
+                className="h-11 w-full rounded-xl border border-white/15 bg-white/10 px-3 text-sm text-white outline-none focus:border-[#d4b46a]"
+                placeholder="Gate A"
+              />
+            </label>
+            {error ? <p className="text-sm text-rose-300">{error}</p> : null}
+            <button
+              type="submit"
+              disabled={busy || code.length < 6}
+              className="flex h-12 w-full items-center justify-center rounded-xl bg-[#d4b46a] text-sm font-semibold text-slate-950 disabled:opacity-50"
+            >
+              {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Start verifying'}
+            </button>
+          </form>
+
+          <div className="mt-4 flex flex-wrap items-center gap-3 text-xs text-white/55">
+            {(installPrompt || iosHint) && (
+              <button
+                type="button"
+                onClick={() => void onInstall()}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-white/15 px-2.5 py-1.5 text-white/80"
+              >
+                <Download className="h-3.5 w-3.5" />
+                Install app
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setSwitchOpen((v) => !v)}
+              className="underline-offset-2 hover:text-white hover:underline"
+            >
+              Switch event
+            </button>
+          </div>
+          {iosHint && !installPrompt ? (
+            <p className="mt-2 text-[11px] text-white/45">
+              iPhone: Share → Add to Home Screen
+            </p>
+          ) : null}
+
+          {switchOpen ? (
+            <form
+              onSubmit={(e) => void onSwitchEvent(e)}
+              className="mt-3 flex gap-2 rounded-xl border border-white/10 bg-black/30 p-2"
+            >
+              <input
+                value={switchSlug}
+                onChange={(e) => setSwitchSlug(e.target.value)}
+                className="h-10 flex-1 rounded-lg border border-white/10 bg-white/5 px-3 text-sm outline-none focus:border-[#d4b46a]"
+                placeholder="Paste verifier link or slug"
+              />
+              <button
+                type="submit"
+                className="h-10 rounded-lg bg-white px-3 text-sm font-semibold text-slate-900"
+              >
+                Go
+              </button>
+            </form>
+          ) : null}
+        </div>
       </div>
     )
   }
 
   if (phase === 'loading') {
     return (
-      <div className="flex min-h-[100dvh] flex-col items-center justify-center gap-3 px-6 text-center">
-        <Loader2 className="h-8 w-8 animate-spin text-[#d4b46a]" />
-        <p className="text-lg font-medium">Downloading tickets…</p>
-        <p className="text-sm text-slate-400">One-time load, then scans stay local and fast.</p>
+      <div className="relative flex min-h-[100dvh] flex-col items-center justify-center overflow-hidden px-6 text-center">
+        {heroImage ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={heroImage}
+            alt=""
+            className="absolute inset-0 h-full w-full object-cover opacity-30"
+          />
+        ) : null}
+        <div className="absolute inset-0 bg-[#0a0e1a]/80" />
+        <div className="relative z-10">
+          <Loader2 className="mx-auto h-8 w-8 animate-spin text-[#d4b46a]" />
+          <p className="mt-3 text-lg font-medium">Preparing verifier…</p>
+          <p className="mt-1 text-sm text-slate-400">{heroName}</p>
+        </div>
       </div>
     )
   }
@@ -666,55 +909,63 @@ export function VerifierApp({ slug }: { slug: string }) {
   return (
     <div className="mx-auto flex min-h-[100dvh] w-full max-w-lg flex-col">
       <header className="border-b border-white/10 px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#d4b46a]">
-              {online ? 'Connected' : 'Offline'}
-              {online ? ' · Realtime' : ' · Queueing'}
-            </p>
-            <h1 className="truncate text-lg font-semibold leading-tight">
-              {session?.eventName || 'Event'}
-            </h1>
-            <p className="truncate text-xs text-slate-400">{session?.deviceName}</p>
-          </div>
-          <div className="flex items-center gap-2">
-            {online ? (
-              <Wifi className="h-4 w-4 text-emerald-400" />
+        <div className="flex items-center gap-3">
+          <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-xl border border-white/10 bg-white/5">
+            {heroImage ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={heroImage} alt="" className="h-full w-full object-cover" />
             ) : (
-              <WifiOff className="h-4 w-4 text-amber-400" />
+              <div className="flex h-full w-full items-center justify-center">
+                <ScanLine className="h-5 w-5 text-[#d4b46a]" />
+              </div>
             )}
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#d4b46a]">
+                {online ? 'Live' : 'Offline'}
+              </p>
+              {online ? (
+                <Wifi className="h-3.5 w-3.5 text-emerald-400" />
+              ) : (
+                <WifiOff className="h-3.5 w-3.5 text-amber-400" />
+              )}
+            </div>
+            <h1 className="truncate text-base font-semibold leading-tight">{heroName}</h1>
+            <p className="truncate text-xs text-slate-400">
+              {checkedIn} checked in
+              {session?.deviceName ? ` · ${session.deviceName}` : ''}
+            </p>
+          </div>
+          <div className="flex shrink-0 flex-col items-end gap-1.5">
             {(installPrompt || iosHint) && (
               <button
                 type="button"
                 onClick={() => void onInstall()}
-                className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-white/15 px-2.5 text-xs font-medium"
+                className="inline-flex h-8 items-center gap-1 rounded-lg border border-white/15 px-2 text-[11px] font-medium"
               >
-                <Download className="h-3.5 w-3.5" />
+                <Download className="h-3 w-3" />
                 Install
               </button>
             )}
+            <button
+              type="button"
+              onClick={() => void lockOut()}
+              className="text-[11px] text-slate-500 underline-offset-2 hover:text-slate-300 hover:underline"
+            >
+              Lock
+            </button>
           </div>
         </div>
-        {iosHint && !installPrompt ? (
-          <p className="mt-2 text-[11px] text-slate-400">
-            iPhone: Share → Add to Home Screen for one-tap open.
-          </p>
-        ) : null}
       </header>
 
-      <div className="grid grid-cols-3 gap-2 px-4 py-3">
-        <Stat label="Loaded" value={stats.loaded} />
-        <Stat label="Checked in" value={stats.checkedIn} />
-        <Stat label="Remaining" value={stats.remaining} />
-      </div>
-
       {pendingCount > 0 ? (
-        <p className="px-4 pb-2 text-xs text-amber-300">
+        <p className="px-4 pt-2 text-xs text-amber-300">
           {pendingCount} check-in{pendingCount === 1 ? '' : 's'} pending sync
         </p>
       ) : null}
 
-      <div className="relative mx-4 overflow-hidden rounded-2xl border border-white/10 bg-black">
+      <div className="relative mx-4 mt-3 flex-1 overflow-hidden rounded-2xl border border-white/10 bg-black shadow-[0_20px_60px_rgba(0,0,0,0.45)]">
         <video
           ref={videoRef}
           className="aspect-[3/4] w-full object-cover sm:aspect-[4/3]"
@@ -723,18 +974,26 @@ export function VerifierApp({ slug }: { slug: string }) {
           autoPlay
         />
         <canvas ref={canvasRef} className="hidden" />
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_32%,rgba(0,0,0,0.45)_100%)]" />
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_34%,rgba(0,0,0,0.5)_100%)]" />
+        {!cameraActive && !flash ? (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/50 px-6 text-center">
+            <div>
+              <Loader2 className="mx-auto h-6 w-6 animate-spin text-white/70" />
+              <p className="mt-2 text-sm text-white/80">Starting camera…</p>
+            </div>
+          </div>
+        ) : null}
         {flash ? (
           <div
             className={cn(
               'absolute inset-0 flex flex-col items-center justify-center px-6 text-center',
-              flash.kind === 'valid' ? 'bg-emerald-600/90' : 'bg-rose-700/92'
+              flash.kind === 'valid' ? 'bg-emerald-600/92' : 'bg-rose-700/93'
             )}
           >
             {flash.kind === 'valid' ? (
-              <CheckCircle2 className="mb-2 h-14 w-14" />
+              <CheckCircle2 className="mb-2 h-16 w-16" />
             ) : (
-              <XCircle className="mb-2 h-14 w-14" />
+              <XCircle className="mb-2 h-16 w-16" />
             )}
             <p className="text-3xl font-bold tracking-wide">{flash.title}</p>
             {flash.subtitle ? (
@@ -744,14 +1003,14 @@ export function VerifierApp({ slug }: { slug: string }) {
         ) : null}
       </div>
 
-      <div className="mt-3 grid grid-cols-2 gap-2 px-4">
+      <div className="mt-3 grid grid-cols-2 gap-2 px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
         <button
           type="button"
           onClick={() => (cameraActive ? stopScanner() : void startScanner())}
           className="flex h-12 items-center justify-center gap-2 rounded-xl bg-white text-sm font-semibold text-slate-900"
         >
           <ScanLine className="h-4 w-4" />
-          {cameraActive ? 'Stop camera' : 'Scan QR'}
+          {cameraActive ? 'Stop' : 'Scan'}
         </button>
         <button
           type="button"
@@ -765,7 +1024,7 @@ export function VerifierApp({ slug }: { slug: string }) {
 
       {manualOpen ? (
         <form
-          className="mt-3 flex gap-2 px-4"
+          className="flex gap-2 px-4 pb-4"
           onSubmit={(e) => {
             e.preventDefault()
             void handlePayload(manualValue)
@@ -787,20 +1046,7 @@ export function VerifierApp({ slug }: { slug: string }) {
         </form>
       ) : null}
 
-      {error ? <p className="px-4 pt-3 text-sm text-rose-400">{error}</p> : null}
-
-      <div className="mt-auto px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] text-center text-[11px] text-slate-500">
-        Scans resolve from this device. Sync keeps every gate aligned.
-      </div>
-    </div>
-  )
-}
-
-function Stat({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-center">
-      <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">{label}</p>
-      <p className="text-xl font-semibold tabular-nums">{value}</p>
+      {error ? <p className="px-4 pb-4 text-sm text-rose-400">{error}</p> : null}
     </div>
   )
 }

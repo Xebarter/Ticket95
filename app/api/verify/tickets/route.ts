@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
 
     const { data: event } = await supabaseAdmin
       .from('events')
-      .select('id, name, date, venue, verify_slug')
+      .select('id, name, date, venue, image_url, verify_slug')
       .eq('id', session.eventId)
       .maybeSingle()
 
@@ -41,6 +41,7 @@ export async function GET(request: NextRequest) {
         date: event.date,
         venue: event.venue,
         slug: event.verify_slug,
+        imageUrl: event.image_url || null,
       },
       deviceName: session.deviceName,
       tickets: rows,

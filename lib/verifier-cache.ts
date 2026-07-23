@@ -19,6 +19,8 @@ export type VerifierLocalSession = {
   token: string
   eventId: string
   eventName: string
+  eventImageUrl?: string | null
+  eventVenue?: string | null
   deviceName: string
   expiresAt: string
   syncedAt: string | null

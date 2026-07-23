@@ -1,5 +1,6 @@
-/* Ticket95 Verifier service worker — caches the verify shell only */
-const CACHE = 'ticket95-verifier-shell-v1'
+/* Ticket95 Verifier SW — verify scope only; never serve the main site */
+const CACHE = 'ticket95-verifier-shell-v2'
+const LAST_SLUG_KEY = 'ticket95.lastVerifySlug'
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -17,11 +18,49 @@ self.addEventListener('activate', (event) => {
   self.clients.claim()
 })
 
+self.addEventListener('message', (event) => {
+  const data = event.data
+  if (data && data.type === 'SET_LAST_SLUG' && typeof data.slug === 'string') {
+    event.waitUntil(
+      caches.open(CACHE).then((cache) =>
+        cache.put(
+          LAST_SLUG_KEY,
+          new Response(JSON.stringify({ slug: data.slug }), {
+            headers: { 'Content-Type': 'application/json' },
+          })
+        )
+      )
+    )
+  }
+})
+
+async function lastVerifyPath() {
+  try {
+    const cache = await caches.open(CACHE)
+    const res = await cache.match(LAST_SLUG_KEY)
+    if (!res) return '/verify/'
+    const data = await res.json()
+    if (data?.slug) return `/verify/${data.slug}?source=pwa`
+  } catch {
+    // ignore
+  }
+  return '/verify/'
+}
+
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url)
   if (event.request.method !== 'GET') return
+
+  // Keep installed PWA inside /verify — bounce other documents back
+  if (event.request.mode === 'navigate' && !url.pathname.startsWith('/verify')) {
+    event.respondWith(
+      lastVerifyPath().then((path) => Response.redirect(new URL(path, url.origin), 302))
+    )
+    return
+  }
+
   if (!url.pathname.startsWith('/verify')) return
-  // Network-first for app shell; fall back to cache for offline reopen
+
   event.respondWith(
     fetch(event.request)
       .then((response) => {
