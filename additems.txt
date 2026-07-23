@@ -1,126 +1,295 @@
-# Ticket95 Door Verifier (shipped contract)
+# Ticket95 Organizer Analytics Dashboard Spec
 
-Fast, installable, shareable ticket check-in for event doors.
+## Objective
 
-## Goals
+Build a modern organizer analytics dashboard at `/profile/analytics` that gives event organizers actionable insights into ticket sales, revenue, attendance, buyers, affiliates, payments, and door verification.
 
-* Scan tickets in under 100ms after one-time download (local `Map` lookup).
-* Support many verifier devices at once.
-* Sync check-ins across devices (atomic DB update + sync poll + realtime broadcast).
-* Keep working briefly offline; queue check-ins and flush when online.
-* Staff never need a Ticket95 login — only a link + 6-digit code.
-* Install as a Progressive Web App on phone/tablet/laptop.
+Scope is **organizer portfolio analytics** with an optional single-event filter — not buyer purchase history.
 
-## How organizers share
+Primary goal: help organizers make better decisions before, during, and after events using data Ticket95 already stores.
 
-1. Open **Profile → Verify**.
-2. For an event, click **Generate code** (or **Rotate code**).
-3. Use **Share verifier** (or copy link + code). Staff can also scan the on-screen QR of the link.
-4. Rotating the code revokes existing door sessions.
+---
 
-Share URL shape:
+# Core Design Principles
 
-```
-https://{host}/verify/{slug}
-```
+* Fast, responsive, mobile-friendly
+* Clear visual hierarchy matching existing profile UI
+* Interactive charts (Recharts) that answer business questions
+* Every KPI should support drill-down or supporting detail nearby
+* Reusable section components
+* Polling (not websockets) for live-event operational metrics
+* Accessible and dark/light theme compatible via existing tokens
 
-Staff enter the 6-digit access code and an optional device name (e.g. Gate A).
+---
 
-## How staff install
-
-* **Android / desktop Chrome:** open the link → unlock with code → tap **Install** when prompted (Add to Home Screen).
-* **iPhone:** Safari → Share → **Add to Home Screen**.
-* Manifest start URL is scoped to `/verify/{slug}` so the home-screen icon opens the right event.
-
-## Architecture (what actually ships)
+# Architecture
 
 ```
-Customer purchase → tickets row in Supabase
-                         │
-                         ▼
-Organizer generates slug + hashed access code
-                         │
-                         ▼
-Staff: /verify/{slug} + code → verifier_sessions JWT
-                         │
-                         ▼
-Bootstrap GET /api/verify/tickets → IndexedDB + in-memory Map
-                         │
-                    Scan = Map.get (no DB)
-                         │
-                         ▼
-Optimistic mark local → POST /api/verify/check-in (atomic)
-                         │
-         sync poll + broadcast channel verify:{eventId}
+/profile/analytics (client)
+  → filters (event + date range)
+  → GET /api/profile/analytics?eventId=&from=&to=
+  → server aggregates events / orders / tickets / ticket_types /
+    affiliate_commissions / verifier_sessions for the signed-in organizer
 ```
 
-### Ticket95 field mapping
+Auth: session required. Only events where `organizer_id = session.userId`.
 
-| Concept | Implementation |
-|---|---|
-| qrToken | `tickets.qr_code` (exact string match; paid tickets store JSON without `ticketId`) |
-| used | `tickets.status === 'used'` |
-| checked_in_at / checked_in_by | columns on `tickets` |
-| eventSlug | `events.verify_slug` |
-| access code | `events.verifier_code_hash` (plaintext shown once to organizer) |
-| sessions | `verifier_sessions` |
+---
 
-Signed `T95.` QR envelopes, buyer-name search, NFC, face ID, etc. remain **future** — current QR payloads keep working.
-
-### APIs
-
-| Route | Auth | Purpose |
-|---|---|---|
-| `POST /api/verify/session` | access code | Issue door JWT |
-| `GET /api/verify/tickets` | verifier JWT | Bootstrap lean tickets |
-| `POST /api/verify/check-in` | verifier JWT | Atomic mark used |
-| `GET /api/verify/sync?since=` | verifier JWT | Delta sync |
-| `GET/POST /api/profile/verify/access` | organizer/admin | Link + generate/rotate code |
-| `POST /api/profile/verify/scan` | organizer/admin | Organizer fallback scanner |
-| `POST /api/profile/verify/mark-used` | organizer/admin | Organizer fallback mark used |
-
-### Local cache (lean only)
+# Dashboard Layout (Phase 1)
 
 ```
-id, qr_code, status, ticket_type_name, checked_in_at, checked_in_by, updated_at
+Header (context + Refresh + Export CSV)
+Global Filters (event + date presets)
+Overview KPIs
+Live Event Strip (when event is live)
+Sales & Revenue Analytics
+Ticket Type Performance
+Attendance Analytics
+Customer Analytics
+Payment & Refund Analytics
+Affiliate Analytics
+Verifier Analytics
+Capacity / Sell-through
+Rule-based Insights
+Recent Orders
 ```
 
-Never download payment details, emails, or phones.
+---
 
-### Atomic check-in
+# Global Filters (Phase 1)
 
-```sql
-UPDATE tickets
-SET status = 'used', checked_in_at = now(), checked_in_by = ?
-WHERE id = ? AND event_id = ? AND status = 'valid'
-```
+* Event: All events | single owned event
+* Date range presets: Today, Yesterday, Last 7 Days, Last 30 Days, This Month, Entire Range, Custom
+* All widgets react to the selected filters
 
-Rows affected 0 → already used / conflict.
+Deferred filters (no schema yet): Ticket Type as global filter UI only if needed client-side; Payment Method can be chart breakdown only; Sales Channel; Gate; Verifier Device as global filters.
 
-### Offline
+---
 
-Successful local scans enqueue in IndexedDB (`pending`). On `online`, flush via check-in API. HTTP 409 → show conflict.
+# Header (Phase 1)
 
-### Security
+* Title / description
+* When a single event is selected: name, date, venue, lifecycle status, optional banner thumbnail
+* Actions: Refresh, Export CSV
+* Last updated timestamp
 
-* Access codes are hashed with a server pepper (`VERIFIER_CODE_PEPPER` or `VERIFIER_JWT_SECRET`).
-* Sessions expire (~24h), are individually revocable, and are bulk-revoked on code rotate.
-* Old unauthenticated profile verify APIs are locked down.
+---
 
-### Migration
+# Overview KPI Cards (Phase 1)
 
-Run [`scripts/sql/023_verifier_system.sql`](scripts/sql/023_verifier_system.sql) (also appended in `run_all_migrations.sql`).
+Sales
 
-### Performance targets
+* Tickets capacity / sold / remaining
+* Sell-through %
+* Ticket status counts: valid, used, expired, refunded
 
-* Init: seconds for typical catalogs (bulk select once).
-* Lookup: Map.get, milliseconds.
-* Multi-device latency: sync poll ~4s + broadcast best-effort.
+Revenue
 
-## UI principles
+* Gross revenue (completed orders)
+* Refunded revenue
+* Net revenue (gross − refunded)
 
-Large buttons, high-contrast VALID / INVALID flash, counts for Loaded / Checked in / Remaining, minimal taps (auto check-in on valid scan).
+Attendance
 
-## Future (not in this release)
+* Checked in (used / checked_in_at)
+* Remaining to check in
+* Attendance rate
+* Capacity usage
 
-NFC, barcodes beyond QR, face recognition, wristbands, multi-day passes, heatmaps, signed QR tokens, VIP lanes, hardware scanners.
+Orders
+
+* Total orders (in range)
+* Completed / pending / failed / refunded counts
+* Average order value
+* Average tickets per completed order
+
+Deferred KPIs (no fields yet): Reserved, Complimentary, Platform fees, Taxes, Payment fees, Pending/Paid payouts, Organizer earnings beyond net − affiliate commissions.
+
+---
+
+# Live Event Strip (Phase 1)
+
+Show when the selected event is currently active (event date day / live window).
+
+Poll API ~every 10 seconds.
+
+Include:
+
+* Live check-ins count
+* Check-ins in last few minutes (rate proxy)
+* Active verifier sessions (not revoked, not expired, recently seen)
+* Tickets purchased today (completed orders)
+* Last successful check-in time
+* Last updated / connection hint
+
+Deferred: Current queue, failed scan log stream, websocket sync.
+
+---
+
+# Sales & Revenue Analytics (Phase 1)
+
+Charts:
+
+* Daily ticket sales / revenue over time
+* Hourly sales (within selected range, especially for single day / live)
+* Orders over time
+* Cumulative sales
+* Sell-through progress
+* Order status breakdown (pie)
+
+Chart types: Line / Bar as appropriate via Recharts.
+
+Deferred: Forecast models, promo / channel / device revenue splits.
+
+---
+
+# Ticket Type Performance (Phase 1)
+
+Table columns:
+
+* Ticket type
+* Capacity
+* Sold
+* Remaining
+* Revenue
+* Attendance (used count for that type)
+* Refunds (refunded tickets of that type)
+* % sold + progress bar
+
+---
+
+# Customer Analytics (Phase 1)
+
+* Unique buyers
+* New vs returning (returning = 2+ completed orders across selected events/range)
+* Top buyers (tickets, spend, orders)
+* Average spend / tickets per buyer
+* Repeat purchase rate
+
+Deferred: Age, gender, occupation, and other demographics (not collected).
+
+---
+
+# Payment & Refund Analytics (Phase 1)
+
+* Revenue / order counts by `payment_provider`
+* Refunded order count and amount
+* Failed order count
+
+Deferred: Chargebacks, taxes, platform fee ledger, payout status.
+
+---
+
+# Affiliate Analytics (Phase 1)
+
+For orders/commissions on organizer events:
+
+* Affiliate referral code / id
+* Sales count
+* Order revenue attributed
+* Commission amount / status totals
+* Leaderboard
+
+---
+
+# Attendance Analytics (Phase 1)
+
+* Attendance rate
+* Checked in vs remaining
+* No-shows proxy (sold valid tickets not checked in after event, when applicable)
+* Check-in timeline
+* Peak entry hour
+
+Deferred: Gate-level analytics (no gate entity), facial recognition, crowd density.
+
+---
+
+# Verifier Analytics (Phase 1)
+
+From `verifier_sessions` + `tickets.checked_in_by`:
+
+* Device name
+* Session created / last seen / revoked
+* Check-ins attributed to session
+* Active vs expired sessions
+
+---
+
+# Capacity Analytics (Phase 1)
+
+* Per-event capacity, sold, remaining, fill rate
+* Portfolio rollup when “All events” selected
+
+---
+
+# Insights Panel (Phase 1)
+
+Rule-based (not ML):
+
+* Low sell-through warning
+* High refund rate warning
+* Strong affiliate contributor
+* Strong check-in momentum during live events
+* Top performing ticket type
+
+Deferred: AI-generated narratives, forecasting recommendations.
+
+---
+
+# Reports & Export (Phase 1)
+
+* CSV export of key tables (orders summary, ticket types, buyers, affiliates)
+* Manual refresh
+
+Deferred: Scheduled email reports, shareable public dashboards, saved custom reports.
+
+---
+
+# Security
+
+* Session required
+* Only organizer-owned events
+* Sensitive financial data only for the authenticated organizer
+* Prefer server-side aggregation (service role) after ownership checks
+
+---
+
+# Technology
+
+* Next.js App Router API route
+* supabaseAdmin for aggregation after auth
+* Recharts + existing `components/ui/chart`
+* Profile UI primitives (`ProfilePageHeader`, `ProfileMetric`, `ProfileSection`)
+* Client hook for filters / fetch / live polling
+
+---
+
+# Deferred Enhancements (do not build in Phase 1)
+
+* Multi-org / team RBAC analytics access logs
+* Geographic maps / heatmaps
+* Browser / OS / device analytics
+* Marketing UTM / traffic source analytics
+* Visitor → checkout conversion funnel
+* Promo code analytics
+* Taxes, platform fees, payouts
+* Fraud scoring
+* AI summaries / predictive demand
+* Websocket realtime
+* Gates as first-class entities
+* Merchandise / F&B / parking / sponsors performance packs
+* Benchmarking vs similar events
+
+---
+
+# Final Development Principles
+
+1. Clarity before complexity.
+2. Every chart answers a business question.
+3. KPIs link to supporting detail on the same page.
+4. Poll live metrics only when an event is live.
+5. Aggregate on the server for large event portfolios.
+6. Keep components modular and reusable.
+7. Present insights, not only raw numbers.
+8. Expand later without redesigning the page shell.

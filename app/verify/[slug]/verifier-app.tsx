@@ -449,7 +449,10 @@ export function VerifierApp({ slug }: { slug: string }) {
   const playTone = (ok: boolean) => {
     if (ok) audioRef.current.playValid()
     else audioRef.current.playInvalid()
-    if (navigator.vibrate) navigator.vibrate(ok ? [30, 20, 40] : [50, 40, 50, 40, 80])
+    // Valid: one pulse. Invalid: two distinct pulses.
+    if (navigator.vibrate) {
+      navigator.vibrate(ok ? 140 : [120, 90, 120])
+    }
   }
 
   const showFlash = (next: Exclude<ScanFlash, null>) => {
@@ -808,95 +811,98 @@ export function VerifierApp({ slug }: { slug: string }) {
           </div>
 
           {showCenteredInstall ? (
-            <div className="flex flex-1 flex-col items-center justify-center py-8">
-              <button
-                type="button"
-                onClick={() => void onInstall()}
-                className="flex h-16 w-full max-w-xs items-center justify-center gap-3 rounded-2xl bg-[#d4b46a] px-8 text-base font-semibold text-slate-950 shadow-[0_18px_50px_rgba(212,180,106,0.35)] transition active:scale-[0.98]"
-              >
-                <Download className="h-5 w-5" />
-                Install verifier
-              </button>
-              {iosHint && !installPrompt ? (
-                <p className="mt-4 max-w-xs text-center text-sm text-white/70">
-                  iPhone: tap Share, then <span className="text-white">Add to Home Screen</span>
-                </p>
-              ) : (
-                <p className="mt-4 max-w-xs text-center text-sm text-white/55">
-                  Add to your home screen, then unlock with the access code
-                </p>
-              )}
+            <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center px-5">
+              <div className="pointer-events-auto flex w-full max-w-xs flex-col items-center">
+                <button
+                  type="button"
+                  onClick={() => void onInstall()}
+                  className="flex h-16 w-full items-center justify-center gap-3 rounded-2xl bg-[#d4b46a] px-8 text-base font-semibold text-slate-950 shadow-[0_18px_50px_rgba(212,180,106,0.35)] transition active:scale-[0.98]"
+                >
+                  <Download className="h-5 w-5" />
+                  Install verifier
+                </button>
+                {iosHint && !installPrompt ? (
+                  <p className="mt-4 text-center text-sm text-white/70">
+                    iPhone: tap Share, then{' '}
+                    <span className="text-white">Add to Home Screen</span>
+                  </p>
+                ) : (
+                  <p className="mt-4 text-center text-sm text-white/55">
+                    Add to your home screen, then unlock with the access code below
+                  </p>
+                )}
+              </div>
             </div>
-          ) : (
-            <div className="flex-1" />
-          )}
+          ) : null}
 
-          <form
-            onSubmit={onLogin}
-            className="shrink-0 space-y-3 rounded-2xl border border-white/10 bg-black/35 p-4 backdrop-blur-md"
-          >
-            <label className="block space-y-1.5">
-              <span className="text-xs font-medium text-slate-300">Access code</span>
-              <input
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                pattern="[0-9]*"
-                maxLength={6}
-                value={code}
-                onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                className="h-14 w-full rounded-xl border border-white/15 bg-white/10 px-4 text-center text-2xl tracking-[0.45em] text-white outline-none focus:border-[#d4b46a]"
-                placeholder="••••••"
-                required
-              />
-            </label>
-            <label className="block space-y-1.5">
-              <span className="text-xs font-medium text-slate-300">Device name</span>
-              <input
-                value={deviceName}
-                onChange={(e) => setDeviceName(e.target.value)}
-                className="h-11 w-full rounded-xl border border-white/15 bg-white/10 px-3 text-sm text-white outline-none focus:border-[#d4b46a]"
-                placeholder="Gate A"
-              />
-            </label>
-            {error ? <p className="text-sm text-rose-300">{error}</p> : null}
-            <button
-              type="submit"
-              disabled={busy || code.length < 6}
-              className="flex h-12 w-full items-center justify-center rounded-xl bg-white text-sm font-semibold text-slate-900 disabled:opacity-50"
-            >
-              {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Start verifying'}
-            </button>
-          </form>
-
-          <div className="mt-4 flex flex-wrap items-center justify-center gap-3 text-xs text-white/55">
-            <button
-              type="button"
-              onClick={() => setSwitchOpen((v) => !v)}
-              className="underline-offset-2 hover:text-white hover:underline"
-            >
-              Switch event
-            </button>
-          </div>
-
-          {switchOpen ? (
+          <div className="mt-auto shrink-0 pt-[min(42vh,18rem)]">
             <form
-              onSubmit={(e) => void onSwitchEvent(e)}
-              className="mt-3 flex gap-2 rounded-xl border border-white/10 bg-black/30 p-2"
+              onSubmit={onLogin}
+              className="space-y-3 rounded-2xl border border-white/10 bg-black/35 p-4 backdrop-blur-md"
             >
-              <input
-                value={switchSlug}
-                onChange={(e) => setSwitchSlug(e.target.value)}
-                className="h-10 flex-1 rounded-lg border border-white/10 bg-white/5 px-3 text-sm outline-none focus:border-[#d4b46a]"
-                placeholder="Paste verifier link or slug"
-              />
+              <label className="block space-y-1.5">
+                <span className="text-xs font-medium text-slate-300">Access code</span>
+                <input
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  pattern="[0-9]*"
+                  maxLength={6}
+                  value={code}
+                  onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  className="h-14 w-full rounded-xl border border-white/15 bg-white/10 px-4 text-center text-2xl tracking-[0.45em] text-white outline-none focus:border-[#d4b46a]"
+                  placeholder="••••••"
+                  required
+                />
+              </label>
+              <label className="block space-y-1.5">
+                <span className="text-xs font-medium text-slate-300">Device name</span>
+                <input
+                  value={deviceName}
+                  onChange={(e) => setDeviceName(e.target.value)}
+                  className="h-11 w-full rounded-xl border border-white/15 bg-white/10 px-3 text-sm text-white outline-none focus:border-[#d4b46a]"
+                  placeholder="Gate A"
+                />
+              </label>
+              {error ? <p className="text-sm text-rose-300">{error}</p> : null}
               <button
                 type="submit"
-                className="h-10 rounded-lg bg-white px-3 text-sm font-semibold text-slate-900"
+                disabled={busy || code.length < 6}
+                className="flex h-12 w-full items-center justify-center rounded-xl bg-white text-sm font-semibold text-slate-900 disabled:opacity-50"
               >
-                Go
+                {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Start verifying'}
               </button>
             </form>
-          ) : null}
+
+            <div className="mt-4 flex flex-wrap items-center justify-center gap-3 text-xs text-white/55">
+              <button
+                type="button"
+                onClick={() => setSwitchOpen((v) => !v)}
+                className="underline-offset-2 hover:text-white hover:underline"
+              >
+                Switch event
+              </button>
+            </div>
+
+            {switchOpen ? (
+              <form
+                onSubmit={(e) => void onSwitchEvent(e)}
+                className="mt-3 flex gap-2 rounded-xl border border-white/10 bg-black/30 p-2"
+              >
+                <input
+                  value={switchSlug}
+                  onChange={(e) => setSwitchSlug(e.target.value)}
+                  className="h-10 flex-1 rounded-lg border border-white/10 bg-white/5 px-3 text-sm outline-none focus:border-[#d4b46a]"
+                  placeholder="Paste verifier link or slug"
+                />
+                <button
+                  type="submit"
+                  className="h-10 rounded-lg bg-white px-3 text-sm font-semibold text-slate-900"
+                >
+                  Go
+                </button>
+              </form>
+            ) : null}
+          </div>
         </div>
       </div>
     )

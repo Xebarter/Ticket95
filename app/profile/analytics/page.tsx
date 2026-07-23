@@ -1,417 +1,151 @@
 'use client';
 
-import { useMemo } from 'react';
+import Link from 'next/link';
+import { BarChart3, Plus } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  Pie,
-  PieChart,
-  XAxis,
-  YAxis,
-} from 'recharts';
-import { useProfileData } from '../use-profile-data';
-import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Progress } from '@/components/ui/progress';
-import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart';
-import { AlertTriangle, CalendarClock, DollarSign, ShoppingBag, Ticket, TrendingUp } from 'lucide-react';
-import { getEventLifecycleStatus } from '@/lib/event-status';
-import {
+  ProfileEmptyState,
   ProfileLoadingState,
-  ProfileMetric,
   ProfilePageHeader,
 } from '@/components/profile/profile-ui';
-
-const formatMoney = (amount: number, currency = 'USD') =>
-  new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(amount);
-
-const formatShortMonth = (value: string) =>
-  new Date(value).toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
-
-type MonthlyPoint = {
-  month: string;
-  revenue: number;
-  orders: number;
-};
+import {
+  AnalyticsAffiliates,
+  AnalyticsAttendance,
+  AnalyticsCapacity,
+  AnalyticsCustomers,
+  AnalyticsEventHeader,
+  AnalyticsFilters,
+  AnalyticsInsights,
+  AnalyticsKpis,
+  AnalyticsLiveStrip,
+  AnalyticsPayments,
+  AnalyticsRecentOrders,
+  AnalyticsSalesCharts,
+  AnalyticsTicketTypes,
+  AnalyticsVerifiers,
+} from './components/analytics-sections';
+import { buildAnalyticsCsv, downloadCsv } from './format';
+import { useOrganizerAnalytics } from './use-analytics';
 
 export default function ProfileAnalyticsPage() {
-  const { loading, myEvents, myOrders, myTickets } = useProfileData();
+  const {
+    eventId,
+    setEventId,
+    preset,
+    setPreset,
+    customFrom,
+    setCustomFrom,
+    customTo,
+    setCustomTo,
+    data,
+    loading,
+    refreshing,
+    error,
+    refresh,
+  } = useOrganizerAnalytics();
 
-  const analytics = useMemo(() => {
-    const currency =
-      myOrders.find((order) => order.currency)?.currency ||
-      myEvents.find((event) => event.currency)?.currency ||
-      'USD';
-
-    const completedOrders = myOrders.filter((order) => order.status === 'completed');
-    const pendingOrders = myOrders.filter((order) => order.status === 'pending');
-    const failedOrders = myOrders.filter((order) => order.status === 'failed');
-    const refundedOrders = myOrders.filter((order) => order.status === 'refunded');
-
-    const grossRevenue = completedOrders.reduce((sum, order) => sum + order.total_price, 0);
-    const refundedRevenue = refundedOrders.reduce((sum, order) => sum + order.total_price, 0);
-    const netRevenue = Math.max(grossRevenue - refundedRevenue, 0);
-    const averageOrderValue = completedOrders.length > 0 ? grossRevenue / completedOrders.length : 0;
-
-    const totalEventCapacity = myEvents.reduce((sum, event) => sum + event.total_tickets, 0);
-    const totalTicketsRemaining = myEvents.reduce((sum, event) => sum + event.tickets_available, 0);
-    const totalTicketsSold = Math.max(totalEventCapacity - totalTicketsRemaining, 0);
-    const sellThrough = totalEventCapacity > 0 ? (totalTicketsSold / totalEventCapacity) * 100 : 0;
-
-    const orderStatusData = [
-      { status: 'completed', label: 'Completed', value: completedOrders.length, color: '#10b981' },
-      { status: 'pending', label: 'Pending', value: pendingOrders.length, color: '#f59e0b' },
-      { status: 'failed', label: 'Failed', value: failedOrders.length, color: '#ef4444' },
-      { status: 'refunded', label: 'Refunded', value: refundedOrders.length, color: '#6366f1' },
-    ].filter((item) => item.value > 0);
-
-    const ticketsByStatus = {
-      valid: myTickets.filter((ticket) => ticket.status === 'valid').length,
-      used: myTickets.filter((ticket) => ticket.status === 'used').length,
-      expired: myTickets.filter((ticket) => ticket.status === 'expired').length,
-      refunded: myTickets.filter((ticket) => ticket.status === 'refunded').length,
-    };
-
-    const eventsByStatus = {
-      approved: myEvents.filter((event) => getEventLifecycleStatus(event) === 'approved').length,
-      pending: myEvents.filter((event) => getEventLifecycleStatus(event) === 'pending').length,
-      rejected: myEvents.filter((event) => getEventLifecycleStatus(event) === 'rejected').length,
-      expired: myEvents.filter((event) => getEventLifecycleStatus(event) === 'expired').length,
-    };
-
-    const monthlyMap = new Map<string, MonthlyPoint>();
-    completedOrders.forEach((order) => {
-      const d = new Date(order.created_at);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      const monthLabel = formatShortMonth(order.created_at);
-      const current = monthlyMap.get(key) || { month: monthLabel, revenue: 0, orders: 0 };
-      current.revenue += order.total_price;
-      current.orders += 1;
-      monthlyMap.set(key, current);
-    });
-
-    const monthlyTrend = Array.from(monthlyMap.entries())
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([, value]) => value)
-      .slice(-6);
-
-    const eventPerformance = myEvents
-      .map((event) => {
-        const sold = Math.max(event.total_tickets - event.tickets_available, 0);
-        const fillRate = event.total_tickets > 0 ? (sold / event.total_tickets) * 100 : 0;
-        const estimatedRevenue = sold * event.ticket_price;
-        return {
-          id: event.id,
-          name: event.name,
-          sold,
-          capacity: event.total_tickets,
-          fillRate,
-          estimatedRevenue,
-          status: getEventLifecycleStatus(event),
-          date: event.date,
-        };
-      })
-      .sort((a, b) => b.estimatedRevenue - a.estimatedRevenue);
-
-    const topEvents = eventPerformance.slice(0, 5);
-
-    return {
-      currency,
-      grossRevenue,
-      refundedRevenue,
-      netRevenue,
-      averageOrderValue,
-      totalEventCapacity,
-      totalTicketsSold,
-      sellThrough,
-      orderStatusData,
-      ticketsByStatus,
-      eventsByStatus,
-      monthlyTrend,
-      topEvents,
-      recentOrders: [...myOrders]
-        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-        .slice(0, 8),
-    };
-  }, [myEvents, myOrders, myTickets]);
-
-  const revenueChartConfig = {
-    revenue: { label: 'Revenue', color: 'hsl(var(--primary))' },
-  } satisfies ChartConfig;
-
-  const ordersChartConfig = {
-    value: { label: 'Orders' },
-    completed: { label: 'Completed', color: '#10b981' },
-    pending: { label: 'Pending', color: '#f59e0b' },
-    failed: { label: 'Failed', color: '#ef4444' },
-    refunded: { label: 'Refunded', color: '#6366f1' },
-  } satisfies ChartConfig;
-
-  if (loading) {
+  if (loading && !data) {
     return <ProfileLoadingState label="Loading analytics…" />;
   }
+
+  if (error && !data) {
+    return (
+      <div className="space-y-5">
+        <ProfilePageHeader
+          title="Analytics"
+          description="Sales, attendance, and performance across your events."
+        />
+        <ProfileEmptyState
+          icon={BarChart3}
+          title="Couldn’t load analytics"
+          description={error}
+          action={
+            <Button type="button" onClick={refresh}>
+              Try again
+            </Button>
+          }
+        />
+      </div>
+    );
+  }
+
+  if (!data || data.events.length === 0) {
+    return (
+      <div className="space-y-5">
+        <ProfilePageHeader
+          title="Analytics"
+          description="Sales, attendance, and performance across your events."
+        />
+        <ProfileEmptyState
+          icon={BarChart3}
+          title="No events yet"
+          description="Create an event to unlock organizer analytics for sales, revenue, and check-ins."
+          action={
+            <Button asChild>
+              <Link href="/organizer/dashboard/create">
+                <Plus className="mr-1.5 h-4 w-4" />
+                Create event
+              </Link>
+            </Button>
+          }
+        />
+      </div>
+    );
+  }
+
+  const handleExport = () => {
+    const csv = buildAnalyticsCsv(data);
+    downloadCsv(`ticket95-analytics-${new Date().toISOString().slice(0, 10)}.csv`, csv);
+  };
 
   return (
     <div className="space-y-5">
       <ProfilePageHeader
         title="Analytics"
-        description="Revenue, sell-through, and performance across your events."
+        description="Organizer sales, attendance, buyers, affiliates, and door performance."
         actions={
           <span className="rounded-full border border-border/70 bg-muted/40 px-3 py-1 text-xs tabular-nums text-muted-foreground">
-            {myEvents.length} event{myEvents.length === 1 ? '' : 's'}
+            {data.events.length} event{data.events.length === 1 ? '' : 's'}
           </span>
         }
       />
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <ProfileMetric
-          label="Net revenue"
-          value={formatMoney(analytics.netRevenue, analytics.currency)}
-          icon={DollarSign}
-          accent="emerald"
-        />
-        <ProfileMetric
-          label="Avg order"
-          value={formatMoney(analytics.averageOrderValue, analytics.currency)}
-          icon={TrendingUp}
-        />
-        <ProfileMetric
-          label="Tickets sold"
-          value={String(analytics.totalTicketsSold)}
-          icon={ShoppingBag}
-        />
-        <ProfileMetric
-          label="Sell-through"
-          value={`${analytics.sellThrough.toFixed(0)}%`}
-          icon={Ticket}
-          accent="amber"
-        />
-      </div>
+      <AnalyticsFilters
+        events={data.events}
+        eventId={eventId}
+        onEventChange={setEventId}
+        preset={preset}
+        onPresetChange={setPreset}
+        customFrom={customFrom}
+        customTo={customTo}
+        onCustomFromChange={setCustomFrom}
+        onCustomToChange={setCustomTo}
+        refreshing={refreshing}
+        onRefresh={refresh}
+        onExport={handleExport}
+        generatedAt={data.generatedAt}
+      />
 
-      <div className="grid gap-3 xl:grid-cols-3">
-        <Card className="border-border/70 xl:col-span-2">
-          <CardHeader>
-            <CardTitle className="text-base">Revenue</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {analytics.monthlyTrend.length === 0 ? (
-              <p className="py-8 text-center text-sm text-muted-foreground">None</p>
-            ) : (
-              <ChartContainer config={revenueChartConfig} className="h-[280px] w-full">
-                <BarChart data={analytics.monthlyTrend}>
-                  <CartesianGrid vertical={false} />
-                  <XAxis dataKey="month" tickLine={false} axisLine={false} />
-                  <YAxis tickLine={false} axisLine={false} width={70} />
-                  <ChartTooltip content={<ChartTooltipContent />} />
-                  <Bar dataKey="revenue" radius={8} fill="var(--color-revenue)" />
-                </BarChart>
-              </ChartContainer>
-            )}
-          </CardContent>
-        </Card>
+      {data.selectedEvent ? <AnalyticsEventHeader event={data.selectedEvent} /> : null}
 
-        <Card className="border-border/70">
-          <CardHeader>
-            <CardTitle className="text-base">Orders</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {analytics.orderStatusData.length === 0 ? (
-              <p className="py-8 text-center text-sm text-muted-foreground">None</p>
-            ) : (
-              <div className="space-y-4">
-                <ChartContainer config={ordersChartConfig} className="mx-auto h-[180px] w-full">
-                  <PieChart>
-                    <Pie
-                      data={analytics.orderStatusData}
-                      dataKey="value"
-                      nameKey="label"
-                      innerRadius={50}
-                      outerRadius={75}
-                      paddingAngle={3}
-                    >
-                      {analytics.orderStatusData.map((segment) => (
-                        <Cell key={segment.status} fill={segment.color} />
-                      ))}
-                    </Pie>
-                    <ChartTooltip content={<ChartTooltipContent nameKey="label" hideLabel />} />
-                  </PieChart>
-                </ChartContainer>
-
-                <div className="space-y-2">
-                  {analytics.orderStatusData.map((item) => (
-                    <div key={item.status} className="flex items-center justify-between rounded-lg border border-border/70 px-3 py-2 text-sm">
-                      <span className="inline-flex items-center gap-2">
-                        <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.color }} />
-                        {item.label}
-                      </span>
-                      <span className="font-semibold">{item.value}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid gap-3 xl:grid-cols-2">
-        <Card className="border-border/70">
-          <CardHeader>
-            <CardTitle className="text-base">Pipeline</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="rounded-xl border border-border/70 p-3">
-              <div className="flex items-center justify-between text-sm">
-                <span>Approved</span>
-                <span className="font-semibold">{analytics.eventsByStatus.approved}</span>
-              </div>
-              <Progress
-                className="mt-2"
-                value={myEvents.length > 0 ? (analytics.eventsByStatus.approved / myEvents.length) * 100 : 0}
-              />
-            </div>
-            <div className="rounded-xl border border-border/70 p-3">
-              <div className="flex items-center justify-between text-sm">
-                <span>Pending</span>
-                <span className="font-semibold">{analytics.eventsByStatus.pending}</span>
-              </div>
-              <Progress
-                className="mt-2"
-                value={myEvents.length > 0 ? (analytics.eventsByStatus.pending / myEvents.length) * 100 : 0}
-              />
-            </div>
-            <div className="rounded-xl border border-border/70 p-3">
-              <div className="flex items-center justify-between text-sm">
-                <span>Rejected</span>
-                <span className="font-semibold">{analytics.eventsByStatus.rejected}</span>
-              </div>
-              <Progress
-                className="mt-2"
-                value={myEvents.length > 0 ? (analytics.eventsByStatus.rejected / myEvents.length) * 100 : 0}
-              />
-            </div>
-            <div className="rounded-xl border border-border/70 p-3">
-              <div className="flex items-center justify-between text-sm">
-                <span>Expired</span>
-                <span className="font-semibold">{analytics.eventsByStatus.expired}</span>
-              </div>
-              <Progress
-                className="mt-2"
-                value={myEvents.length > 0 ? (analytics.eventsByStatus.expired / myEvents.length) * 100 : 0}
-              />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-border/70">
-          <CardHeader>
-            <CardTitle className="text-base">Tickets</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex items-center justify-between rounded-xl border border-border/70 p-3">
-              <p className="text-sm">Valid</p>
-              <p className="text-lg font-semibold">{analytics.ticketsByStatus.valid}</p>
-            </div>
-            <div className="flex items-center justify-between rounded-xl border border-border/70 p-3">
-              <p className="text-sm">Used</p>
-              <p className="text-lg font-semibold">{analytics.ticketsByStatus.used}</p>
-            </div>
-            <div className="flex items-center justify-between rounded-xl border border-border/70 p-3">
-              <p className="text-sm">Expired</p>
-              <p className="text-lg font-semibold">{analytics.ticketsByStatus.expired}</p>
-            </div>
-            <div className="flex items-center justify-between rounded-xl border border-border/70 p-3">
-              <p className="text-sm">Refunded</p>
-              <p className="text-lg font-semibold">{analytics.ticketsByStatus.refunded}</p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card className="border-border/70">
-        <CardHeader>
-          <CardTitle className="text-base">Top events</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {analytics.topEvents.length === 0 ? (
-            <p className="text-sm text-muted-foreground">None</p>
-          ) : (
-            analytics.topEvents.map((event) => (
-              <div key={event.id} className="rounded-xl border border-border/70 p-3">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <p className="font-medium">{event.name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      <CalendarClock className="mr-1 inline h-3.5 w-3.5" />
-                      {new Date(event.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                    </p>
-                  </div>
-                  <div className="text-sm">
-                    <p className="font-semibold">{formatMoney(event.estimatedRevenue, analytics.currency)}</p>
-                    <p className="text-muted-foreground">
-                      {event.sold}/{event.capacity} sold ({event.fillRate.toFixed(1)}%)
-                    </p>
-                  </div>
-                </div>
-                <Progress className="mt-2 h-2.5" value={event.fillRate} />
-              </div>
-            ))
-          )}
-        </CardContent>
-      </Card>
-
-      <Card className="border-border/70">
-        <CardHeader>
-          <CardTitle className="text-base">Recent orders</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          {analytics.recentOrders.length === 0 ? (
-            <p className="text-sm text-muted-foreground">None</p>
-          ) : (
-            analytics.recentOrders.map((order) => (
-              <div key={order.id} className="flex flex-col gap-2 rounded-xl border border-border/70 p-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <p className="text-sm font-medium">Order #{order.id.slice(0, 8).toUpperCase()}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {new Date(order.created_at).toLocaleString('en-US', {
-                      month: 'short',
-                      day: 'numeric',
-                      year: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Badge
-                    variant={
-                      order.status === 'completed'
-                        ? 'default'
-                        : order.status === 'pending'
-                          ? 'secondary'
-                          : 'destructive'
-                    }
-                  >
-                    {order.status}
-                  </Badge>
-                  <p className="text-sm font-semibold">{formatMoney(order.total_price, order.currency || analytics.currency)}</p>
-                </div>
-              </div>
-            ))
-          )}
-        </CardContent>
-      </Card>
-
-      {analytics.refundedRevenue > 0 ? (
-        <Card className="border-amber-500/40">
-          <CardContent className="flex items-center gap-2 p-4 text-sm text-muted-foreground">
-            <AlertTriangle className="h-4 w-4 shrink-0 text-amber-500" />
-            Refunds {formatMoney(analytics.refundedRevenue, analytics.currency)}
-          </CardContent>
-        </Card>
+      {error ? (
+        <p className="rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-sm text-amber-800 dark:text-amber-200">
+          {error}
+        </p>
       ) : null}
+
+      <AnalyticsKpis data={data} />
+      <AnalyticsLiveStrip live={data.live} />
+      <AnalyticsSalesCharts data={data} />
+      <AnalyticsTicketTypes data={data} />
+      <AnalyticsAttendance data={data} />
+      <AnalyticsCustomers data={data} />
+      <AnalyticsPayments data={data} />
+      <AnalyticsAffiliates data={data} />
+      <AnalyticsVerifiers data={data} />
+      <AnalyticsCapacity data={data} />
+      <AnalyticsInsights data={data} />
+      <AnalyticsRecentOrders data={data} />
     </div>
   );
 }
