@@ -3,6 +3,7 @@ import { Lexend } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import { AuthProvider } from '@/lib/supabase-auth-context'
 import { EventSearchProvider } from '@/lib/event-search-context'
+import { VerifierSwCleanup } from '@/components/verify/verifier-sw-cleanup'
 import { BRAND_ICON_PATHS, brandAssetUrl } from '@/lib/brand-assets'
 import { getSiteUrl } from '@/lib/site-url'
 import './globals.css'
@@ -67,6 +68,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={lexend.variable}>
       <body className="font-sans antialiased">
+        <VerifierSwCleanup />
         <AuthProvider>
           <EventSearchProvider>
             {children}

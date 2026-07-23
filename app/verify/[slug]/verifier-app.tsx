@@ -403,16 +403,45 @@ export function VerifierApp({ slug }: { slug: string }) {
     setIosHint(isIos && !isStandaloneDisplay())
 
     if ('serviceWorker' in navigator) {
-      void navigator.serviceWorker
-        .register('/verify-sw.js', { scope: '/verify/' })
-        .then(() => rememberSlug(safeSlug))
-        .catch(() => undefined)
+      void (async () => {
+        try {
+          // Retire legacy root-scoped SW that redirected the whole origin to /verify/...
+          const registrations = await navigator.serviceWorker.getRegistrations()
+          await Promise.all(
+            registrations.map(async (registration) => {
+              const scriptUrl =
+                registration.active?.scriptURL ||
+                registration.waiting?.scriptURL ||
+                registration.installing?.scriptURL ||
+                ''
+              if (scriptUrl.endsWith('/verify-sw.js')) {
+                await registration.unregister()
+              }
+            })
+          )
+          await navigator.serviceWorker.register('/verify/sw.js', { scope: '/verify/' })
+          rememberSlug(safeSlug)
+        } catch {
+          // ignore
+        }
+      })()
     }
+
+    const onSwMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'VERIFIER_SW_RETIRED' && !isStandaloneDisplay()) {
+        // Drop legacy controller without yanking door staff out of the PWA
+        if (navigator.serviceWorker?.controller) {
+          window.location.reload()
+        }
+      }
+    }
+    navigator.serviceWorker?.addEventListener('message', onSwMessage)
 
     return () => {
       window.removeEventListener('online', onOnline)
       window.removeEventListener('offline', onOffline)
       window.removeEventListener('beforeinstallprompt', onBip)
+      navigator.serviceWorker?.removeEventListener('message', onSwMessage)
     }
   }, [flushPending, safeSlug])
 
