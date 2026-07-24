@@ -269,13 +269,13 @@ interface ProfileMobileHeaderProps {
 
 export function ProfileMobileHeader({ onMenuClick }: ProfileMobileHeaderProps) {
   return (
-    <header className="mb-4 flex items-center justify-between gap-3 rounded-3xl border border-border/70 bg-card/95 px-3 py-2.5 shadow-sm md:hidden">
+    <header className="mb-3 flex items-center justify-between gap-2 md:hidden">
       <BrandLogo href="/" size="sm" />
       <div className="flex items-center gap-1">
         <NotificationBell />
         <Button
           type="button"
-          variant="outline"
+          variant="ghost"
           size="icon"
           className="h-9 w-9 shrink-0 rounded-xl"
           onClick={onMenuClick}

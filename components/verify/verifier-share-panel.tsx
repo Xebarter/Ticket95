@@ -5,6 +5,7 @@ import QRCode from 'qrcode'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import {
+  Check,
   Copy,
   Eye,
   EyeOff,
@@ -23,14 +24,27 @@ type AccessInfo = {
   code?: string
 }
 
+function shortVerifierHost(url: string) {
+  try {
+    const parsed = new URL(url)
+    const path = parsed.pathname.replace(/\/$/, '')
+    return `${parsed.host}${path}`
+  } catch {
+    return url
+  }
+}
+
 export function VerifierSharePanel({
   eventId,
   eventName,
   className,
+  embedded = false,
 }: {
   eventId: string
   eventName: string
   className?: string
+  /** Flat layout when already inside a parent surface — no nested boxes. */
+  embedded?: boolean
 }) {
   const [info, setInfo] = useState<AccessInfo | null>(null)
   const [loading, setLoading] = useState(true)
@@ -52,7 +66,11 @@ export function VerifierSharePanel({
       if (!res.ok) throw new Error(data?.error || 'Failed to load verifier access')
       setInfo(data)
       if (data.url) {
-        const qr = await QRCode.toDataURL(data.url, { width: 220, margin: 1 })
+        const qr = await QRCode.toDataURL(data.url, {
+          width: 240,
+          margin: 1,
+          color: { dark: '#0f172a', light: '#ffffff' },
+        })
         setQrDataUrl(qr)
       }
     } catch (err: unknown) {
@@ -82,7 +100,11 @@ export function VerifierSharePanel({
       setRevealedCode(data.code)
       setShowCode(true)
       if (data.url) {
-        const qr = await QRCode.toDataURL(data.url, { width: 220, margin: 1 })
+        const qr = await QRCode.toDataURL(data.url, {
+          width: 240,
+          margin: 1,
+          color: { dark: '#0f172a', light: '#ffffff' },
+        })
         setQrDataUrl(qr)
       }
     } catch (err: unknown) {
@@ -94,7 +116,7 @@ export function VerifierSharePanel({
 
   const flashCopied = (kind: 'link' | 'code' | 'all') => {
     setCopied(kind)
-    window.setTimeout(() => setCopied((c) => (c === kind ? null : c)), 1500)
+    window.setTimeout(() => setCopied((c) => (c === kind ? null : c)), 1600)
   }
 
   const copyText = async (text: string, kind: 'link' | 'code' | 'all') => {
@@ -104,12 +126,12 @@ export function VerifierSharePanel({
 
   const share = async () => {
     if (!info?.url) return
-    const codeLine = revealedCode ? `\nAccess code: ${revealedCode}` : info.hasCode ? '' : ''
-    const text = `Ticket95 door verifier for ${eventName}\n${info.url}${codeLine}`
+    const codeLine = revealedCode ? `\nAccess code: ${revealedCode}` : ''
+    const text = `Door verifier — ${eventName}\n${info.url}${codeLine}`
     if (navigator.share) {
       try {
         await navigator.share({
-          title: `Verify: ${eventName}`,
+          title: `${eventName} verifier`,
           text,
           url: info.url,
         })
@@ -123,111 +145,175 @@ export function VerifierSharePanel({
 
   if (loading) {
     return (
-      <div className={cn('flex items-center gap-2 rounded-xl border border-border/70 p-4 text-sm text-muted-foreground', className)}>
+      <div className={cn('flex items-center gap-2.5 py-3 text-sm text-muted-foreground', className)}>
         <Loader2 className="h-4 w-4 animate-spin" />
-        Preparing shareable verifier…
+        Preparing staff access…
       </div>
     )
   }
 
+  const hasRevealed = Boolean(revealedCode)
+  const needsGenerate = !info?.hasCode && !hasRevealed
+  const codeReady = info?.hasCode || hasRevealed
+
   return (
-    <div className={cn('rounded-2xl border border-border/70 bg-card p-4 shadow-sm', className)}>
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#9A7B2F]">
-            Share with door staff
+    <div
+      className={cn(
+        embedded ? 'space-y-5' : 'space-y-5 rounded-2xl border border-border/70 bg-card p-5 shadow-sm',
+        className
+      )}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#9A7B2F]">
+            Staff access
           </p>
-          <h3 className="mt-1 text-base font-semibold tracking-tight">Installable verifier</h3>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Staff open the link, enter the code, then Install for one-tap scanning. No login required.
+          <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
+            Installable verifier for door staff. No Ticket95 login required.
           </p>
         </div>
+        <span
+          className={cn(
+            'shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em]',
+            codeReady
+              ? 'bg-emerald-500/10 text-emerald-700'
+              : 'bg-amber-500/10 text-amber-800'
+          )}
+        >
+          {codeReady ? 'Active' : 'Setup'}
+        </span>
+      </div>
+
+      {error ? <p className="text-sm text-destructive">{error}</p> : null}
+
+      <div className="flex items-end gap-4">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+              Access code
+            </p>
+            {hasRevealed ? (
+              <button
+                type="button"
+                className="text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+                onClick={() => setShowCode((v) => !v)}
+              >
+                <span className="inline-flex items-center gap-1">
+                  {showCode ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                  {showCode ? 'Hide' : 'Show'}
+                </span>
+              </button>
+            ) : null}
+          </div>
+
+          {needsGenerate ? (
+            <p className="mt-2 text-sm text-muted-foreground">
+              Create a one-time code to authorize door devices.
+            </p>
+          ) : hasRevealed ? (
+            <p className="mt-2 font-mono text-[2rem] font-medium leading-none tracking-[0.32em] text-foreground tabular-nums">
+              {showCode ? revealedCode : '······'}
+            </p>
+          ) : (
+            <p className="mt-2 text-sm text-muted-foreground">
+              A code is already active. Generate again only if you need to reveal or replace it.
+            </p>
+          )}
+        </div>
+
         {qrDataUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={qrDataUrl}
-            alt="Verifier link QR"
-            className="h-24 w-24 rounded-lg border border-border/60 bg-white p-1"
+            alt="Verifier QR code"
+            className="h-16 w-16 shrink-0 ring-1 ring-border/80 sm:h-[4.5rem] sm:w-[4.5rem]"
           />
         ) : null}
       </div>
 
-      {error ? <p className="mt-3 text-sm text-destructive">{error}</p> : null}
-
-      <div className="mt-4 space-y-3">
-        <div className="rounded-xl border border-border/60 bg-muted/30 px-3 py-2.5">
-          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Link</p>
-          <p className="mt-0.5 break-all text-sm font-medium">{info?.url || '—'}</p>
-        </div>
-
-        <div className="rounded-xl border border-border/60 bg-muted/30 px-3 py-2.5">
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-              Access code
+      {info?.url ? (
+        <div className="flex items-center gap-3 border-y border-border/50 py-3">
+          <div className="min-w-0 flex-1">
+            <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+              Verifier link
             </p>
-            {revealedCode ? (
-              <button
-                type="button"
-                className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-                onClick={() => setShowCode((v) => !v)}
-              >
-                {showCode ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                {showCode ? 'Hide' : 'Show'}
-              </button>
-            ) : null}
+            <p className="mt-1 truncate text-[13px] text-foreground/85">
+              {shortVerifierHost(info.url)}
+            </p>
           </div>
-          <p className="mt-0.5 font-mono text-xl tracking-[0.25em]">
-            {revealedCode
-              ? showCode
-                ? revealedCode
-                : '••••••'
-              : info?.hasCode
-                ? 'Code set (generate again to reveal)'
-                : 'Not set yet'}
-          </p>
+          <button
+            type="button"
+            onClick={() => void copyText(info.url, 'link')}
+            className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium text-[#9A7B2F] transition-colors hover:bg-[#9A7B2F]/10"
+          >
+            {copied === 'link' ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+            {copied === 'link' ? 'Copied' : 'Copy'}
+          </button>
         </div>
-      </div>
+      ) : null}
 
-      <div className="mt-4 flex flex-wrap gap-2">
-        <Button type="button" className="rounded-xl" onClick={() => void share()} disabled={!info?.url}>
-          <Share2 className="mr-1.5 h-4 w-4" />
-          {copied === 'all' ? 'Copied' : 'Share verifier'}
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          className="rounded-xl"
-          onClick={() => info?.url && void copyText(info.url, 'link')}
-          disabled={!info?.url}
-        >
-          <Copy className="mr-1.5 h-4 w-4" />
-          {copied === 'link' ? 'Copied' : 'Copy link'}
-        </Button>
-        {revealedCode ? (
+      <div className="space-y-2">
+        {needsGenerate || !hasRevealed ? (
           <Button
             type="button"
-            variant="outline"
-            className="rounded-xl"
-            onClick={() => void copyText(revealedCode, 'code')}
+            className="h-11 w-full rounded-lg bg-[#9A7B2F] text-sm font-medium tracking-wide text-white hover:bg-[#8a6e2a]"
+            onClick={() => void rotate()}
+            disabled={busy || !info?.url}
           >
-            <Copy className="mr-1.5 h-4 w-4" />
-            {copied === 'code' ? 'Copied' : 'Copy code'}
+            {busy ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <RefreshCw className="mr-2 h-4 w-4" />
+            )}
+            {info?.hasCode ? 'Reveal new code' : 'Generate access code'}
           </Button>
         ) : null}
+
         <Button
           type="button"
-          variant="outline"
-          className="rounded-xl"
-          onClick={() => void rotate()}
-          disabled={busy}
-        >
-          {busy ? (
-            <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-          ) : (
-            <RefreshCw className="mr-1.5 h-4 w-4" />
+          variant={needsGenerate || !hasRevealed ? 'outline' : 'default'}
+          className={cn(
+            'h-11 w-full rounded-lg text-sm font-medium tracking-wide',
+            !(needsGenerate || !hasRevealed) &&
+              'bg-[#9A7B2F] text-white hover:bg-[#8a6e2a]'
           )}
-          {info?.hasCode || revealedCode ? 'Rotate code' : 'Generate code'}
+          onClick={() => void share()}
+          disabled={!info?.url}
+        >
+          <Share2 className="mr-2 h-4 w-4" />
+          {copied === 'all' ? 'Copied' : 'Share with staff'}
         </Button>
+
+        {hasRevealed ? (
+          <div className="flex items-center justify-center gap-5 pt-1">
+            <button
+              type="button"
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+              onClick={() => void copyText(revealedCode!, 'code')}
+            >
+              {copied === 'code' ? (
+                <Check className="h-3.5 w-3.5" />
+              ) : (
+                <Copy className="h-3.5 w-3.5" />
+              )}
+              {copied === 'code' ? 'Code copied' : 'Copy code'}
+            </button>
+            <span className="h-3 w-px bg-border" aria-hidden />
+            <button
+              type="button"
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+              onClick={() => void rotate()}
+              disabled={busy}
+            >
+              {busy ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <RefreshCw className="h-3.5 w-3.5" />
+              )}
+              Rotate code
+            </button>
+          </div>
+        ) : null}
       </div>
     </div>
   )

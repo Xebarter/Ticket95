@@ -10,11 +10,11 @@ import { cn } from '@/lib/utils';
 import { getEventImages } from '@/lib/event-display';
 import {
   ArrowLeft,
-  CalendarDays,
   CheckCircle2,
+  ChevronDown,
   Keyboard,
-  MapPin,
   ScanLine,
+  Share2,
   ShieldAlert,
   XCircle,
 } from 'lucide-react';
@@ -22,8 +22,6 @@ import { useProfileData } from '../use-profile-data';
 import {
   ProfileEmptyState,
   ProfileLoadingState,
-  ProfilePageHeader,
-  ProfileSection,
 } from '@/components/profile/profile-ui';
 import { VerifierSharePanel } from '@/components/verify/verifier-share-panel';
 
@@ -57,12 +55,18 @@ type JsQrDecoder = (data: Uint8ClampedArray, width: number, height: number) => J
 
 const formatEventWhen = (value: string) =>
   new Date(value).toLocaleString('en-US', {
-    weekday: 'short',
     month: 'short',
     day: 'numeric',
     hour: 'numeric',
     minute: '2-digit',
   });
+
+const formatEventDateLine = (date?: string | null, venue?: string | null) => {
+  const parts: string[] = [];
+  if (date) parts.push(formatEventWhen(date));
+  if (venue) parts.push(venue);
+  return parts.join(' · ');
+};
 
 function EventThumb({
   src,
@@ -76,7 +80,7 @@ function EventThumb({
   return (
     <div
       className={cn(
-        'relative shrink-0 overflow-hidden rounded-xl border border-border/70 bg-muted',
+        'relative shrink-0 overflow-hidden rounded-xl bg-muted',
         className
       )}
     >
@@ -84,7 +88,7 @@ function EventThumb({
         <Image src={src} alt={alt} fill className="object-cover" sizes="96px" />
       ) : (
         <div className="flex h-full w-full items-center justify-center text-muted-foreground">
-          <ScanLine className="h-6 w-6" />
+          <ScanLine className="h-5 w-5" />
         </div>
       )}
     </div>
@@ -96,6 +100,7 @@ export default function VerifyClient() {
   const eventId = (searchParams.get('event') || '').trim();
   const { loading: loadingProfile, myEvents } = useProfileData();
   const [manualOpen, setManualOpen] = useState(false);
+  const [shareOpenId, setShareOpenId] = useState<string | null>(null);
 
   const [manualPayload, setManualPayload] = useState('');
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
@@ -435,11 +440,18 @@ export default function VerifyClient() {
 
   if (!eventId) {
     return (
-      <div className="space-y-5">
-        <ProfilePageHeader
-          title="Verify"
-          description="Share an installable door verifier with your team, or scan tickets yourself."
-        />
+      <div className="mx-auto w-full max-w-2xl space-y-7 md:max-w-none">
+        <header className="space-y-2 border-b border-border/50 pb-5">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[#9A7B2F]">
+            Operations
+          </p>
+          <h1 className="text-[1.75rem] font-semibold tracking-[-0.02em] text-foreground sm:text-[1.85rem]">
+            Ticket verification
+          </h1>
+          <p className="max-w-lg text-[13px] leading-relaxed text-muted-foreground sm:text-sm">
+            Admit guests at the door, or provision a secure verifier for your staff.
+          </p>
+        </header>
 
         {loadingProfile ? (
           <ProfileLoadingState />
@@ -449,68 +461,100 @@ export default function VerifyClient() {
             title="No events to verify"
             description="Create an event first, then use this page to scan tickets at entry."
             action={
-              <Button asChild className="rounded-xl">
+              <Button asChild className="rounded-lg">
                 <Link href="/organizer/dashboard/create">Create event</Link>
               </Button>
             }
           />
         ) : (
-          <ProfileSection
-            title="Your events"
-            description="Share the installable verifier with door staff, or scan yourself."
-          >
-            <div className="space-y-4">
-              {myEvents.map((event) => {
+          <section aria-labelledby="verify-events-heading">
+            <div className="mb-1 flex items-end justify-between gap-3">
+              <h2
+                id="verify-events-heading"
+                className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground"
+              >
+                Events
+              </h2>
+              <p className="text-[11px] tabular-nums text-muted-foreground">
+                {myEvents.length.toString().padStart(2, '0')}
+              </p>
+            </div>
+
+            <ul>
+              {myEvents.map((event, index) => {
                 const image = getEventImages(event)[0];
+                const shareOpen = shareOpenId === event.id;
+                const meta = formatEventDateLine(event.date, event.venue);
                 return (
-                  <article
+                  <li
                     key={event.id}
-                    className="overflow-hidden rounded-2xl border border-border/70 bg-card shadow-sm"
+                    className={cn('py-5', index > 0 && 'border-t border-border/40')}
                   >
-                    <div className="flex gap-3 p-3 sm:gap-4 sm:p-4">
+                    <div className="flex gap-3.5">
                       <EventThumb
                         src={image}
                         alt=""
-                        className="h-[4.5rem] w-[4.5rem] sm:h-24 sm:w-24"
+                        className="h-14 w-14 rounded-lg sm:h-[3.75rem] sm:w-[3.75rem]"
                       />
-                      <div className="min-w-0 flex-1">
-                        <h3 className="line-clamp-2 text-[15px] font-semibold leading-snug tracking-tight sm:text-base">
+                      <div className="min-w-0 flex-1 self-center">
+                        <h3 className="line-clamp-2 text-[15px] font-semibold leading-snug tracking-[-0.01em] text-foreground sm:text-base">
                           {event.name}
                         </h3>
-                        <div className="mt-1.5 space-y-1 text-xs text-muted-foreground sm:text-[13px]">
-                          {event.date ? (
-                            <p className="inline-flex items-center gap-1.5">
-                              <CalendarDays className="h-3.5 w-3.5 shrink-0" />
-                              <span className="truncate">{formatEventWhen(event.date)}</span>
-                            </p>
-                          ) : null}
-                          {event.venue ? (
-                            <p className="inline-flex min-w-0 items-center gap-1.5">
-                              <MapPin className="h-3.5 w-3.5 shrink-0" />
-                              <span className="truncate">{event.venue}</span>
-                            </p>
-                          ) : null}
-                        </div>
+                        {meta ? (
+                          <p className="mt-1 truncate text-[12px] leading-relaxed text-muted-foreground">
+                            {meta}
+                          </p>
+                        ) : null}
                       </div>
                     </div>
 
-                    <div className="border-t border-border/60 bg-muted/10 p-3 sm:px-4">
-                      <VerifierSharePanel eventId={event.id} eventName={event.name} />
-                    </div>
-
-                    <div className="border-t border-border/60 bg-muted/20 p-3 sm:flex sm:justify-end sm:px-4">
-                      <Button asChild className="h-11 w-full rounded-xl sm:h-9 sm:w-auto">
+                    <div className="mt-4 grid grid-cols-2 gap-2.5">
+                      <Button
+                        asChild
+                        className="h-11 rounded-lg bg-slate-900 text-[13px] font-medium tracking-wide text-white hover:bg-slate-800"
+                      >
                         <Link href={`/profile/verify?event=${event.id}`}>
-                          <ScanLine className="mr-1.5 h-4 w-4" />
-                          Scan as organizer
+                          <ScanLine className="mr-2 h-4 w-4" />
+                          Open scanner
                         </Link>
                       </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className={cn(
+                          'h-11 rounded-lg border-border/80 text-[13px] font-medium tracking-wide',
+                          shareOpen && 'border-[#9A7B2F]/40 bg-[#9A7B2F]/5 text-foreground'
+                        )}
+                        onClick={() =>
+                          setShareOpenId((current) => (current === event.id ? null : event.id))
+                        }
+                        aria-expanded={shareOpen}
+                      >
+                        <Share2 className="mr-2 h-3.5 w-3.5" />
+                        Staff access
+                        <ChevronDown
+                          className={cn(
+                            'ml-1.5 h-3.5 w-3.5 opacity-50 transition-transform duration-200',
+                            shareOpen && 'rotate-180'
+                          )}
+                        />
+                      </Button>
                     </div>
-                  </article>
+
+                    {shareOpen ? (
+                      <div className="pt-5">
+                        <VerifierSharePanel
+                          eventId={event.id}
+                          eventName={event.name}
+                          embedded
+                        />
+                      </div>
+                    ) : null}
+                  </li>
                 );
               })}
-            </div>
-          </ProfileSection>
+            </ul>
+          </section>
         )}
       </div>
     );
@@ -519,12 +563,12 @@ export default function VerifyClient() {
   return (
     <div className="flex min-h-[100dvh] flex-col bg-[#0a0e1a] text-white">
       <header className="sticky top-0 z-20 border-b border-white/10 bg-[#0a0e1a]/95 backdrop-blur supports-[backdrop-filter]:bg-[#0a0e1a]/85">
-        <div className="mx-auto flex w-full max-w-lg items-center gap-3 px-3 py-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:px-4">
+        <div className="mx-auto flex w-full max-w-lg items-center gap-2.5 px-2 py-2.5 pt-[max(0.65rem,env(safe-area-inset-top))] sm:gap-3 sm:px-4 sm:py-3">
           <Button
             asChild
             variant="ghost"
             size="icon"
-            className="h-11 w-11 shrink-0 rounded-xl text-white hover:bg-white/10 hover:text-white"
+            className="h-10 w-10 shrink-0 rounded-xl text-white hover:bg-white/10 hover:text-white sm:h-11 sm:w-11"
           >
             <Link href="/profile/verify" aria-label="Back to event list">
               <ArrowLeft className="h-5 w-5" />
@@ -534,14 +578,14 @@ export default function VerifyClient() {
           <EventThumb
             src={activeEventImage}
             alt=""
-            className="h-12 w-12 rounded-lg border-white/15 sm:h-14 sm:w-14"
+            className="h-11 w-11 rounded-lg border-white/15 sm:h-14 sm:w-14"
           />
 
           <div className="min-w-0 flex-1">
             <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#d4b46a]">
               Door verify
             </p>
-            <h1 className="truncate text-base font-semibold leading-tight sm:text-lg">
+            <h1 className="truncate text-[15px] font-semibold leading-tight sm:text-lg">
               {activeEvent?.name || (loadingProfile ? 'Loading event…' : 'Event scanner')}
             </h1>
             {activeEvent?.venue ? (
@@ -551,8 +595,8 @@ export default function VerifyClient() {
         </div>
       </header>
 
-      <div className="mx-auto flex w-full max-w-lg flex-1 flex-col gap-3 px-3 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 sm:px-4 sm:pt-4">
-        <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-black shadow-lg">
+      <div className="mx-auto flex w-full max-w-lg flex-1 flex-col gap-2.5 px-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 sm:gap-3 sm:px-4 sm:pt-4">
+        <div className="relative overflow-hidden rounded-xl border border-white/10 bg-black shadow-lg sm:rounded-2xl">
           <video
             ref={videoRef}
             className="aspect-[3/4] w-full bg-black object-cover sm:aspect-[4/3]"
@@ -564,8 +608,8 @@ export default function VerifyClient() {
 
           <div className="pointer-events-none absolute inset-0">
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_32%,rgba(0,0,0,0.45)_100%)]" />
-            <div className="absolute left-1/2 top-1/2 h-[42%] w-[58%] max-w-[16rem] -translate-x-1/2 -translate-y-1/2 rounded-2xl border-2 border-white/70 shadow-[0_0_0_9999px_rgba(0,0,0,0.28)]" />
-            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-4 pb-4 pt-10">
+            <div className="absolute left-1/2 top-1/2 h-[42%] w-[62%] max-w-[16rem] -translate-x-1/2 -translate-y-1/2 rounded-2xl border-2 border-white/70 shadow-[0_0_0_9999px_rgba(0,0,0,0.28)]" />
+            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-3 pb-3 pt-8 sm:px-4 sm:pb-4 sm:pt-10">
               <p className="text-center text-sm font-medium text-white/90">
                 {isVerifying
                   ? 'Checking ticket…'
@@ -577,7 +621,7 @@ export default function VerifyClient() {
           </div>
 
           {cameraActive ? (
-            <span className="absolute right-3 top-3 inline-flex items-center gap-1.5 rounded-full bg-emerald-500/90 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-white">
+            <span className="absolute right-2.5 top-2.5 inline-flex items-center gap-1.5 rounded-full bg-emerald-500/90 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-white sm:right-3 sm:top-3">
               <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" />
               Live
             </span>
@@ -605,21 +649,21 @@ export default function VerifyClient() {
         </div>
 
         {cameraError ? (
-          <div className="rounded-xl border border-red-400/30 bg-red-500/15 px-3 py-3 text-sm text-red-100">
+          <div className="rounded-xl border border-red-400/30 bg-red-500/15 px-3 py-2.5 text-sm text-red-100">
             {cameraError}
           </div>
         ) : null}
 
         {scanError ? (
-          <div className="rounded-xl border border-red-400/30 bg-red-500/15 px-3 py-3 text-sm text-red-100">
+          <div className="rounded-xl border border-red-400/30 bg-red-500/15 px-3 py-2.5 text-sm text-red-100">
             {scanError}
           </div>
         ) : null}
 
-        <div className="rounded-2xl border border-white/10 bg-white/5">
+        <div className="rounded-xl border border-white/10 bg-white/5 sm:rounded-2xl">
           <button
             type="button"
-            className="flex w-full items-center justify-between gap-3 px-4 py-3.5 text-left"
+            className="flex w-full items-center justify-between gap-3 px-3 py-3 text-left sm:px-4 sm:py-3.5"
             onClick={() => setManualOpen((open) => !open)}
           >
             <span className="inline-flex items-center gap-2 text-sm font-medium">
@@ -629,7 +673,7 @@ export default function VerifyClient() {
             <span className="text-xs text-slate-400">{manualOpen ? 'Hide' : 'Show'}</span>
           </button>
           {manualOpen ? (
-            <form className="space-y-2 border-t border-white/10 px-4 pb-4 pt-3" onSubmit={onManualSubmit}>
+            <form className="space-y-2 border-t border-white/10 px-3 pb-3 pt-3 sm:px-4 sm:pb-4" onSubmit={onManualSubmit}>
               <Input
                 value={manualPayload}
                 onChange={(event) => setManualPayload(event.target.value)}
@@ -650,17 +694,17 @@ export default function VerifyClient() {
       </div>
 
       {scanResult ? (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/75 p-3 sm:items-center sm:p-4">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/75 p-2 sm:items-center sm:p-4">
           <div
             className={cn(
-              'w-full max-w-md overflow-hidden rounded-3xl border shadow-2xl sm:rounded-2xl',
+              'w-full max-w-md overflow-hidden rounded-2xl border shadow-2xl sm:rounded-2xl',
               scanResult.valid
                 ? 'border-emerald-400/30 bg-[#0f2a1f] text-emerald-50'
                 : 'border-red-400/30 bg-[#2a1216] text-red-50'
             )}
           >
             {activeEventImage ? (
-              <div className="relative h-28 w-full sm:h-32">
+              <div className="relative h-24 w-full sm:h-32">
                 <Image
                   src={activeEventImage}
                   alt=""
@@ -679,7 +723,7 @@ export default function VerifyClient() {
               </div>
             ) : null}
 
-            <div className="space-y-4 px-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] pt-5 sm:pb-5">
+            <div className="space-y-4 px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-4 sm:px-5 sm:pb-5 sm:pt-5">
               <div className="flex items-start gap-3">
                 {scanResult.valid ? (
                   <CheckCircle2 className="mt-0.5 h-7 w-7 shrink-0 text-emerald-300" />
