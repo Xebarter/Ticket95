@@ -181,6 +181,7 @@ export function VerifierApp({ slug }: { slug: string }) {
   const [pendingCount, setPendingCount] = useState(0)
   const [flash, setFlash] = useState<ScanFlash>(null)
   const [cameraActive, setCameraActive] = useState(false)
+  const [cameraStarting, setCameraStarting] = useState(false)
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null)
   const [iosHint, setIosHint] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -200,6 +201,7 @@ export function VerifierApp({ slug }: { slug: string }) {
   const flushingRef = useRef(false)
   const audioRef = useRef(createScanAudio())
   const cameraStartedRef = useRef(false)
+  const userPausedRef = useRef(false)
 
   useEffect(() => {
     sessionRef.current = session
@@ -704,18 +706,25 @@ export function VerifierApp({ slug }: { slug: string }) {
   )
 
   const stopScanner = useCallback(() => {
+    userPausedRef.current = true
     if (scanTimerRef.current) {
       window.clearInterval(scanTimerRef.current)
       scanTimerRef.current = null
     }
     streamRef.current?.getTracks().forEach((t) => t.stop())
     streamRef.current = null
+    if (videoRef.current) {
+      videoRef.current.srcObject = null
+    }
     setCameraActive(false)
+    setCameraStarting(false)
     cameraStartedRef.current = false
   }, [])
 
   const startScanner = useCallback(async () => {
+    userPausedRef.current = false
     setError(null)
+    setCameraStarting(true)
     void audioRef.current.unlock()
     try {
       if (!barcodeDetectorRef.current && 'BarcodeDetector' in window) {
@@ -733,12 +742,18 @@ export function VerifierApp({ slug }: { slug: string }) {
         video: { facingMode: { ideal: 'environment' } },
         audio: false,
       })
+      if (userPausedRef.current) {
+        stream.getTracks().forEach((t) => t.stop())
+        setCameraStarting(false)
+        return
+      }
       streamRef.current = stream
       if (videoRef.current) {
         videoRef.current.srcObject = stream
         await videoRef.current.play()
       }
       setCameraActive(true)
+      setCameraStarting(false)
       cameraStartedRef.current = true
 
       scanTimerRef.current = window.setInterval(async () => {
@@ -774,15 +789,16 @@ export function VerifierApp({ slug }: { slug: string }) {
       const message = err instanceof Error ? err.message : 'Camera unavailable'
       setError(message)
       setCameraActive(false)
+      setCameraStarting(false)
       cameraStartedRef.current = false
     }
   }, [handlePayload])
 
   useEffect(() => () => stopScanner(), [stopScanner])
 
-  // Auto-start camera when ready
+  // Auto-start camera when ready (not after an intentional Stop)
   useEffect(() => {
-    if (phase !== 'ready' || cameraStartedRef.current) return
+    if (phase !== 'ready' || cameraStartedRef.current || userPausedRef.current) return
     const t = window.setTimeout(() => {
       void startScanner()
     }, 350)
@@ -1070,51 +1086,83 @@ export function VerifierApp({ slug }: { slug: string }) {
       ) : null}
 
       <div className="relative mx-4 mt-3 flex-1 overflow-hidden rounded-2xl border border-white/10 bg-black shadow-[0_20px_60px_rgba(0,0,0,0.45)]">
-        <video
-          ref={videoRef}
-          className="aspect-[3/4] w-full object-cover sm:aspect-[4/3]"
-          muted
-          playsInline
-          autoPlay
-        />
-        <canvas ref={canvasRef} className="hidden" />
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_34%,rgba(0,0,0,0.5)_100%)]" />
-        {!cameraActive && !flash ? (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/50 px-6 text-center">
-            <div>
-              <Loader2 className="mx-auto h-6 w-6 animate-spin text-white/70" />
-              <p className="mt-2 text-sm text-white/80">Starting camera…</p>
-            </div>
-          </div>
-        ) : null}
-        {flash ? (
+        <div className="relative aspect-[3/4] w-full sm:aspect-[4/3]">
+          {/* Event image stays mounted under the feed so Stop is instant */}
           <div
             className={cn(
-              'absolute inset-0 flex flex-col items-center justify-center px-6 text-center',
-              flash.kind === 'valid' ? 'bg-emerald-600/92' : 'bg-rose-700/93'
+              'absolute inset-0',
+              cameraActive ? 'pointer-events-none opacity-0' : 'opacity-100'
             )}
+            aria-hidden={cameraActive}
           >
-            {flash.kind === 'valid' ? (
-              <CheckCircle2 className="mb-2 h-16 w-16" />
+            {heroImage ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={heroImage} alt="" className="h-full w-full object-cover" />
             ) : (
-              <XCircle className="mb-2 h-16 w-16" />
+              <div className="h-full w-full bg-[radial-gradient(ellipse_at_top,#1e293b,transparent_55%),linear-gradient(160deg,#0a0e1a,#111827_50%,#0a0e1a)]" />
             )}
-            <p className="text-3xl font-bold tracking-wide">{flash.title}</p>
-            {flash.subtitle ? (
-              <p className="mt-1 text-sm text-white/90">{flash.subtitle}</p>
+            <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/25 to-black/35" />
+            {!cameraStarting && !flash ? (
+              <div className="absolute inset-0 flex flex-col items-center justify-center px-6 text-center">
+                <ScanLine className="mb-2 h-8 w-8 text-[#d4b46a]" />
+                <p className="text-sm font-medium text-white/90">Tap Scan to open camera</p>
+              </div>
+            ) : null}
+            {cameraStarting && !flash ? (
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/40 px-6 text-center">
+                <Loader2 className="h-6 w-6 animate-spin text-white/80" />
+                <p className="mt-2 text-sm text-white/80">Starting camera…</p>
+              </div>
             ) : null}
           </div>
-        ) : null}
+
+          <video
+            ref={videoRef}
+            className={cn(
+              'absolute inset-0 h-full w-full object-cover',
+              cameraActive ? 'opacity-100' : 'pointer-events-none opacity-0'
+            )}
+            muted
+            playsInline
+            autoPlay
+          />
+          <canvas ref={canvasRef} className="hidden" />
+
+          {cameraActive && !flash ? (
+            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_34%,rgba(0,0,0,0.5)_100%)]" />
+          ) : null}
+
+          {flash ? (
+            <div
+              className={cn(
+                'absolute inset-0 flex flex-col items-center justify-center px-6 text-center',
+                flash.kind === 'valid' ? 'bg-emerald-600/92' : 'bg-rose-700/93'
+              )}
+            >
+              {flash.kind === 'valid' ? (
+                <CheckCircle2 className="mb-2 h-16 w-16" />
+              ) : (
+                <XCircle className="mb-2 h-16 w-16" />
+              )}
+              <p className="text-3xl font-bold tracking-wide">{flash.title}</p>
+              {flash.subtitle ? (
+                <p className="mt-1 text-sm text-white/90">{flash.subtitle}</p>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
       </div>
 
       <div className="mt-3 px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
         <button
           type="button"
-          onClick={() => (cameraActive ? stopScanner() : void startScanner())}
+          onClick={() =>
+            cameraActive || cameraStarting ? stopScanner() : void startScanner()
+          }
           className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-white text-sm font-semibold text-slate-900"
         >
           <ScanLine className="h-4 w-4" />
-          {cameraActive ? 'Stop' : 'Scan'}
+          {cameraActive || cameraStarting ? 'Stop' : 'Scan'}
         </button>
       </div>
 
