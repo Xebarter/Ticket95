@@ -29,7 +29,6 @@ import { cn } from '@/lib/utils'
 import {
   CheckCircle2,
   Download,
-  Keyboard,
   Loader2,
   ScanLine,
   Wifi,
@@ -181,8 +180,6 @@ export function VerifierApp({ slug }: { slug: string }) {
   const [online, setOnline] = useState(true)
   const [pendingCount, setPendingCount] = useState(0)
   const [flash, setFlash] = useState<ScanFlash>(null)
-  const [manualOpen, setManualOpen] = useState(false)
-  const [manualValue, setManualValue] = useState('')
   const [cameraActive, setCameraActive] = useState(false)
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null)
   const [iosHint, setIosHint] = useState(false)
@@ -861,16 +858,6 @@ export function VerifierApp({ slug }: { slug: string }) {
     router.push(`/verify/${next}`)
   }
 
-  const lockOut = async () => {
-    stopScanner()
-    await clearSession(safeSlug)
-    setSession(null)
-    sessionRef.current = null
-    setTickets([])
-    setPhase('login')
-    setCode('')
-  }
-
   if (phase === 'boot') {
     return (
       <div className="flex min-h-[100dvh] items-center justify-center">
@@ -1063,25 +1050,16 @@ export function VerifierApp({ slug }: { slug: string }) {
               {session?.deviceName ? ` · ${session.deviceName}` : ''}
             </p>
           </div>
-          <div className="flex shrink-0 flex-col items-end gap-1.5">
-            {(installPrompt || iosHint) && (
-              <button
-                type="button"
-                onClick={() => void onInstall()}
-                className="inline-flex h-8 items-center gap-1 rounded-lg border border-white/15 px-2 text-[11px] font-medium"
-              >
-                <Download className="h-3 w-3" />
-                Install
-              </button>
-            )}
+          {(installPrompt || iosHint) && (
             <button
               type="button"
-              onClick={() => void lockOut()}
-              className="text-[11px] text-slate-500 underline-offset-2 hover:text-slate-300 hover:underline"
+              onClick={() => void onInstall()}
+              className="inline-flex h-8 shrink-0 items-center gap-1 rounded-lg border border-white/15 px-2 text-[11px] font-medium"
             >
-              Lock
+              <Download className="h-3 w-3" />
+              Install
             </button>
-          </div>
+          )}
         </div>
       </header>
 
@@ -1129,48 +1107,16 @@ export function VerifierApp({ slug }: { slug: string }) {
         ) : null}
       </div>
 
-      <div className="mt-3 grid grid-cols-2 gap-2 px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+      <div className="mt-3 px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
         <button
           type="button"
           onClick={() => (cameraActive ? stopScanner() : void startScanner())}
-          className="flex h-12 items-center justify-center gap-2 rounded-xl bg-white text-sm font-semibold text-slate-900"
+          className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-white text-sm font-semibold text-slate-900"
         >
           <ScanLine className="h-4 w-4" />
           {cameraActive ? 'Stop' : 'Scan'}
         </button>
-        <button
-          type="button"
-          onClick={() => setManualOpen((v) => !v)}
-          className="flex h-12 items-center justify-center gap-2 rounded-xl border border-white/15 text-sm font-medium"
-        >
-          <Keyboard className="h-4 w-4" />
-          Manual
-        </button>
       </div>
-
-      {manualOpen ? (
-        <form
-          className="flex gap-2 px-4 pb-4"
-          onSubmit={(e) => {
-            e.preventDefault()
-            void handlePayload(manualValue)
-            setManualValue('')
-          }}
-        >
-          <input
-            value={manualValue}
-            onChange={(e) => setManualValue(e.target.value)}
-            className="h-11 flex-1 rounded-xl border border-white/15 bg-white/5 px-3 text-sm outline-none focus:border-[#d4b46a]"
-            placeholder="Paste QR payload"
-          />
-          <button
-            type="submit"
-            className="h-11 rounded-xl bg-[#d4b46a] px-4 text-sm font-semibold text-slate-950"
-          >
-            Check
-          </button>
-        </form>
-      ) : null}
 
       {error ? <p className="px-4 pb-4 text-sm text-rose-400">{error}</p> : null}
     </div>
