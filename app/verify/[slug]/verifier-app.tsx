@@ -187,6 +187,9 @@ export function VerifierApp({ slug }: { slug: string }) {
   const [busy, setBusy] = useState(false)
   const [switchOpen, setSwitchOpen] = useState(false)
   const [switchSlug, setSwitchSlug] = useState('')
+  const [isStandalone, setIsStandalone] = useState(() =>
+    typeof window !== 'undefined' ? isStandaloneDisplay() : false
+  )
 
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
@@ -202,6 +205,19 @@ export function VerifierApp({ slug }: { slug: string }) {
   const audioRef = useRef(createScanAudio())
   const cameraStartedRef = useRef(false)
   const userPausedRef = useRef(false)
+
+  useEffect(() => {
+    const syncStandalone = () => setIsStandalone(isStandaloneDisplay())
+    syncStandalone()
+    const mq = window.matchMedia('(display-mode: standalone)')
+    const onChange = () => syncStandalone()
+    mq.addEventListener?.('change', onChange)
+    window.addEventListener('focus', syncStandalone)
+    return () => {
+      mq.removeEventListener?.('change', onChange)
+      window.removeEventListener('focus', syncStandalone)
+    }
+  }, [])
 
   useEffect(() => {
     sessionRef.current = session
@@ -796,14 +812,15 @@ export function VerifierApp({ slug }: { slug: string }) {
 
   useEffect(() => () => stopScanner(), [stopScanner])
 
-  // Auto-start camera when ready (not after an intentional Stop)
+  // Auto-start camera only in the installed PWA — browser / QR open stays on install poster
   useEffect(() => {
-    if (phase !== 'ready' || cameraStartedRef.current || userPausedRef.current) return
+    if (phase !== 'ready' || !isStandalone) return
+    if (cameraStartedRef.current || userPausedRef.current) return
     const t = window.setTimeout(() => {
       void startScanner()
     }, 350)
     return () => window.clearTimeout(t)
-  }, [phase, startScanner])
+  }, [phase, isStandalone, startScanner])
 
   const onLogin = async (e: FormEvent) => {
     e.preventDefault()
@@ -883,7 +900,7 @@ export function VerifierApp({ slug }: { slug: string }) {
   }
 
   if (phase === 'login') {
-    const showCenteredInstall = !isStandaloneDisplay()
+    const showInstall = !isStandalone
 
     return (
       <div className="relative mx-auto flex min-h-[100dvh] w-full max-w-lg flex-col overflow-hidden">
@@ -894,10 +911,10 @@ export function VerifierApp({ slug }: { slug: string }) {
           ) : (
             <div className="h-full w-full bg-[radial-gradient(ellipse_at_top,#1e293b,transparent_55%),linear-gradient(160deg,#0a0e1a,#111827_50%,#0a0e1a)]" />
           )}
-          <div className="absolute inset-0 bg-gradient-to-b from-black/55 via-[#0a0e1a]/88 to-[#0a0e1a]" />
+          <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-[#0a0e1a]/80 to-[#0a0e1a]" />
         </div>
 
-        <div className="relative z-10 flex min-h-[100dvh] flex-1 flex-col px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-[max(2rem,env(safe-area-inset-top))]">
+        <div className="relative z-10 flex min-h-[100dvh] flex-1 flex-col px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-[max(1.5rem,env(safe-area-inset-top))]">
           <div className="shrink-0">
             <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#d4b46a]">
               Door verifier
@@ -905,43 +922,50 @@ export function VerifierApp({ slug }: { slug: string }) {
             <h1 className="mt-2 text-3xl font-semibold tracking-tight text-white drop-shadow">
               {heroName}
             </h1>
-            {heroVenue ? (
-              <p className="mt-1 text-sm text-white/70">{heroVenue}</p>
-            ) : (
-              <p className="mt-1 text-sm text-white/60">
-                {showCenteredInstall
-                  ? 'Install this verifier on your phone for the door'
-                  : 'Enter the organizer access code'}
-              </p>
-            )}
+            {heroVenue ? <p className="mt-1 text-sm text-white/70">{heroVenue}</p> : null}
           </div>
 
-          {showCenteredInstall ? (
-            <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center px-5">
-              <div className="pointer-events-auto flex w-full max-w-xs flex-col items-center">
-                <button
-                  type="button"
-                  onClick={() => void onInstall()}
-                  className="flex h-16 w-full items-center justify-center gap-3 rounded-2xl bg-[#d4b46a] px-8 text-base font-semibold text-slate-950 shadow-[0_18px_50px_rgba(212,180,106,0.35)] transition active:scale-[0.98]"
-                >
-                  <Download className="h-5 w-5" />
-                  Install verifier
-                </button>
-                {iosHint && !installPrompt ? (
-                  <p className="mt-4 text-center text-sm text-white/70">
-                    iPhone: tap Share, then{' '}
-                    <span className="text-white">Add to Home Screen</span>
-                  </p>
-                ) : (
-                  <p className="mt-4 text-center text-sm text-white/55">
-                    Add to your home screen, then unlock with the access code below
-                  </p>
-                )}
-              </div>
-            </div>
-          ) : null}
+          {/* Same framed space as the scanner — install first when opened from URL / QR */}
+          <div className="relative mt-5 flex-1 overflow-hidden rounded-2xl border border-white/15 shadow-[0_20px_60px_rgba(0,0,0,0.45)]">
+            <div className="relative aspect-[3/4] min-h-[16rem] w-full sm:aspect-[4/3]">
+              {heroImage ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={heroImage} alt="" className="absolute inset-0 h-full w-full object-cover" />
+              ) : (
+                <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,#1e293b,transparent_55%),linear-gradient(160deg,#0a0e1a,#111827_50%,#0a0e1a)]" />
+              )}
+              <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/30 to-black/40" />
 
-          <div className="mt-auto shrink-0 pt-[min(42vh,18rem)]">
+              {showInstall ? (
+                <div className="absolute inset-0 flex flex-col items-center justify-center px-6 text-center">
+                  <button
+                    type="button"
+                    onClick={() => void onInstall()}
+                    className="flex h-14 w-full max-w-xs items-center justify-center gap-2.5 rounded-2xl bg-[#d4b46a] px-6 text-base font-semibold text-slate-950 shadow-[0_18px_50px_rgba(212,180,106,0.35)] transition active:scale-[0.98]"
+                  >
+                    <Download className="h-5 w-5" />
+                    Install verifier
+                  </button>
+                  {iosHint && !installPrompt ? (
+                    <p className="mt-4 max-w-xs text-sm text-white/75">
+                      iPhone: tap Share, then{' '}
+                      <span className="font-medium text-white">Add to Home Screen</span>
+                    </p>
+                  ) : (
+                    <p className="mt-4 max-w-xs text-sm text-white/60">
+                      Install for one-tap door scanning, then enter the access code below.
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <div className="absolute inset-0 flex flex-col items-center justify-center px-6 text-center">
+                  <p className="text-sm font-medium text-white/85">Enter the access code to start</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="mt-4 shrink-0">
             <form
               onSubmit={onLogin}
               className="space-y-3 rounded-2xl border border-white/10 bg-black/35 p-4 backdrop-blur-md"
@@ -1104,8 +1128,33 @@ export function VerifierApp({ slug }: { slug: string }) {
             <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/25 to-black/35" />
             {!cameraStarting && !flash ? (
               <div className="absolute inset-0 flex flex-col items-center justify-center px-6 text-center">
-                <ScanLine className="mb-2 h-8 w-8 text-[#d4b46a]" />
-                <p className="text-sm font-medium text-white/90">Tap Scan to open camera</p>
+                {!isStandalone ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => void onInstall()}
+                      className="pointer-events-auto flex h-14 w-full max-w-xs items-center justify-center gap-2.5 rounded-2xl bg-[#d4b46a] px-6 text-base font-semibold text-slate-950 shadow-[0_18px_50px_rgba(212,180,106,0.35)] transition active:scale-[0.98]"
+                    >
+                      <Download className="h-5 w-5" />
+                      Install verifier
+                    </button>
+                    {iosHint && !installPrompt ? (
+                      <p className="mt-4 max-w-xs text-sm text-white/75">
+                        iPhone: tap Share, then{' '}
+                        <span className="font-medium text-white">Add to Home Screen</span>
+                      </p>
+                    ) : (
+                      <p className="mt-4 max-w-xs text-sm text-white/60">
+                        Install for reliable door scanning on this device.
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <ScanLine className="mb-2 h-8 w-8 text-[#d4b46a]" />
+                    <p className="text-sm font-medium text-white/90">Tap Scan to open camera</p>
+                  </>
+                )}
               </div>
             ) : null}
             {cameraStarting && !flash ? (
@@ -1154,16 +1203,27 @@ export function VerifierApp({ slug }: { slug: string }) {
       </div>
 
       <div className="mt-3 px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
-        <button
-          type="button"
-          onClick={() =>
-            cameraActive || cameraStarting ? stopScanner() : void startScanner()
-          }
-          className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-white text-sm font-semibold text-slate-900"
-        >
-          <ScanLine className="h-4 w-4" />
-          {cameraActive || cameraStarting ? 'Stop' : 'Scan'}
-        </button>
+        {!isStandalone && !cameraActive && !cameraStarting ? (
+          <button
+            type="button"
+            onClick={() => void onInstall()}
+            className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#d4b46a] text-sm font-semibold text-slate-950"
+          >
+            <Download className="h-4 w-4" />
+            Install verifier
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() =>
+              cameraActive || cameraStarting ? stopScanner() : void startScanner()
+            }
+            className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-white text-sm font-semibold text-slate-900"
+          >
+            <ScanLine className="h-4 w-4" />
+            {cameraActive || cameraStarting ? 'Stop' : 'Scan'}
+          </button>
+        )}
       </div>
 
       {error ? <p className="px-4 pb-4 text-sm text-rose-400">{error}</p> : null}
