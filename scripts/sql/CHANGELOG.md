@@ -263,6 +263,10 @@ For issues or questions about the database schema:
 
 ## Version History
 
+### v1.1.0
+- Added marketing email engine (`026_marketing_emails.sql`)
+  - `newsletter_subscribers`, `marketing_campaigns`, `marketing_campaign_recipients`
+
 ### v1.0.0 (Current)
 - Initial production-ready schema
 - Full Supabase integration
@@ -272,4 +276,4 @@ For issues or questions about the database schema:
 
 ---
 
-Last Updated: 2026-02-25
+Last Updated: 2026-07-27

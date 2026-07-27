@@ -18,13 +18,34 @@ import { BrandLogo } from '@/components/brand/brand-logo';
 export function Footer() {
   const [email, setEmail] = useState('');
   const [isSubscribed, setIsSubscribed] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleSubscribe = (e: React.FormEvent) => {
+  const handleSubscribe = async (e: React.FormEvent) => {
     e.preventDefault();
-    // TODO: Implement newsletter subscription logic
-    setIsSubscribed(true);
-    setEmail('');
-    setTimeout(() => setIsSubscribed(false), 3000);
+    if (isSubmitting) return;
+
+    setError(null);
+    setIsSubmitting(true);
+    try {
+      const response = await fetch('/api/newsletter/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, source: 'footer' }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload.error || 'Could not subscribe. Please try again.');
+      }
+
+      setIsSubscribed(true);
+      setEmail('');
+      setTimeout(() => setIsSubscribed(false), 4000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not subscribe. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const currentYear = new Date().getFullYear();
@@ -139,23 +160,31 @@ export function Footer() {
             </p>
             <form onSubmit={handleSubscribe} className="space-y-2">
               <Input
-                type="email"
-                placeholder="Enter your email"
+                type="text"
+                inputMode="email"
+                autoComplete="email"
+                placeholder="Email (or paste several)"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  if (error) setError(null);
+                }}
                 required
+                disabled={isSubmitting}
                 className="w-full border-white/15 bg-white/5 text-white placeholder:text-slate-500 focus-visible:border-[#9A7B2F]/60 focus-visible:ring-[#9A7B2F]/25"
               />
               <Button
                 type="submit"
+                disabled={isSubmitting}
                 className="w-full bg-gradient-to-b from-[#d4b46a] to-[#9A7B2F] font-semibold text-[#0a0e1a] hover:from-[#ddc07a] hover:to-[#a8893a]"
               >
-                {isSubscribed ? 'Subscribed!' : 'Subscribe'}
+                {isSubscribed ? 'Subscribed!' : isSubmitting ? 'Subscribing…' : 'Subscribe'}
               </Button>
             </form>
             {isSubscribed ? (
               <p className="text-sm text-emerald-400">Thanks for subscribing!</p>
             ) : null}
+            {error ? <p className="text-sm text-red-400">{error}</p> : null}
           </div>
         </div>
 
