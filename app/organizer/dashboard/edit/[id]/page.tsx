@@ -32,6 +32,9 @@ export default function EditEventPage() {
         date: string;
         end_date?: string | null;
         venue: string;
+        venue_lat?: number | null;
+        venue_lng?: number | null;
+        venue_place_id?: string | null;
         currency?: string;
         category?: EventCategoryId;
         ticket_price: number;
@@ -100,6 +103,9 @@ export default function EditEventPage() {
           date: event.date,
           end_date: event.end_date,
           venue: event.venue,
+          venue_lat: event.venue_lat,
+          venue_lng: event.venue_lng,
+          venue_place_id: event.venue_place_id,
           currency: event.currency,
           category: event.category,
           ticket_price: event.ticket_price,

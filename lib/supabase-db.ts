@@ -312,7 +312,7 @@ export async function getFeaturedEvents(limit: number = 5) {
  * card needs. Sponsors are intentionally omitted here (expensive RLS embeds
  * were causing statement timeouts); the purchase dialog loads them on demand.
  */
-export async function getApprovedEventsForLanding(limit: number = 12) {
+export async function getApprovedEventsForLanding(limit: number = 50) {
   const nowIso = getNowIso();
   try {
     const { data, error } = await supabase
@@ -322,6 +322,9 @@ export async function getApprovedEventsForLanding(limit: number = 12) {
         name,
         date,
         venue,
+        venue_lat,
+        venue_lng,
+        venue_place_id,
         image_url,
         organizer_name,
         status,
@@ -367,6 +370,9 @@ export async function getApprovedEventsForLanding(limit: number = 12) {
           name,
           date,
           venue,
+          venue_lat,
+          venue_lng,
+          venue_place_id,
           image_url,
           organizer_name,
           status,
@@ -415,6 +421,9 @@ export async function getApprovedEventsForLanding(limit: number = 12) {
         name,
         date,
         venue,
+        venue_lat,
+        venue_lng,
+        venue_place_id,
         image_url,
         organizer_name,
         status,

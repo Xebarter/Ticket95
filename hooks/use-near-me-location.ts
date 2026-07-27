@@ -10,6 +10,8 @@ type NearMeStatus = 'idle' | 'loading' | 'ready' | 'denied' | 'unavailable' | 'e
 type StoredPlace = {
   placeTokens: string[]
   label: string
+  lat: number
+  lng: number
 }
 
 function readStoredPlace(): StoredPlace | null {
@@ -17,9 +19,24 @@ function readStoredPlace(): StoredPlace | null {
   try {
     const raw = sessionStorage.getItem(STORAGE_KEY)
     if (!raw) return null
-    const parsed = JSON.parse(raw) as StoredPlace
-    if (!Array.isArray(parsed.placeTokens) || !parsed.placeTokens.length) return null
-    return parsed
+    const parsed = JSON.parse(raw) as Partial<StoredPlace>
+    if (
+      typeof parsed.lat !== 'number' ||
+      typeof parsed.lng !== 'number' ||
+      !Number.isFinite(parsed.lat) ||
+      !Number.isFinite(parsed.lng)
+    ) {
+      // Invalidate legacy cache entries that lack coordinates
+      sessionStorage.removeItem(STORAGE_KEY)
+      return null
+    }
+    if (typeof parsed.label !== 'string' || !parsed.label) return null
+    return {
+      placeTokens: Array.isArray(parsed.placeTokens) ? parsed.placeTokens : [],
+      label: parsed.label,
+      lat: parsed.lat,
+      lng: parsed.lng,
+    }
   } catch {
     return null
   }
@@ -48,7 +65,10 @@ function uniqueTokens(values: Array<string | null | undefined>): string[] {
   return out
 }
 
-async function reverseGeocode(lat: number, lon: number): Promise<StoredPlace> {
+async function reverseGeocode(
+  lat: number,
+  lon: number
+): Promise<Omit<StoredPlace, 'lat' | 'lng'>> {
   const url = new URL('/api/geo/reverse', window.location.origin)
   url.searchParams.set('lat', String(lat))
   url.searchParams.set('lon', String(lon))
@@ -112,7 +132,11 @@ export function useNearMeLocation(active: boolean) {
   const [label, setLabel] = useState<string | null>(null)
 
   const applyPlace = useCallback((place: StoredPlace) => {
-    setContext({ placeTokens: place.placeTokens })
+    setContext({
+      placeTokens: place.placeTokens,
+      lat: place.lat,
+      lng: place.lng,
+    })
     setLabel(place.label)
     setStatus('ready')
   }, [])
@@ -128,12 +152,12 @@ export function useNearMeLocation(active: boolean) {
 
     try {
       const position = await getCurrentPosition()
-      const place = await reverseGeocode(
-        position.coords.latitude,
-        position.coords.longitude
-      )
-      writeStoredPlace(place)
-      applyPlace(place)
+      const lat = position.coords.latitude
+      const lng = position.coords.longitude
+      const place = await reverseGeocode(lat, lng)
+      const stored: StoredPlace = { ...place, lat, lng }
+      writeStoredPlace(stored)
+      applyPlace(stored)
     } catch (error) {
       const geoError = error as GeolocationPositionError | Error
       if (

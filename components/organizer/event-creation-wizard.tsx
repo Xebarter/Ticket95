@@ -20,6 +20,7 @@ import {
   WizardSuccessState,
   WIZARD_STEP_ICONS,
 } from '@/components/organizer/event-wizard-ui';
+import { VenuePlacesPicker } from '@/components/organizer/venue-places-picker';
 import { createEvent, createSponsor, createTicketTypes, updateEvent, replaceEventSponsors, replaceEventTicketTypes } from '@/lib/supabase-db';
 import { MAX_EVENT_SPONSORS } from '@/lib/event-sponsors';
 import { getSupabaseBrowserClient } from '@/lib/supabase/browser';
@@ -70,6 +71,9 @@ type InitialEventData = {
   date?: string;
   end_date?: string | null;
   venue?: string;
+  venue_lat?: number | null;
+  venue_lng?: number | null;
+  venue_place_id?: string | null;
   currency?: string;
   ticket_price?: number;
   total_tickets?: number;
@@ -292,11 +296,15 @@ export function EventCreationWizard({
       initialDateTime.timePeriod
     ),
     venue: initialEvent?.venue || '',
+    venue_lat: initialEvent?.venue_lat ?? null,
+    venue_lng: initialEvent?.venue_lng ?? null,
+    venue_place_id: initialEvent?.venue_place_id ?? null,
     currency: initialEvent?.currency || 'UGX',
     category: normalizeEventCategory(initialEvent?.category) as EventCategoryId,
     ticketPrice: initialEvent?.ticket_price != null ? String(initialEvent.ticket_price) : '',
     totalTickets: initialEvent?.total_tickets != null ? String(initialEvent.total_tickets) : '',
   });
+  const [venueFormattedAddress, setVenueFormattedAddress] = useState<string | null>(null);
 
   const [organizer, setOrganizer] = useState({
     name: initialEvent?.organizer_name || user?.profile_name || '',
@@ -568,7 +576,27 @@ export function EventCreationWizard({
         } else if (eventEndDate && eventEndDate < eventDate) {
           errors.end_date = 'End date must be on or after the start date';
         }
-        if (!formData.venue.trim()) errors.venue = 'Enter the venue or location';
+        if (!formData.venue.trim()) {
+          errors.venue = 'Enter the venue or location';
+        } else {
+          const hasCoords =
+            formData.venue_lat != null &&
+            formData.venue_lng != null &&
+            Number.isFinite(formData.venue_lat) &&
+            Number.isFinite(formData.venue_lng);
+          const initialHadCoords =
+            initialEvent?.venue_lat != null && initialEvent?.venue_lng != null;
+          const venueUnchanged =
+            formData.venue.trim() === (initialEvent?.venue || '').trim();
+
+          if (mode === 'create' && !hasCoords) {
+            errors.venue = 'Select a venue from the suggestions';
+          } else if (mode === 'edit' && !hasCoords) {
+            if (initialHadCoords || !venueUnchanged) {
+              errors.venue = 'Select a venue from the suggestions';
+            }
+          }
+        }
         if (existingImageUrls.length + eventImages.length === 0) {
           errors.images = 'Add at least one event photo';
         }
@@ -890,6 +918,9 @@ export function EventCreationWizard({
           date: formData.date,
           end_date: eventEndDate ? endDateFromDateInput(eventEndDate) : null,
           venue: formData.venue,
+          venue_lat: formData.venue_lat,
+          venue_lng: formData.venue_lng,
+          venue_place_id: formData.venue_place_id,
           currency: formData.currency,
           category: formData.category,
           ticket_price: createTicketPrice,
@@ -989,6 +1020,9 @@ export function EventCreationWizard({
           date: formData.date,
           end_date: eventEndDate ? endDateFromDateInput(eventEndDate) : null,
           venue: formData.venue,
+          venue_lat: formData.venue_lat,
+          venue_lng: formData.venue_lng,
+          venue_place_id: formData.venue_place_id,
           currency: formData.currency,
           category: formData.category,
           ticket_price: nextTicketPrice,
@@ -1336,18 +1370,28 @@ export function EventCreationWizard({
                   </WizardField>
 
                   <WizardField label="Venue" htmlFor="event-venue" required error={fieldErrors.venue}>
-                    <Input
+                    <VenuePlacesPicker
                       id="event-venue"
-                      type="text"
-                      name="venue"
-                      placeholder="e.g. National Theatre, Kampala"
-                      value={formData.venue}
-                      onChange={(e) => {
-                        handleChange(e);
+                      value={{
+                        venue: formData.venue,
+                        venue_lat: formData.venue_lat,
+                        venue_lng: formData.venue_lng,
+                        venue_place_id: formData.venue_place_id,
+                        formattedAddress: venueFormattedAddress,
+                      }}
+                      onChange={(next) => {
+                        setFormData((prev) => ({
+                          ...prev,
+                          venue: next.venue,
+                          venue_lat: next.venue_lat,
+                          venue_lng: next.venue_lng,
+                          venue_place_id: next.venue_place_id,
+                        }));
+                        setVenueFormattedAddress(next.formattedAddress ?? null);
                         clearFieldError('venue');
                       }}
-                      aria-invalid={!!fieldErrors.venue}
-                      className={fieldErrors.venue ? 'border-destructive' : ''}
+                      invalid={!!fieldErrors.venue}
+                      placeholder="Search for a venue or address"
                     />
                   </WizardField>
                 </WizardSection>

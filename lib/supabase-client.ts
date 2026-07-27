@@ -40,6 +40,12 @@ export interface Event {
   /** Optional last day for multi-day events; null/undefined = single-day */
   end_date?: string | null;
   venue: string;
+  /** Latitude from Google Places (null for legacy free-text venues) */
+  venue_lat?: number | null;
+  /** Longitude from Google Places (null for legacy free-text venues) */
+  venue_lng?: number | null;
+  /** Google Places place_id */
+  venue_place_id?: string | null;
   ticket_price: number;
   total_tickets: number;
   tickets_available: number;

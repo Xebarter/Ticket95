@@ -20,6 +20,9 @@ export interface Event {
   description: string;
   date: string;
   venue: string;
+  venueLat?: number | null;
+  venueLng?: number | null;
+  venuePlaceId?: string | null;
   ticketPrice: number;
   totalTickets: number;
   ticketsAvailable: number;

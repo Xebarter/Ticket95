@@ -1208,6 +1208,23 @@ CREATE POLICY "Admins can manage campaign recipients"
   );
 
 -- =====================================================
+-- 27. EVENT VENUE COORDINATES (Google Places / Near me)
+-- =====================================================
+
+ALTER TABLE events
+  ADD COLUMN IF NOT EXISTS venue_lat DOUBLE PRECISION;
+
+ALTER TABLE events
+  ADD COLUMN IF NOT EXISTS venue_lng DOUBLE PRECISION;
+
+ALTER TABLE events
+  ADD COLUMN IF NOT EXISTS venue_place_id TEXT;
+
+CREATE INDEX IF NOT EXISTS idx_events_venue_coords
+  ON events (venue_lat, venue_lng)
+  WHERE venue_lat IS NOT NULL AND venue_lng IS NOT NULL;
+
+-- =====================================================
 -- SETUP COMPLETE
 -- =====================================================
 -- All tables, indexes, triggers, and RLS policies have been created.

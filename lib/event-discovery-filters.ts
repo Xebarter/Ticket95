@@ -1,4 +1,5 @@
 import type { Event } from '@/lib/supabase-client'
+import { haversineKm } from '@/lib/geo'
 
 export const EVENT_DISCOVERY_FILTERS = [
   {
@@ -36,9 +37,16 @@ export const EVENT_DISCOVERY_FILTERS = [
 export type DiscoveryFilterId = (typeof EVENT_DISCOVERY_FILTERS)[number]['id']
 
 export type NearMeContext = {
-  /** City / region tokens derived from reverse geocode */
+  /** City / region tokens derived from reverse geocode (fallback for legacy venues) */
   placeTokens: string[]
+  /** User latitude from browser geolocation */
+  lat: number
+  /** User longitude from browser geolocation */
+  lng: number
 }
+
+/** Default radius for "Near me" in kilometers */
+export const NEAR_ME_RADIUS_KM = 50
 
 export function isDiscoveryFilterId(
   value: string | null | undefined
@@ -165,10 +173,49 @@ export function applyDiscoveryFilter(
     }
     case 'near-me': {
       const tokens = nearMe?.placeTokens ?? []
-      if (!tokens.length) return []
-      return events
-        .filter((e) => venueMatchesPlace(e.venue ?? '', tokens))
-        .sort(sortByDateAsc)
+      const userLat = nearMe?.lat
+      const userLng = nearMe?.lng
+      const hasUserCoords =
+        typeof userLat === 'number' &&
+        typeof userLng === 'number' &&
+        Number.isFinite(userLat) &&
+        Number.isFinite(userLng)
+
+      if (!hasUserCoords && !tokens.length) return []
+
+      const withDistance = events
+        .map((event) => {
+          const venueLat = event.venue_lat
+          const venueLng = event.venue_lng
+          if (
+            hasUserCoords &&
+            typeof venueLat === 'number' &&
+            typeof venueLng === 'number' &&
+            Number.isFinite(venueLat) &&
+            Number.isFinite(venueLng)
+          ) {
+            const distanceKm = haversineKm(userLat, userLng, venueLat, venueLng)
+            if (distanceKm <= NEAR_ME_RADIUS_KM) {
+              return { event, distanceKm }
+            }
+            return null
+          }
+
+          // Legacy free-text venues: city-name token match
+          if (tokens.length && venueMatchesPlace(event.venue ?? '', tokens)) {
+            return { event, distanceKm: Number.POSITIVE_INFINITY }
+          }
+
+          return null
+        })
+        .filter((row): row is { event: Event; distanceKm: number } => row != null)
+
+      return withDistance
+        .sort((a, b) => {
+          if (a.distanceKm !== b.distanceKm) return a.distanceKm - b.distanceKm
+          return sortByDateAsc(a.event, b.event)
+        })
+        .map((row) => row.event)
     }
     default:
       return events
