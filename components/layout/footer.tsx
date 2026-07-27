@@ -163,12 +163,12 @@ export function Footer() {
           <div className="grid grid-cols-1 gap-4 text-sm text-slate-400 md:grid-cols-3">
             <div className="flex items-center gap-2">
               <MapPin className="h-4 w-4 shrink-0 text-[#d4b46a]" />
-              <span>123 Event Street, New York, NY 10001</span>
+              <span>Mutungo Zone 1, Nakawa, Kampala Uganda</span>
             </div>
             <div className="flex items-center gap-2">
               <Phone className="h-4 w-4 shrink-0 text-[#d4b46a]" />
-              <a href="tel:+1234567890" className="transition-colors hover:text-[#d4b46a]">
-                +1 (234) 567-890
+              <a href="tel:+256783676313" className="transition-colors hover:text-[#d4b46a]">
+                +256783676313
               </a>
             </div>
             <div className="flex items-center gap-2">

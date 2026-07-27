@@ -59,15 +59,22 @@ function PaymentCompleteContent() {
     searchParams.get('purchaseId') ||
     searchParams.get('orderTrackingId') ||
     searchParams.get('OrderTrackingId') ||
+    searchParams.get('TransactionToken') ||
+    searchParams.get('TransToken') ||
     '';
   const freeCheckout = searchParams.get('freeCheckout') === '1';
   const redirectStatus = (searchParams.get('status') || '').toLowerCase();
   const customerEmailParam = searchParams.get('customerEmail') || '';
   const guestCheckoutParam = searchParams.get('guestCheckout') === '1';
 
+  const providerParam = searchParams.get('provider') || '';
   const verifyEndpoint = useMemo(
-    () => (freeCheckout ? null : '/api/payments/paytota/verify'),
-    [freeCheckout]
+    () => {
+      if (freeCheckout) return null;
+      if (providerParam === 'dpo') return '/api/payments/dpo/verify';
+      return '/api/payments/paytota/verify';
+    },
+    [freeCheckout, providerParam]
   );
 
   useEffect(() => {

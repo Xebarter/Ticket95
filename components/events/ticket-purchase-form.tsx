@@ -15,6 +15,8 @@ import {
   Plus,
   ShieldCheck,
   Loader2,
+  Smartphone,
+  CreditCard,
 } from 'lucide-react';
 import { getStoredAffiliateCode } from '@/components/affiliates/affiliate-ref-capture';
 import { stashFreeCheckoutPayload } from '@/lib/checkout-handoff';
@@ -123,6 +125,7 @@ export function useTicketPurchase({
   >(sponsors || []);
   const [selectedQuantities, setSelectedQuantities] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(false);
+  const [loadingMethod, setLoadingMethod] = useState<'mobile_money' | 'card' | null>(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
@@ -141,6 +144,7 @@ export function useTicketPurchase({
     setSuccess(false);
     setSuccessMessage('');
     setLoading(false);
+    setLoadingMethod(null);
     setGuestEmail('');
     setGuestName('');
   }, []);
@@ -234,15 +238,17 @@ export function useTicketPurchase({
     setSuccessMessage('');
   };
 
-  const handlePurchase = async () => {
+  const handlePurchase = async (method?: 'mobile_money' | 'card') => {
     setError('');
     setSuccess(false);
     setSuccessMessage('');
     setLoading(true);
+    setLoadingMethod(method || null);
 
     if (totalQuantity < 1) {
       setError('Please select at least 1 ticket');
       setLoading(false);
+      setLoadingMethod(null);
       return;
     }
 
@@ -252,6 +258,7 @@ export function useTicketPurchase({
       if (!email || !emailPattern.test(email)) {
         setError('Please enter a valid email address for guest checkout.');
         setLoading(false);
+        setLoadingMethod(null);
         return;
       }
     }
@@ -261,12 +268,19 @@ export function useTicketPurchase({
       if (selectedQty > ticketType.available_quantity) {
         setError(`Only ${ticketType.available_quantity} ${ticketType.name} tickets available`);
         setLoading(false);
+        setLoadingMethod(null);
         return;
       }
     }
 
+    // Determine API endpoint based on method (free orders always go through paytota path)
+    const isFree = isFreePrice(totalPrice);
+    const endpoint = !isFree && method === 'card'
+      ? '/api/payments/dpo/initialize'
+      : '/api/payments/paytota/initialize';
+
     try {
-      const response = await fetch('/api/payments/paytota/initialize', {
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -319,6 +333,7 @@ export function useTicketPurchase({
       setError(err instanceof Error ? err.message : 'Purchase failed');
     } finally {
       setLoading(false);
+      setLoadingMethod(null);
     }
   };
 
@@ -340,6 +355,7 @@ export function useTicketPurchase({
     sponsorsState,
     selectedQuantities,
     loading,
+    loadingMethod,
     error,
     success,
     successMessage,
@@ -477,28 +493,57 @@ export function TicketPurchaseMobileSection({
 
       {!success && totalQuantity > 0 ? (
         <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 p-4 backdrop-blur-md lg:hidden">
-          <div className="mx-auto flex max-w-lg items-center gap-3">
-            <div className="min-w-0 flex-1">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                Total · {totalQuantity} ticket{totalQuantity === 1 ? '' : 's'}
-              </p>
-              <p className="text-lg font-bold text-slate-900">
-                {formatDisplayPrice(event.currency, totalPrice)}
-              </p>
+          <div className="mx-auto max-w-lg">
+            <div className="mb-2 flex items-center justify-between">
+              <div className="min-w-0">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                  Total · {totalQuantity} ticket{totalQuantity === 1 ? '' : 's'}
+                </p>
+                <p className="text-lg font-bold text-slate-900">
+                  {formatDisplayPrice(event.currency, totalPrice)}
+                </p>
+              </div>
             </div>
-            <Button
-              className="h-11 shrink-0 rounded-lg bg-slate-900 px-6 font-semibold hover:bg-slate-800 disabled:bg-slate-300"
-              onClick={handlePurchase}
-              disabled={!canCheckout}
-            >
-              {loading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : isFreePrice(totalPrice) ? (
-                'Get free'
-              ) : (
-                'Pay'
-              )}
-            </Button>
+            {isFreePrice(totalPrice) ? (
+              <Button
+                className="h-11 w-full rounded-lg bg-slate-900 font-semibold hover:bg-slate-800 disabled:bg-slate-300"
+                onClick={() => handlePurchase('mobile_money')}
+                disabled={!canCheckout}
+              >
+                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Get free'}
+              </Button>
+            ) : (
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  className="h-11 rounded-lg bg-slate-900 font-semibold text-white hover:bg-slate-800 disabled:bg-slate-300"
+                  onClick={() => handlePurchase('mobile_money')}
+                  disabled={!canCheckout}
+                >
+                  {purchase.loadingMethod === 'mobile_money' ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 text-sm">
+                      <Smartphone className="h-3.5 w-3.5" />
+                      Mobile
+                    </span>
+                  )}
+                </Button>
+                <Button
+                  className="h-11 rounded-lg border border-slate-200 bg-white font-semibold text-slate-900 hover:bg-slate-50 disabled:bg-slate-100"
+                  onClick={() => handlePurchase('card')}
+                  disabled={!canCheckout}
+                >
+                  {purchase.loadingMethod === 'card' ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 text-sm">
+                      <CreditCard className="h-3.5 w-3.5" />
+                      Card
+                    </span>
+                  )}
+                </Button>
+              </div>
+            )}
           </div>
         </div>
       ) : null}
@@ -975,8 +1020,10 @@ export function TicketPurchaseCheckoutBar({
   onCancel?: () => void;
   showCancel?: boolean;
 }) {
-  const { totalQuantity, totalPrice, loading, success, canCheckout, handlePurchase, formatPrice, currencySymbol } =
+  const { totalQuantity, totalPrice, loading, loadingMethod, success, canCheckout, handlePurchase, formatPrice, currencySymbol } =
     purchase;
+
+  const isFree = isFreePrice(totalPrice);
 
   return (
     <div className="shrink-0 border-t border-slate-200 bg-white px-5 py-4">
@@ -993,44 +1040,95 @@ export function TicketPurchaseCheckoutBar({
         </div>
       </div>
 
-      <div className="flex gap-2">
+      <div className="flex flex-col gap-2">
         {showCancel && onCancel ? (
           <Button
             type="button"
             variant="outline"
-            className="h-11 flex-1 border-slate-200 text-slate-700 hover:bg-slate-50"
+            className="h-11 w-full border-slate-200 text-slate-700 hover:bg-slate-50"
             onClick={onCancel}
             disabled={loading}
           >
             Cancel
           </Button>
         ) : null}
-        <Button
-          type="button"
-          className={cn(
-            'h-11 bg-slate-900 font-semibold text-white shadow-none hover:bg-slate-800 disabled:bg-slate-300',
-            showCancel && onCancel ? 'flex-[1.4]' : 'w-full'
-          )}
-          onClick={handlePurchase}
-          disabled={!canCheckout}
-          aria-label="Proceed to secure payment"
-        >
-          {loading ? (
-            <span className="inline-flex items-center gap-2">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              {isFreePrice(totalPrice) ? 'Confirming…' : 'Redirecting…'}
-            </span>
-          ) : success ? (
-            isFreePrice(totalPrice) ? 'Confirmed' : 'Redirecting…'
-          ) : isFreePrice(totalPrice) ? (
-            'Get free tickets'
-          ) : (
-            'Pay securely'
-          )}
-        </Button>
+
+        {isFree ? (
+          <Button
+            type="button"
+            className="h-11 w-full bg-slate-900 font-semibold text-white shadow-none hover:bg-slate-800 disabled:bg-slate-300"
+            onClick={() => handlePurchase('mobile_money')}
+            disabled={!canCheckout}
+            aria-label="Get free tickets"
+          >
+            {loading ? (
+              <span className="inline-flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Confirming…
+              </span>
+            ) : success ? (
+              'Confirmed'
+            ) : (
+              'Get free tickets'
+            )}
+          </Button>
+        ) : (
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <Button
+              type="button"
+              className="h-12 w-full bg-slate-900 font-semibold text-white shadow-none hover:bg-slate-800 disabled:bg-slate-300"
+              onClick={() => handlePurchase('mobile_money')}
+              disabled={!canCheckout}
+              aria-label="Pay with Mobile Money"
+            >
+              {loadingMethod === 'mobile_money' ? (
+                <span className="inline-flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Redirecting…
+                </span>
+              ) : success && loadingMethod === 'mobile_money' ? (
+                'Redirecting…'
+              ) : (
+                <span className="inline-flex items-center gap-2">
+                  <Smartphone className="h-4 w-4" />
+                  Mobile Money
+                </span>
+              )}
+            </Button>
+            <Button
+              type="button"
+              className="h-12 w-full border border-slate-200 bg-white font-semibold text-slate-900 shadow-none hover:bg-slate-50 disabled:bg-slate-100 disabled:text-slate-400"
+              onClick={() => handlePurchase('card')}
+              disabled={!canCheckout}
+              aria-label="Pay with Card"
+            >
+              {loadingMethod === 'card' ? (
+                <span className="inline-flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Redirecting…
+                </span>
+              ) : success && loadingMethod === 'card' ? (
+                'Redirecting…'
+              ) : (
+                <span className="inline-flex items-center gap-2">
+                  <CreditCard className="h-4 w-4" />
+                  Pay with Card
+                </span>
+              )}
+            </Button>
+          </div>
+        )}
       </div>
+
+      {!isFree ? (
+        <div className="mt-2 grid grid-cols-2 gap-2 text-center">
+          <p className="text-[10px] text-slate-400">MTN / Airtel</p>
+          <p className="text-[10px] text-slate-400">Visa / Mastercard</p>
+        </div>
+      ) : null}
+
       <p className="mt-2.5 text-center text-[11px] leading-relaxed text-slate-400">
-        {isFreePrice(totalPrice)
+        {isFree
           ? 'No payment required. Your tickets will download after confirmation.'
           : 'By continuing, you agree to complete payment on our secure platform.'}
       </p>
