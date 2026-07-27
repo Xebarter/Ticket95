@@ -18,7 +18,7 @@ export default function AdminSettingsPage() {
   const { toast } = useToast();
   const [settings, setSettings] = useState<AffiliateSettings>({
     programEnabled: true,
-    commissionPercent: 5,
+    commissionPercent: 10,
   });
   const [loadingSettings, setLoadingSettings] = useState(true);
   const [savingSettings, setSavingSettings] = useState(false);

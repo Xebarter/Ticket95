@@ -25,6 +25,7 @@ import {
   Loader2,
   Mail,
   Handshake,
+  Banknote,
 } from 'lucide-react';
 import { BrandLogo } from '@/components/brand/brand-logo';
 import { useAuth } from '@/lib/supabase-auth-context';
@@ -41,6 +42,7 @@ const navItems: NavItem[] = [
   { href: '/admin/events/create', label: 'Create', icon: PlusCircle },
   { href: '/admin/verify', label: 'Verify', icon: ScanLine },
   { href: '/admin/affiliates', label: 'Affiliates', icon: Handshake },
+  { href: '/admin/payout', label: 'Payouts', icon: Banknote },
   { href: '/admin/support-messages', label: 'Support', icon: Mail },
   { href: '/admin/settings', label: 'Settings', icon: Settings },
 ];

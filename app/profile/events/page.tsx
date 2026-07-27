@@ -14,6 +14,7 @@ import { EventBuyersTable } from './components/event-buyers-table';
 import { EventTicketTypesTable } from './components/event-ticket-types-table';
 import { useEventManagement } from './use-event-management';
 import { ProfileEmptyState } from '@/components/profile/profile-ui';
+import { OrganizerEarningsPanel } from '@/components/payouts/organizer-earnings-panel';
 import { cn } from '@/lib/utils';
 
 export default function ProfileEventsPage() {
@@ -117,6 +118,8 @@ export default function ProfileEventsPage() {
           ) : data ? (
             <>
               <EventOverviewCards metrics={data.metrics} currency={data.event.currency || 'USD'} />
+
+              <OrganizerEarningsPanel selectedEventId={data.event.id} />
 
               <Tabs value={tab} onValueChange={setTab} className="gap-4">
                 <TabsList className="h-auto w-full justify-start gap-1 overflow-x-auto rounded-xl border border-border/70 bg-slate-50/90 p-1 dark:bg-slate-900/60">

@@ -26,6 +26,7 @@ export interface User {
   profile_name?: string;
   profile_description?: string;
   profile_logo_url?: string;
+  payout_phone?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -107,6 +108,10 @@ export interface Order {
   payment_metadata?: Record<string, any>;
   affiliate_id?: string | null;
   affiliate_referral_code?: string | null;
+  gateway_fee_amount?: number | null;
+  platform_fee_amount?: number | null;
+  affiliate_share_amount?: number | null;
+  organizer_share_amount?: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -134,6 +139,30 @@ export interface AffiliateCommission {
   status: 'pending' | 'approved' | 'paid' | 'cancelled';
   paid_at: string | null;
   notes: string | null;
+  payout_id?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Payout {
+  id: string;
+  payee_type: 'organizer' | 'affiliate';
+  payee_user_id: string;
+  affiliate_id?: string | null;
+  amount: number;
+  currency: string;
+  phone: string;
+  email?: string | null;
+  country: string;
+  status: 'pending' | 'processing' | 'success' | 'error' | 'cancelled';
+  paytota_payout_id?: string | null;
+  paytota_reference: string;
+  execution_url?: string | null;
+  paytota_metadata?: Record<string, unknown> | null;
+  requested_at: string;
+  processed_at?: string | null;
+  error_message?: string | null;
+  admin_notes?: string | null;
   created_at: string;
   updated_at: string;
 }

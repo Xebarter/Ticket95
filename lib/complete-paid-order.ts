@@ -6,6 +6,7 @@ import {
   clampAffiliateCommissionPercent,
 } from '@/lib/affiliates';
 import { DEFAULT_AFFILIATE_COMMISSION_PERCENT } from '@/lib/affiliate-constants';
+import { computeOrderShares } from '@/lib/order-shares';
 
 type OrderRow = {
   id: string;
@@ -169,13 +170,30 @@ export async function completePaidOrder(order: OrderRow) {
 
   const eventTicketsAvailable = Math.max(0, Number(event.tickets_available || 0) - totalQuantity);
 
+  // Resolve affiliate cut for share persistence (same rules as commission award)
+  const shareAffiliatePercent = await resolveAffiliatePercentForShares(order, event);
+
+  const shares = computeOrderShares({
+    totalPrice: Number(order.total_price ?? 0),
+    affiliateCommissionPercent: shareAffiliatePercent,
+  });
+
   const inventoryResults = await Promise.all([
     ...inventoryUpdates,
     supabaseAdmin
       .from('events')
       .update({ tickets_available: eventTicketsAvailable })
       .eq('id', order.event_id),
-    supabaseAdmin.from('orders').update({ status: 'completed' }).eq('id', order.id),
+    supabaseAdmin
+      .from('orders')
+      .update({
+        status: 'completed',
+        gateway_fee_amount: shares.gatewayFee,
+        platform_fee_amount: shares.platformFee,
+        affiliate_share_amount: shares.affiliateShare,
+        organizer_share_amount: shares.organizerShare,
+      })
+      .eq('id', order.id),
   ]);
 
   for (const result of inventoryResults) {
@@ -188,6 +206,51 @@ export async function completePaidOrder(order: OrderRow) {
   });
 
   return { alreadyCompleted: false };
+}
+
+async function resolveAffiliatePercentForShares(
+  order: OrderRow,
+  event: {
+    affiliates_enabled?: boolean | null;
+    affiliate_commission_percent?: number | null;
+  }
+): Promise<number> {
+  try {
+    const settings = await getAffiliateSettings();
+    if (!settings.programEnabled || !event.affiliates_enabled) return 0;
+
+    const metadata = (order.payment_metadata || {}) as {
+      affiliateCode?: string;
+      affiliateId?: string;
+    };
+
+    const referralCode =
+      order.affiliate_referral_code ||
+      (typeof metadata.affiliateCode === 'string' ? metadata.affiliateCode : '') ||
+      '';
+
+    let affiliateId = order.affiliate_id || metadata.affiliateId || null;
+    let affiliate = affiliateId
+      ? (
+          await supabaseAdmin.from('affiliates').select('*').eq('id', affiliateId).maybeSingle()
+        ).data
+      : null;
+
+    if (!affiliate && referralCode) {
+      affiliate = await getAffiliateByReferralCode(referralCode);
+    }
+
+    if (!affiliate || affiliate.status !== 'active') return 0;
+    if (order.user_id && affiliate.user_id === order.user_id) return 0;
+
+    return clampAffiliateCommissionPercent(
+      event.affiliate_commission_percent ??
+        settings.commissionPercent ??
+        DEFAULT_AFFILIATE_COMMISSION_PERCENT
+    );
+  } catch {
+    return 0;
+  }
 }
 
 async function maybeAwardAffiliateCommission(

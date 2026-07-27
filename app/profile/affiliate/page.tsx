@@ -12,8 +12,14 @@ import {
   ProfilePageHeader,
   ProfileSection,
 } from '@/components/profile/profile-ui';
-import { DEFAULT_AFFILIATE_COMMISSION_PERCENT, clampAffiliateCommissionPercent } from '@/lib/affiliate-constants';
+import {
+  DEFAULT_AFFILIATE_COMMISSION_PERCENT,
+  clampAffiliateCommissionPercent,
+} from '@/lib/affiliate-constants';
+import { RequestPayoutDialog, formatUgx } from '@/components/payouts/request-payout-dialog';
+import { MIN_PAYOUT_AMOUNT_UGX } from '@/lib/payout-constants';
 import { cn } from '@/lib/utils';
+import type { Payout } from '@/lib/supabase-client';
 
 type AffiliateEvent = {
   id: string;
@@ -34,8 +40,20 @@ type CommissionRow = {
   commission_amount: number;
   currency: string;
   status: string;
+  payout_id?: string | null;
   created_at: string;
   events?: { name: string } | null;
+};
+
+type AffiliatePayoutBalance = {
+  available: number;
+  pendingCommissions: number;
+  paidCommissions: number;
+  lifetime: number;
+  minPayout: number;
+  canRequest: boolean;
+  payoutPhone: string | null;
+  recentPayouts: Payout[];
 };
 
 const formatMoney = (amount: number, currency = 'USD') => {
@@ -118,18 +136,29 @@ export default function AffiliateDashboardPage() {
   const [totals, setTotals] = useState({ lifetime: 0, pending: 0, paid: 0, sales: 0 });
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [copiedCode, setCopiedCode] = useState(false);
+  const [payoutBalance, setPayoutBalance] = useState<AffiliatePayoutBalance | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await fetch('/api/affiliates/me');
-      const payload = await response.json();
-      if (!response.ok) throw new Error(payload.error || 'Failed to load');
+      const [affRes, balRes] = await Promise.all([
+        fetch('/api/affiliates/me'),
+        fetch('/api/payouts/affiliate/balance'),
+      ]);
+      const payload = await affRes.json();
+      if (!affRes.ok) throw new Error(payload.error || 'Failed to load');
       setProgramEnabled(Boolean(payload.settings?.programEnabled));
       setReferralCode(payload.affiliate?.referral_code || '');
       setEvents(payload.events || []);
       setCommissions(payload.commissions || []);
       setTotals(payload.totals || { lifetime: 0, pending: 0, paid: 0, sales: 0 });
+
+      if (balRes.ok) {
+        const bal = await balRes.json();
+        setPayoutBalance(bal);
+      }
     } catch (error) {
       toast({
         title: 'Couldn’t load affiliate dashboard',
@@ -194,9 +223,35 @@ export default function AffiliateDashboardPage() {
     await copyLink(event.id);
   };
 
+  const handlePayoutRequest = async ({ amount, phone }: { amount: number; phone: string }) => {
+    setSubmitting(true);
+    try {
+      const res = await fetch('/api/payouts/affiliate/request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount, phone }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Payout request failed');
+      toast({
+        title: data.autoDisbursed ? 'Payout submitted' : 'Payout recorded with errors',
+        description: data.autoDisbursed
+          ? 'Mobile money disbursement is processing via Paytota.'
+          : data.payout?.error_message || 'Check payout history for details.',
+      });
+      setDialogOpen(false);
+      await load();
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   if (loading) {
     return <ProfileLoadingState label="Loading affiliate dashboard…" />;
   }
+
+  const available = payoutBalance?.available ?? totals.pending;
+  const canRequest = payoutBalance?.canRequest ?? available >= MIN_PAYOUT_AMOUNT_UGX;
 
   return (
     <div className="space-y-5 sm:space-y-6">
@@ -239,20 +294,67 @@ export default function AffiliateDashboardPage() {
         />
         <MetricCard label="Sales" value={String(totals.sales)} />
         <MetricCard
-          label="Pending"
-          value={formatMoney(totals.pending)}
+          label="Available"
+          value={formatUgx(available)}
           accent="amber"
           icon={Wallet}
+          hint={`Min payout ${formatUgx(MIN_PAYOUT_AMOUNT_UGX)}`}
           valueClassName="text-base sm:text-2xl"
+          action={
+            <Button
+              type="button"
+              size="sm"
+              className="h-8 w-full rounded-lg text-xs sm:w-auto"
+              disabled={!canRequest}
+              onClick={() => setDialogOpen(true)}
+            >
+              Request payout
+            </Button>
+          }
         />
         <MetricCard
           label="Lifetime"
           value={formatMoney(totals.lifetime)}
           accent="emerald"
           icon={Wallet}
+          hint={
+            payoutBalance
+              ? `Paid ${formatUgx(payoutBalance.paidCommissions)}`
+              : `Paid ${formatMoney(totals.paid)}`
+          }
           valueClassName="text-base sm:text-2xl"
         />
       </div>
+
+      {!canRequest ? (
+        <p className="text-xs text-muted-foreground">
+          Affiliate payouts are sent to mobile money once your available balance reaches{' '}
+          {formatUgx(MIN_PAYOUT_AMOUNT_UGX)}.
+        </p>
+      ) : null}
+
+      {payoutBalance && payoutBalance.recentPayouts.length > 0 ? (
+        <ProfileSection title="Payout history" description="Recent mobile money disbursements.">
+          <div className="space-y-2">
+            {payoutBalance.recentPayouts.slice(0, 8).map((p) => (
+              <div
+                key={p.id}
+                className="flex items-center justify-between gap-3 rounded-xl border border-border/70 px-3 py-2.5 text-sm"
+              >
+                <div>
+                  <p className="font-medium tabular-nums">{formatUgx(Number(p.amount))}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {new Date(p.requested_at).toLocaleDateString()} · {p.phone}
+                  </p>
+                </div>
+                <Badge variant="outline" className="capitalize">
+                  {p.status}
+                </Badge>
+              </div>
+            ))}
+          </div>
+        </ProfileSection>
+      ) : null}
 
       <ProfileSection
         title="Events you can promote"
@@ -269,73 +371,73 @@ export default function AffiliateDashboardPage() {
                 event.affiliate_commission_percent ?? DEFAULT_AFFILIATE_COMMISSION_PERCENT
               );
               return (
-              <div
-                key={event.id}
-                className="overflow-hidden rounded-xl border border-border/70 bg-background/70"
-              >
-                <div className="flex items-start gap-3 p-3">
-                  <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl border border-border/70 bg-muted sm:h-16 sm:w-16">
-                    {event.image_url ? (
-                      <Image
-                        src={event.image_url}
-                        alt=""
-                        fill
-                        className="object-cover"
-                        sizes="64px"
-                      />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center text-muted-foreground">
-                        <Ticket className="h-5 w-5" />
-                      </div>
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-start justify-between gap-2">
-                      <Link
-                        href={`/events/${event.id}?ref=${encodeURIComponent(referralCode)}`}
-                        className="line-clamp-2 min-w-0 text-sm font-medium leading-snug hover:underline sm:text-base"
-                      >
-                        {event.name}
-                      </Link>
-                      <Badge
-                        variant="outline"
-                        className="shrink-0 rounded-full border-emerald-500/30 bg-emerald-500/10 text-[10px] text-emerald-800 sm:text-xs"
-                      >
-                        {eventCommission}% commission
-                      </Badge>
+                <div
+                  key={event.id}
+                  className="overflow-hidden rounded-xl border border-border/70 bg-background/70"
+                >
+                  <div className="flex items-start gap-3 p-3">
+                    <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl border border-border/70 bg-muted sm:h-16 sm:w-16">
+                      {event.image_url ? (
+                        <Image
+                          src={event.image_url}
+                          alt=""
+                          fill
+                          className="object-cover"
+                          sizes="64px"
+                        />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center text-muted-foreground">
+                          <Ticket className="h-5 w-5" />
+                        </div>
+                      )}
                     </div>
-                    <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground sm:text-xs">
-                      <span className="whitespace-nowrap">{formatEventDate(event.date)}</span>
-                      <span className="mx-1 opacity-50">·</span>
-                      <span className="break-words">{event.venue}</span>
-                    </p>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-2">
+                        <Link
+                          href={`/events/${event.id}?ref=${encodeURIComponent(referralCode)}`}
+                          className="line-clamp-2 min-w-0 text-sm font-medium leading-snug hover:underline sm:text-base"
+                        >
+                          {event.name}
+                        </Link>
+                        <Badge
+                          variant="outline"
+                          className="shrink-0 rounded-full border-emerald-500/30 bg-emerald-500/10 text-[10px] text-emerald-800 sm:text-xs"
+                        >
+                          {eventCommission}% commission
+                        </Badge>
+                      </div>
+                      <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground sm:text-xs">
+                        <span className="whitespace-nowrap">{formatEventDate(event.date)}</span>
+                        <span className="mx-1 opacity-50">·</span>
+                        <span className="break-words">{event.venue}</span>
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 border-t border-border/60 bg-muted/20 p-2.5 sm:flex sm:justify-end sm:bg-transparent sm:p-3">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-10 rounded-xl sm:h-9 sm:min-w-[7.5rem]"
+                      onClick={() => copyLink(event.id)}
+                    >
+                      {copiedId === event.id ? (
+                        <Check className="mr-1.5 h-4 w-4" />
+                      ) : (
+                        <Copy className="mr-1.5 h-4 w-4" />
+                      )}
+                      Copy link
+                    </Button>
+                    <Button
+                      size="sm"
+                      className="h-10 rounded-xl sm:h-9 sm:min-w-[7.5rem]"
+                      onClick={() => shareLink(event)}
+                    >
+                      <Share2 className="mr-1.5 h-4 w-4" />
+                      Share
+                    </Button>
                   </div>
                 </div>
-
-                <div className="grid grid-cols-2 gap-2 border-t border-border/60 bg-muted/20 p-2.5 sm:flex sm:justify-end sm:bg-transparent sm:p-3">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-10 rounded-xl sm:h-9 sm:min-w-[7.5rem]"
-                    onClick={() => copyLink(event.id)}
-                  >
-                    {copiedId === event.id ? (
-                      <Check className="mr-1.5 h-4 w-4" />
-                    ) : (
-                      <Copy className="mr-1.5 h-4 w-4" />
-                    )}
-                    Copy link
-                  </Button>
-                  <Button
-                    size="sm"
-                    className="h-10 rounded-xl sm:h-9 sm:min-w-[7.5rem]"
-                    onClick={() => shareLink(event)}
-                  >
-                    <Share2 className="mr-1.5 h-4 w-4" />
-                    Share
-                  </Button>
-                </div>
-              </div>
               );
             })}
           </div>
@@ -370,16 +472,19 @@ export default function AffiliateDashboardPage() {
                         day: 'numeric',
                         year: 'numeric',
                       })}
+                      {row.payout_id ? (
+                        <>
+                          <span className="mx-1 opacity-50">·</span>
+                          payout linked
+                        </>
+                      ) : null}
                     </p>
                   </div>
                   <div className="flex items-center justify-between gap-3 sm:shrink-0 sm:flex-col sm:items-end sm:justify-center">
                     <p className="text-sm font-semibold tabular-nums">
                       {formatMoney(Number(row.commission_amount), row.currency)}
                     </p>
-                    <Badge
-                      variant="outline"
-                      className="rounded-full capitalize text-[10px]"
-                    >
+                    <Badge variant="outline" className="rounded-full capitalize text-[10px]">
                       {row.status}
                     </Badge>
                   </div>
@@ -389,6 +494,16 @@ export default function AffiliateDashboardPage() {
           </div>
         )}
       </ProfileSection>
+
+      <RequestPayoutDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        available={available}
+        defaultPhone={payoutBalance?.payoutPhone}
+        title="Request affiliate payout"
+        submitting={submitting}
+        onSubmit={handlePayoutRequest}
+      />
     </div>
   );
 }

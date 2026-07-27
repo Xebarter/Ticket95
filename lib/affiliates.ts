@@ -35,6 +35,7 @@ export type AffiliateCommissionRow = {
   status: 'pending' | 'approved' | 'paid' | 'cancelled';
   paid_at: string | null;
   notes: string | null;
+  payout_id?: string | null;
   created_at: string;
   updated_at: string;
 };

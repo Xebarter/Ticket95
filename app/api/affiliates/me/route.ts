@@ -21,7 +21,7 @@ export async function GET() {
     const { data: commissionsRaw, error: commissionsError } = await supabaseAdmin
       .from('affiliate_commissions')
       .select(
-        'id, order_id, event_id, order_amount, commission_percent, commission_amount, currency, status, paid_at, created_at'
+        'id, order_id, event_id, order_amount, commission_percent, commission_amount, currency, status, paid_at, payout_id, created_at'
       )
       .eq('affiliate_id', affiliate.id)
       .order('created_at', { ascending: false })
