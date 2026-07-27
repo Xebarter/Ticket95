@@ -1,13 +1,14 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { StaticPageLayout } from '@/components/layout/static-page-layout';
+import { getOrRestoreSession } from '@/lib/session-restore';
 
 export const metadata: Metadata = {
   title: 'Sitemap | Ticket95.com',
   description: 'Browse all primary Ticket95.com pages from one location.',
 };
 
-const pageGroups = [
+const publicGroups = [
   {
     title: 'Discover',
     links: [
@@ -16,26 +17,10 @@ const pageGroups = [
     ],
   },
   {
-    title: 'Account and profile',
+    title: 'Account',
     links: [
       { href: '/login', label: 'Login' },
       { href: '/signup', label: 'Sign up' },
-      { href: '/profile', label: 'Profile overview' },
-      { href: '/profile/tickets', label: 'My tickets' },
-      { href: '/profile/orders', label: 'My orders' },
-      { href: '/profile/events', label: 'My events' },
-      { href: '/profile/analytics', label: 'Analytics' },
-      { href: '/profile/verify', label: 'Ticket verification' },
-    ],
-  },
-  {
-    title: 'Organizer and admin',
-    links: [
-      { href: '/organizer/dashboard/create', label: 'Create event' },
-      { href: '/admin/dashboard', label: 'Admin dashboard' },
-      { href: '/admin/events', label: 'Admin events' },
-      { href: '/admin/settings', label: 'Admin settings' },
-      { href: '/admin/verify', label: 'Admin verification' },
     ],
   },
   {
@@ -53,11 +38,34 @@ const pageGroups = [
   },
 ];
 
-export default function SitemapPage() {
+const signedInGroups = [
+  {
+    title: 'Account and profile',
+    links: [
+      { href: '/profile', label: 'Profile overview' },
+      { href: '/profile/tickets', label: 'My tickets' },
+      { href: '/profile/orders', label: 'My orders' },
+      { href: '/profile/events', label: 'My events' },
+      { href: '/profile/analytics', label: 'Analytics' },
+      { href: '/profile/verify', label: 'Ticket verification' },
+    ],
+  },
+  {
+    title: 'Organizer',
+    links: [{ href: '/organizer/dashboard/create', label: 'Create event' }],
+  },
+];
+
+export default async function SitemapPage() {
+  const session = await getOrRestoreSession();
+  const pageGroups = session
+    ? [publicGroups[0], ...signedInGroups, publicGroups[2]]
+    : publicGroups;
+
   return (
     <StaticPageLayout
       title="Sitemap"
-      description="Quick navigation to Ticket95.com pages for buyers, organizers, and administrators."
+      description="Quick navigation to Ticket95.com pages for buyers and organizers."
       lastUpdated="March 16, 2026"
     >
       <div className="grid gap-4 sm:grid-cols-2">

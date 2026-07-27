@@ -1,7 +1,7 @@
 'use client';
 
-import { usePathname, useSearchParams } from 'next/navigation';
-import { Suspense, useState } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { Suspense, useEffect, useState } from 'react';
 import { Footer } from '@/components/layout/footer';
 import { ProfileMobileHeader, ProfileSidebar } from '@/components/profile/profile-sidebar';
 import { cn } from '@/lib/utils';
@@ -25,13 +25,31 @@ export default function ProfileLayoutShell({ children }: { children: React.React
 function ProfileLayoutShellInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const { user } = useAuth();
+  const router = useRouter();
+  const { user, loading: authLoading } = useAuth();
   const { myEvents, loading: loadingProfileData } = useProfileData();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+
+  useEffect(() => {
+    if (authLoading) return;
+    if (user) return;
+
+    const search = searchParams.toString();
+    const redirectTo = `${pathname}${search ? `?${search}` : ''}`;
+    router.replace(`/login?redirect=${encodeURIComponent(redirectTo)}`);
+  }, [authLoading, user, pathname, searchParams, router]);
 
   const verifyEventId = (searchParams.get('event') || '').trim();
   const isVerifyList = Boolean(pathname?.startsWith('/profile/verify') && !verifyEventId);
   const noEventsMode = Boolean(user) && !loadingProfileData && myEvents.length === 0;
+
+  if (authLoading || !user) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+      </div>
+    );
+  }
 
   // Full-bleed verify scanner — keep chrome out of the way
   if (pathname?.startsWith('/profile/verify') && verifyEventId) {

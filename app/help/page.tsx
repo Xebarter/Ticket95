@@ -22,7 +22,7 @@ export const metadata: Metadata = {
 };
 
 const CONTACT_EMAIL = 'support@ticket95.com';
-const CONTACT_WHATSAPP_PHONE = '[Insert Number]';
+const CONTACT_WHATSAPP_PHONE = '+256783676313';
 const CONTACT_WEBSITE = 'Ticket95.com';
 
 export default function HelpCenterPage() {
@@ -553,7 +553,14 @@ export default function HelpCenterPage() {
                   <Phone className="h-4 w-4 text-primary" />
                   WhatsApp / Phone
                 </p>
-                <p className="mt-2 text-sm text-muted-foreground">{CONTACT_WHATSAPP_PHONE}</p>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  <a
+                    className="font-medium text-slate-900 hover:underline"
+                    href={`tel:${CONTACT_WHATSAPP_PHONE}`}
+                  >
+                    {CONTACT_WHATSAPP_PHONE}
+                  </a>
+                </p>
               </div>
             </div>
 
