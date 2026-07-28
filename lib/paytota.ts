@@ -1,3 +1,7 @@
+import { normalizeUgandaMomoPhone } from '@/lib/uganda-phone';
+
+export { normalizeUgandaMomoPhone } from '@/lib/uganda-phone';
+
 const PAYTOTA_SECRET_KEY = process.env.PAYTOTA_SECRET_KEY;
 const PAYTOTA_BRAND_ID = process.env.PAYTOTA_BRAND_ID;
 const PAYTOTA_BASE_URL = (process.env.PAYTOTA_BASE_URL || 'https://gate.paytota.com').replace(/\/$/, '');
@@ -183,24 +187,6 @@ function paytotaErrorMessage(data: unknown, fallback: string): string {
     if (typeof nested.message === 'string') return nested.message;
   }
   return fallback;
-}
-
-/** Normalize Uganda mobile numbers to 256XXXXXXXXX (no +). */
-export function normalizeUgandaMomoPhone(input: string): string | null {
-  const digits = String(input || '').replace(/\D/g, '');
-  if (!digits) return null;
-
-  let normalized = digits;
-  if (normalized.startsWith('0') && normalized.length === 10) {
-    normalized = `256${normalized.slice(1)}`;
-  } else if (normalized.startsWith('7') && normalized.length === 9) {
-    normalized = `256${normalized}`;
-  } else if (normalized.startsWith('+')) {
-    normalized = normalized.replace(/^\+/, '');
-  }
-
-  if (!/^256\d{9}$/.test(normalized)) return null;
-  return normalized;
 }
 
 export async function getPaytotaAccountBalance(): Promise<PaytotaAccountBalance> {

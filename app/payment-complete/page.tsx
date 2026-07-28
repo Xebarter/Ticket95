@@ -207,7 +207,7 @@ function PaymentCompleteContent() {
   ]);
 
   useEffect(() => {
-    if (status !== 'success' || !isFreeOrder || tickets.length === 0 || autoDownloadStarted.current) {
+    if (status !== 'success' || tickets.length === 0 || autoDownloadStarted.current) {
       return;
     }
 
@@ -216,12 +216,18 @@ function PaymentCompleteContent() {
 
     downloadTicketsAsPdfs(tickets, event)
       .then(() => {
-        setMessage('Your free tickets have been downloaded.');
+        setMessage(
+          isFreeOrder
+            ? 'Your free tickets have been downloaded.'
+            : 'Your tickets have been downloaded.'
+        );
       })
       .catch((error) => {
         console.error('Auto-download failed:', error);
         setMessage(
-          'Your free tickets are ready. Use the download buttons below if the file did not save.'
+          isFreeOrder
+            ? 'Your free tickets are ready. Use the download buttons below if the file did not save.'
+            : 'Your tickets are ready. Use the download buttons below if the file did not save.'
         );
       })
       .finally(() => {

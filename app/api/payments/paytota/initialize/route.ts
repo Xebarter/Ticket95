@@ -1,21 +1,37 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createPaytotaPurchase } from '@/lib/paytota';
+import { normalizeUgandaMomoPhone } from '@/lib/uganda-phone';
 import {
   prepareCheckoutOrder,
   updateOrderAdmin,
   buildPaymentCompleteRedirectBase,
   CheckoutOrderError,
 } from '@/lib/checkout-order';
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
+
+    const rawPhone =
+      typeof body?.customerPhone === 'string' ? body.customerPhone.trim() : '';
+    const normalizedPhone = rawPhone ? normalizeUgandaMomoPhone(rawPhone) : null;
+
+    if (rawPhone && !normalizedPhone) {
+      return NextResponse.json(
+        {
+          error:
+            'Enter a valid Uganda mobile money number (e.g. 07XXXXXXXX or 2567XXXXXXXX).',
+        },
+        { status: 400 }
+      );
+    }
 
     const result = await prepareCheckoutOrder({
       eventId: body?.eventId as string,
       selectedQuantities: (body?.selectedQuantities || {}) as Record<string, number>,
       customerEmail: body?.customerEmail,
       customerName: body?.customerName,
-      customerPhone: body?.customerPhone,
+      customerPhone: normalizedPhone || undefined,
       affiliateCode: body?.affiliateCode,
       paidProvider: 'paytota',
     });
@@ -33,7 +49,25 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const { order, event, normalizedSelections, totalPrice, checkoutEmail, customerName, customerPhone, isGuest } = result;
+    if (!normalizedPhone) {
+      return NextResponse.json(
+        {
+          error:
+            'Enter a valid Uganda mobile money number (e.g. 07XXXXXXXX or 2567XXXXXXXX).',
+        },
+        { status: 400 }
+      );
+    }
+
+    const {
+      order,
+      event,
+      normalizedSelections,
+      totalPrice,
+      checkoutEmail,
+      customerName,
+      isGuest,
+    } = result;
 
     const redirectBase = buildPaymentCompleteRedirectBase({
       orderId: order.id,
@@ -51,7 +85,7 @@ export async function POST(request: NextRequest) {
         price: selection.ticketPrice * selection.quantity,
       })),
       email: checkoutEmail,
-      phone: customerPhone || undefined,
+      phone: normalizedPhone,
       fullName: customerName || undefined,
       successRedirect: `${redirectBase}&status=success`,
       failureRedirect: `${redirectBase}&status=failed`,
@@ -65,6 +99,11 @@ export async function POST(request: NextRequest) {
         ...(order.payment_metadata || {}),
         ticketSelections: normalizedSelections,
         paytotaInit: paytotaPurchase,
+        customer: {
+          ...((order.payment_metadata as { customer?: Record<string, unknown> } | null)
+            ?.customer || {}),
+          phone: normalizedPhone,
+        },
       },
     });
 
