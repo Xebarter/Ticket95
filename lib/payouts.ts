@@ -5,8 +5,10 @@ import { computeOrderShares, resolveOrganizerShare } from '@/lib/order-shares';
 import {
   MIN_PAYOUT_AMOUNT_UGX,
   PAYOUT_BALANCE_LOCK_STATUSES,
+  PAYOUT_COOLDOWN_DAYS,
   PAYOUT_COUNTRY,
   PAYOUT_CURRENCY,
+  formatPayoutEligibleDate,
   type PayoutPayeeType,
   type PayoutStatus,
 } from '@/lib/payout-constants';
@@ -32,6 +34,9 @@ export type OrganizerBalanceSummary = {
   available: number;
   minPayout: number;
   canRequest: boolean;
+  cooldownDays: number;
+  lastPayoutAt: string | null;
+  nextPayoutAt: string | null;
   payoutPhone: string | null;
   email: string;
   recentPayouts: Payout[];
@@ -53,6 +58,9 @@ export type AffiliateBalanceSummary = {
   lockedInPayouts: number;
   minPayout: number;
   canRequest: boolean;
+  cooldownDays: number;
+  lastPayoutAt: string | null;
+  nextPayoutAt: string | null;
   payoutPhone: string | null;
   email: string;
   affiliateId: string;
@@ -108,6 +116,58 @@ async function sumLockedPayouts(userId: string, payeeType: PayoutPayeeType) {
     .in('status', PAYOUT_BALANCE_LOCK_STATUSES);
   if (error) throw error;
   return sumAmounts((data || []).map((row) => Number(row.amount) || 0));
+}
+
+export type PayoutCooldownInfo = {
+  cooldownDays: number;
+  lastPayoutAt: string | null;
+  nextPayoutAt: string | null;
+  cooldownActive: boolean;
+};
+
+async function getPayoutCooldown(
+  userId: string,
+  payeeType: PayoutPayeeType
+): Promise<PayoutCooldownInfo> {
+  const { data, error } = await supabaseAdmin
+    .from('payouts')
+    .select('requested_at, status')
+    .eq('payee_user_id', userId)
+    .eq('payee_type', payeeType)
+    .in('status', PAYOUT_BALANCE_LOCK_STATUSES)
+    .order('requested_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+
+  const lastPayoutAt = data?.requested_at ? String(data.requested_at) : null;
+  if (!lastPayoutAt) {
+    return {
+      cooldownDays: PAYOUT_COOLDOWN_DAYS,
+      lastPayoutAt: null,
+      nextPayoutAt: null,
+      cooldownActive: false,
+    };
+  }
+
+  const next = new Date(lastPayoutAt);
+  next.setDate(next.getDate() + PAYOUT_COOLDOWN_DAYS);
+  const nextPayoutAt = next.toISOString();
+  const cooldownActive = next.getTime() > Date.now();
+
+  return {
+    cooldownDays: PAYOUT_COOLDOWN_DAYS,
+    lastPayoutAt,
+    nextPayoutAt: cooldownActive ? nextPayoutAt : null,
+    cooldownActive,
+  };
+}
+
+function assertPayoutCooldownClear(cooldown: PayoutCooldownInfo) {
+  if (!cooldown.cooldownActive || !cooldown.nextPayoutAt) return;
+  throw new Error(
+    `Payouts are limited to once every ${PAYOUT_COOLDOWN_DAYS} days. You can request again on ${formatPayoutEligibleDate(cooldown.nextPayoutAt)}.`
+  );
 }
 
 function sharesForOrder(order: CompletedOrderShareRow, affiliatePercentFallback = 0) {
@@ -166,7 +226,10 @@ export async function getOrganizerBalance(userId: string): Promise<OrganizerBala
   );
 
   if (eventIds.length === 0) {
-    const recentPayouts = await listUserPayouts(userId, 'organizer');
+    const [recentPayouts, cooldown] = await Promise.all([
+      listUserPayouts(userId, 'organizer'),
+      getPayoutCooldown(userId, 'organizer'),
+    ]);
     return {
       currency: PAYOUT_CURRENCY,
       grossRevenue: 0,
@@ -179,6 +242,9 @@ export async function getOrganizerBalance(userId: string): Promise<OrganizerBala
       available: 0,
       minPayout: MIN_PAYOUT_AMOUNT_UGX,
       canRequest: false,
+      cooldownDays: cooldown.cooldownDays,
+      lastPayoutAt: cooldown.lastPayoutAt,
+      nextPayoutAt: cooldown.nextPayoutAt,
       payoutPhone: user.payout_phone || null,
       email: user.email,
       recentPayouts,
@@ -263,7 +329,10 @@ export async function getOrganizerBalance(userId: string): Promise<OrganizerBala
   const paidOut = sumAmounts((successPayouts || []).map((r) => Number(r.amount) || 0));
 
   const available = roundMoney(Math.max(0, organizerEarned - lockedInPayouts));
-  const recentPayouts = await listUserPayouts(userId, 'organizer');
+  const [recentPayouts, cooldown] = await Promise.all([
+    listUserPayouts(userId, 'organizer'),
+    getPayoutCooldown(userId, 'organizer'),
+  ]);
 
   return {
     currency: PAYOUT_CURRENCY,
@@ -276,7 +345,10 @@ export async function getOrganizerBalance(userId: string): Promise<OrganizerBala
     lockedInPayouts,
     available,
     minPayout: MIN_PAYOUT_AMOUNT_UGX,
-    canRequest: available >= MIN_PAYOUT_AMOUNT_UGX,
+    canRequest: available >= MIN_PAYOUT_AMOUNT_UGX && !cooldown.cooldownActive,
+    cooldownDays: cooldown.cooldownDays,
+    lastPayoutAt: cooldown.lastPayoutAt,
+    nextPayoutAt: cooldown.nextPayoutAt,
     payoutPhone: user.payout_phone || null,
     email: user.email,
     recentPayouts,
@@ -327,7 +399,10 @@ export async function getAffiliateBalance(userId: string): Promise<AffiliateBala
   const lockedInPayouts = await sumLockedPayouts(userId, 'affiliate');
   // Available is commissions not yet linked; locked payouts already linked so don't double-subtract
   const available = roundMoney(Math.max(0, availableFromCommissions));
-  const recentPayouts = await listUserPayouts(userId, 'affiliate');
+  const [recentPayouts, cooldown] = await Promise.all([
+    listUserPayouts(userId, 'affiliate'),
+    getPayoutCooldown(userId, 'affiliate'),
+  ]);
 
   return {
     currency: PAYOUT_CURRENCY,
@@ -337,7 +412,10 @@ export async function getAffiliateBalance(userId: string): Promise<AffiliateBala
     lifetime: roundMoney(lifetime),
     lockedInPayouts,
     minPayout: MIN_PAYOUT_AMOUNT_UGX,
-    canRequest: available >= MIN_PAYOUT_AMOUNT_UGX,
+    canRequest: available >= MIN_PAYOUT_AMOUNT_UGX && !cooldown.cooldownActive,
+    cooldownDays: cooldown.cooldownDays,
+    lastPayoutAt: cooldown.lastPayoutAt,
+    nextPayoutAt: cooldown.nextPayoutAt,
     payoutPhone: user.payout_phone || null,
     email: user.email,
     affiliateId: affiliate.id,
@@ -547,6 +625,12 @@ export async function requestOrganizerPayout(params: {
   }
 
   const balance = await getOrganizerBalance(params.userId);
+  assertPayoutCooldownClear({
+    cooldownDays: balance.cooldownDays,
+    lastPayoutAt: balance.lastPayoutAt,
+    nextPayoutAt: balance.nextPayoutAt,
+    cooldownActive: Boolean(balance.nextPayoutAt),
+  });
   const amount = roundMoney(
     params.amount != null ? Number(params.amount) : balance.available
   );
@@ -610,6 +694,12 @@ export async function requestAffiliatePayout(params: {
   }
 
   const balance = await getAffiliateBalance(params.userId);
+  assertPayoutCooldownClear({
+    cooldownDays: balance.cooldownDays,
+    lastPayoutAt: balance.lastPayoutAt,
+    nextPayoutAt: balance.nextPayoutAt,
+    cooldownActive: Boolean(balance.nextPayoutAt),
+  });
   const amount = roundMoney(
     params.amount != null ? Number(params.amount) : balance.available
   );

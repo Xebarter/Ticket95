@@ -13,7 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { MIN_PAYOUT_AMOUNT_UGX } from '@/lib/payout-constants';
+import { MIN_PAYOUT_AMOUNT_UGX, PAYOUT_COOLDOWN_DAYS } from '@/lib/payout-constants';
 
 function formatUgx(amount: number) {
   try {
@@ -26,6 +26,8 @@ function formatUgx(amount: number) {
     return `UGX ${Math.round(amount).toLocaleString()}`;
   }
 }
+
+const DEFAULT_DESCRIPTION = `Payouts are sent to Uganda mobile money via Paytota. Minimum ${formatUgx(MIN_PAYOUT_AMOUNT_UGX)}. Disbursements are limited to once every ${PAYOUT_COOLDOWN_DAYS} days.`;
 
 type Props = {
   open: boolean;
@@ -88,10 +90,7 @@ export function RequestPayoutDialog({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>
-            {description ||
-              `Payouts are sent instantly to Uganda mobile money via Paytota. Minimum ${formatUgx(MIN_PAYOUT_AMOUNT_UGX)}.`}
-          </DialogDescription>
+          <DialogDescription>{description || DEFAULT_DESCRIPTION}</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="rounded-lg border border-border/70 bg-muted/30 px-3 py-2 text-sm">

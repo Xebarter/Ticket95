@@ -6,7 +6,12 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { RequestPayoutDialog, formatUgx } from '@/components/payouts/request-payout-dialog';
-import { TOTAL_PLATFORM_AND_GATEWAY_PERCENT } from '@/lib/payout-constants';
+import {
+  PAYOUT_COOLDOWN_DAYS,
+  TOTAL_PLATFORM_AND_GATEWAY_PERCENT,
+  payoutCooldownBlockedMessage,
+  payoutCooldownPolicyMessage,
+} from '@/lib/payout-constants';
 import type { Payout } from '@/lib/supabase-client';
 
 type OrganizerBalance = {
@@ -20,6 +25,9 @@ type OrganizerBalance = {
   available: number;
   minPayout: number;
   canRequest: boolean;
+  cooldownDays?: number;
+  lastPayoutAt?: string | null;
+  nextPayoutAt?: string | null;
   payoutPhone: string | null;
   recentPayouts: Payout[];
   perEvent: Array<{
@@ -116,6 +124,9 @@ export function OrganizerEarningsPanel({ selectedEventId }: { selectedEventId?: 
             Ticket95 retains {TOTAL_PLATFORM_AND_GATEWAY_PERCENT}% (2% platform + 3.5% gateway).
             Affiliate cuts apply only on referred sales.
           </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {payoutCooldownPolicyMessage(balance.cooldownDays ?? PAYOUT_COOLDOWN_DAYS)}
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <Button type="button" variant="ghost" size="sm" onClick={() => void load()} disabled={loading}>
@@ -155,7 +166,13 @@ export function OrganizerEarningsPanel({ selectedEventId }: { selectedEventId?: 
         </p>
       ) : null}
 
-      {!balance.canRequest ? (
+      {!balance.canRequest && balance.nextPayoutAt ? (
+        <p className="text-xs text-amber-700 dark:text-amber-400">
+          {payoutCooldownBlockedMessage(balance.nextPayoutAt)}
+        </p>
+      ) : null}
+
+      {!balance.canRequest && !balance.nextPayoutAt ? (
         <p className="text-xs text-amber-700 dark:text-amber-400">
           Payouts unlock at {formatUgx(balance.minPayout)}. Paid out so far:{' '}
           {formatUgx(balance.paidOut)}.

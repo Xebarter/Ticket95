@@ -17,7 +17,12 @@ import {
   clampAffiliateCommissionPercent,
 } from '@/lib/affiliate-constants';
 import { RequestPayoutDialog, formatUgx } from '@/components/payouts/request-payout-dialog';
-import { MIN_PAYOUT_AMOUNT_UGX } from '@/lib/payout-constants';
+import {
+  MIN_PAYOUT_AMOUNT_UGX,
+  PAYOUT_COOLDOWN_DAYS,
+  payoutCooldownBlockedMessage,
+  payoutCooldownPolicyMessage,
+} from '@/lib/payout-constants';
 import { cn } from '@/lib/utils';
 import type { Payout } from '@/lib/supabase-client';
 
@@ -52,6 +57,9 @@ type AffiliatePayoutBalance = {
   lifetime: number;
   minPayout: number;
   canRequest: boolean;
+  cooldownDays?: number;
+  lastPayoutAt?: string | null;
+  nextPayoutAt?: string | null;
   payoutPhone: string | null;
   recentPayouts: Payout[];
 };
@@ -326,7 +334,17 @@ export default function AffiliateDashboardPage() {
         />
       </div>
 
-      {!canRequest ? (
+      <p className="text-xs text-muted-foreground">
+        {payoutCooldownPolicyMessage(payoutBalance?.cooldownDays ?? PAYOUT_COOLDOWN_DAYS)}
+      </p>
+
+      {!canRequest && payoutBalance?.nextPayoutAt ? (
+        <p className="text-xs text-amber-700 dark:text-amber-400">
+          {payoutCooldownBlockedMessage(payoutBalance.nextPayoutAt)}
+        </p>
+      ) : null}
+
+      {!canRequest && !payoutBalance?.nextPayoutAt ? (
         <p className="text-xs text-muted-foreground">
           Affiliate payouts are sent to mobile money once your available balance reaches{' '}
           {formatUgx(MIN_PAYOUT_AMOUNT_UGX)}.
