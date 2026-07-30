@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from 'crypto';
 import { Resend } from 'resend';
-import { getSiteUrl } from '@/lib/site-url';
+import { BRAND_LOGO_SRC, brandAssetUrl } from '@/lib/brand-assets';
+import { getSiteUrl, toAbsoluteUrl } from '@/lib/site-url';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i;
 
@@ -116,6 +117,10 @@ export function wrapMarketingEmailHtml(input: {
 }): string {
   const preview = escapeHtml((input.previewText || input.subject).trim());
   const year = new Date().getFullYear();
+  const siteUrl = getSiteUrl();
+  const logoUrl = escapeHtml(
+    toAbsoluteUrl(brandAssetUrl(BRAND_LOGO_SRC), siteUrl) || `${siteUrl}${BRAND_LOGO_SRC}`
+  );
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -132,8 +137,19 @@ export function wrapMarketingEmailHtml(input: {
         <table role="presentation" width="100%" style="max-width:560px;background:#ffffff;border-radius:16px;overflow:hidden;">
           <tr>
             <td style="background:linear-gradient(180deg,#1a2238,#0a0e1a);padding:28px 28px 22px;border-bottom:2px solid #d4b46a;">
-              <div style="font-size:22px;font-weight:700;color:#ffffff;letter-spacing:-0.02em;">Ticket<span style="color:#d4b46a;">95</span></div>
-              <div style="margin-top:4px;font-size:12px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.14em;">Event updates</div>
+              <table role="presentation" cellspacing="0" cellpadding="0">
+                <tr>
+                  <td style="vertical-align:middle;padding-right:14px;">
+                    <a href="${escapeHtml(siteUrl)}" style="text-decoration:none;">
+                      <img src="${logoUrl}" width="44" height="44" alt="Ticket95" style="display:block;border:0;border-radius:10px;outline:none;" />
+                    </a>
+                  </td>
+                  <td style="vertical-align:middle;">
+                    <div style="font-size:22px;font-weight:700;color:#ffffff;letter-spacing:-0.02em;">Ticket<span style="color:#d4b46a;">95</span></div>
+                    <div style="margin-top:4px;font-size:12px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.14em;">Event updates</div>
+                  </td>
+                </tr>
+              </table>
             </td>
           </tr>
           <tr>

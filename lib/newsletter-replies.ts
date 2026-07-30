@@ -143,6 +143,16 @@ async function resolveLinks(params: {
   return { campaignId, subscriberId };
 }
 
+function formatResendApiError(message: string): string {
+  if (/restricted to only send emails/i.test(message)) {
+    return (
+      'Your RESEND_API_KEY is Sending access only. Receiving replies requires a Full access key. ' +
+      'Create one at https://resend.com/api-keys (permission: Full access), then update RESEND_API_KEY locally and on Vercel.'
+    );
+  }
+  return message;
+}
+
 export async function ingestReceivedEmail(resendEmailId: string): Promise<MarketingEmailReply | null> {
   const resend = getResendClient();
   if (!resend) {
@@ -164,7 +174,7 @@ export async function ingestReceivedEmail(resendEmailId: string): Promise<Market
   });
 
   if (error || !data) {
-    throw new Error(error?.message || 'Failed to fetch received email');
+    throw new Error(formatResendApiError(error?.message || 'Failed to fetch received email'));
   }
 
   const parsedFrom = parseFromHeader(data.from);
@@ -252,6 +262,16 @@ function normalizeReplyRow(row: Record<string, unknown>): MarketingEmailReply {
   };
 }
 
+/** Probe whether the configured Resend key can read inbound/received emails. */
+export async function getReceivingAccessError(): Promise<string | null> {
+  const resend = getResendClient();
+  if (!resend) return 'RESEND_API_KEY is not configured';
+
+  const { error } = await resend.emails.receiving.list({ limit: 1 });
+  if (!error) return null;
+  return formatResendApiError(error.message || 'Failed to access Resend receiving API');
+}
+
 export async function listReplies(params?: {
   status?: ReplyStatus | 'all' | 'inbox';
   q?: string;
@@ -261,6 +281,7 @@ export async function listReplies(params?: {
   unreadCount: number;
   replyInboxConfigured: boolean;
   emailReplyTo: string | null;
+  receivingAccessError: string | null;
 }> {
   const limit = Math.min(Math.max(params?.limit || 100, 1), 500);
   let query = supabaseAdmin
@@ -281,7 +302,12 @@ export async function listReplies(params?: {
     query = query.or(`from_email.ilike.%${q}%,subject.ilike.%${q}%,body_text.ilike.%${q}%`);
   }
 
-  const { data, error } = await query;
+  const [{ data, error }, receivingAccessError] = await Promise.all([
+    query,
+    getReceivingAccessError().catch((err) =>
+      err instanceof Error ? err.message : 'Failed to check Resend receiving access'
+    ),
+  ]);
   if (error) throw new Error(error.message);
 
   const { count, error: countError } = await supabaseAdmin
@@ -307,6 +333,7 @@ export async function listReplies(params?: {
     unreadCount: count || 0,
     replyInboxConfigured: isReplyInboxConfigured(),
     emailReplyTo: getEmailReplyToAddress(),
+    receivingAccessError,
   };
 }
 
@@ -460,7 +487,7 @@ export async function syncReceivedEmailsFromResend(limit = 50): Promise<{
 
   const { data, error } = await resend.emails.receiving.list({ limit: Math.min(Math.max(limit, 1), 100) });
   if (error) {
-    throw new Error(error.message || 'Failed to list received emails');
+    throw new Error(formatResendApiError(error.message || 'Failed to list received emails'));
   }
 
   const items = data?.data || [];

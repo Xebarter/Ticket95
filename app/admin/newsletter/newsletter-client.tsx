@@ -107,6 +107,7 @@ export default function NewsletterAdminClient() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [replyInboxConfigured, setReplyInboxConfigured] = useState(true);
   const [emailReplyTo, setEmailReplyTo] = useState<string | null>(null);
+  const [receivingAccessError, setReceivingAccessError] = useState<string | null>(null);
   const [replyFilter, setReplyFilter] = useState<'inbox' | 'unread' | 'archived' | 'all'>('inbox');
   const [replySearch, setReplySearch] = useState('');
   const [selectedReplyId, setSelectedReplyId] = useState<string | null>(null);
@@ -169,6 +170,11 @@ export default function NewsletterAdminClient() {
     setUnreadCount(payload.unreadCount || 0);
     setReplyInboxConfigured(Boolean(payload.replyInboxConfigured));
     setEmailReplyTo(payload.emailReplyTo || null);
+    setReceivingAccessError(
+      typeof payload.receivingAccessError === 'string' && payload.receivingAccessError
+        ? payload.receivingAccessError
+        : null
+    );
   }, [replyFilter, replySearch]);
 
   const loadAll = useCallback(async () => {
@@ -632,6 +638,12 @@ export default function NewsletterAdminClient() {
           {emailReplyTo ? (
             <span className="mt-1 block text-xs">Current reply-to: {emailReplyTo}</span>
           ) : null}
+        </div>
+      ) : null}
+
+      {receivingAccessError ? (
+        <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-950">
+          Cannot import replies from Resend: {receivingAccessError}
         </div>
       ) : null}
 
