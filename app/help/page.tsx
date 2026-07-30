@@ -15,11 +15,14 @@ import {
   AccordionTrigger,
 } from '@/components/ui/accordion';
 import { StaticPageLayout } from '@/components/layout/static-page-layout';
+import { buildPageMetadata } from '@/lib/seo';
 
-export const metadata: Metadata = {
-  title: 'Help Center | Ticket95.com',
-  description: 'Get help with buying tickets, payments, account access, and organizer workflows.',
-};
+export const metadata: Metadata = buildPageMetadata({
+  title: 'Help Center',
+  description:
+    'Get help with Ticket95 tickets, payments, accounts, refunds, and organizer workflows.',
+  path: '/help',
+});
 
 const CONTACT_EMAIL = 'support@ticket95.com';
 const CONTACT_WHATSAPP_PHONE = '+256783676313';

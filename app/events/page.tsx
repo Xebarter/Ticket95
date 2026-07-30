@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { Suspense } from 'react';
 import { HeaderClient } from '@/components/layout/header-client';
 import { Footer } from '@/components/layout/footer';
@@ -6,6 +7,8 @@ import { EventGridSkeleton } from '@/components/events/event-grid-skeleton';
 import { getApprovedEventsForLanding } from '@/lib/supabase-db';
 import { cache } from 'react';
 import type { Event } from '@/lib/supabase-client';
+import { getEventCategoryLabel, isEventCategoryId } from '@/lib/event-categories';
+import { buildPageMetadata } from '@/lib/seo';
 
 interface EventsPageProps {
   searchParams?: Promise<{
@@ -13,6 +16,37 @@ interface EventsPageProps {
     category?: string;
     filter?: string;
   }>;
+}
+
+export async function generateMetadata({ searchParams }: EventsPageProps): Promise<Metadata> {
+  const query = searchParams ? await searchParams : {};
+  const category = (query.category || '').trim();
+  const search = (query.search || '').trim();
+
+  if (isEventCategoryId(category)) {
+    const label = getEventCategoryLabel(category);
+    return buildPageMetadata({
+      title: `${label} Events & Tickets`,
+      description: `Browse upcoming ${label.toLowerCase()} events and buy tickets online on Ticket95. Secure checkout and instant e-tickets.`,
+      path: `/events?category=${encodeURIComponent(category)}`,
+    });
+  }
+
+  if (search) {
+    return buildPageMetadata({
+      title: `Events matching “${search.slice(0, 60)}”`,
+      description: `Find events related to “${search.slice(0, 80)}” and buy tickets on Ticket95.`,
+      path: `/events?search=${encodeURIComponent(search)}`,
+      noIndex: true,
+    });
+  }
+
+  return buildPageMetadata({
+    title: 'Upcoming Events & Tickets',
+    description:
+      'Browse upcoming concerts, sports, movies, and live events. Filter by category and buy tickets securely on Ticket95.',
+    path: '/events',
+  });
 }
 
 export default async function EventsPage({ searchParams }: EventsPageProps) {

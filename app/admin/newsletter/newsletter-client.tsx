@@ -169,7 +169,7 @@ export default function NewsletterAdminClient() {
   const [composeMode, setComposeMode] = useState<ComposeMode>({ type: 'new' });
 
   const loadGroups = useCallback(async () => {
-    const res = await fetch('/api/admin/newsletter/groups');
+    const res = await fetch('/api/admin/newsletter/groups', { cache: 'no-store' });
     const payload = await res.json();
     if (!res.ok) throw new Error(payload.error || 'Failed to load groups');
     const nextGroups = (payload.groups || []) as NewsletterGroup[];
@@ -190,12 +190,41 @@ export default function NewsletterAdminClient() {
     if (statusFilter !== 'all') params.set('status', statusFilter);
     if (search.trim()) params.set('q', search.trim());
     if (selectedGroupId) params.set('groupId', selectedGroupId);
-    const res = await fetch(`/api/admin/newsletter/subscribers?${params.toString()}`);
+    const res = await fetch(`/api/admin/newsletter/subscribers?${params.toString()}`, {
+      cache: 'no-store',
+    });
     const payload = await res.json();
     if (!res.ok) throw new Error(payload.error || 'Failed to load subscribers');
     setSubscribers(payload.subscribers || []);
     setTotals(payload.totals || {});
   }, [search, selectedGroupId, statusFilter]);
+
+  // Keep the selected group's sidebar count identical to the "In group" total.
+  useEffect(() => {
+    if (!selectedGroupId) return;
+    if (typeof totals.all !== 'number') return;
+    setGroups((prev) => {
+      let changed = false;
+      const next = prev.map((group) => {
+        if (group.id !== selectedGroupId) return group;
+        const nextMemberCount = totals.all || 0;
+        const nextActiveCount = totals.active || 0;
+        if (
+          group.member_count === nextMemberCount &&
+          group.active_member_count === nextActiveCount
+        ) {
+          return group;
+        }
+        changed = true;
+        return {
+          ...group,
+          member_count: nextMemberCount,
+          active_member_count: nextActiveCount,
+        };
+      });
+      return changed ? next : prev;
+    });
+  }, [selectedGroupId, totals.all, totals.active]);
 
   const loadCampaigns = useCallback(async () => {
     const res = await fetch('/api/admin/newsletter/campaigns');
@@ -523,6 +552,7 @@ export default function NewsletterAdminClient() {
       const payload = await res.json();
       if (!res.ok) throw new Error(payload.error || 'Update failed');
       toast({ title: status === 'active' ? 'Resubscribed' : 'Unsubscribed' });
+      await loadGroups();
       await loadSubscribers();
     } catch (error) {
       toast({
@@ -547,6 +577,7 @@ export default function NewsletterAdminClient() {
       const payload = await res.json();
       if (!res.ok) throw new Error(payload.error || 'Delete failed');
       toast({ title: 'Subscriber removed' });
+      await loadGroups();
       await loadSubscribers();
     } catch (error) {
       toast({
@@ -1254,7 +1285,9 @@ export default function NewsletterAdminClient() {
                             active ? 'text-sky-700' : 'text-slate-400'
                           }`}
                         >
-                          {group.active_member_count ?? group.member_count ?? 0}
+                          {active
+                            ? totals.all ?? group.member_count ?? 0
+                            : group.member_count ?? 0}
                         </span>
                       </button>
                     </li>

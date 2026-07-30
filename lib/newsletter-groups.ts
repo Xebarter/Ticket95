@@ -55,6 +55,24 @@ export async function ensureWebsiteGroup(): Promise<NewsletterGroup> {
   return created as NewsletterGroup;
 }
 
+async function fetchAllGroupMemberships(): Promise<
+  Array<{ group_id: string; subscriber_id: string }>
+> {
+  const pageSize = 1000;
+  const rows: Array<{ group_id: string; subscriber_id: string }> = [];
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await supabaseAdmin
+      .from('newsletter_group_members')
+      .select('group_id, subscriber_id')
+      .range(from, from + pageSize - 1);
+    if (error) throw new Error(error.message);
+    const chunk = (data || []) as Array<{ group_id: string; subscriber_id: string }>;
+    rows.push(...chunk);
+    if (chunk.length < pageSize) break;
+  }
+  return rows;
+}
+
 export async function listGroups(): Promise<NewsletterGroup[]> {
   await ensureWebsiteGroup();
 
@@ -66,20 +84,33 @@ export async function listGroups(): Promise<NewsletterGroup[]> {
 
   if (error) throw new Error(error.message);
 
-  const { data: members, error: membersError } = await supabaseAdmin
-    .from('newsletter_group_members')
-    .select('group_id, subscriber_id, newsletter_subscribers(status)');
+  const members = await fetchAllGroupMemberships();
 
-  if (membersError) throw new Error(membersError.message);
+  const subscriberIds = Array.from(
+    new Set(members.map((row) => row.subscriber_id).filter(Boolean))
+  );
+
+  const statusBySubscriberId = new Map<string, string>();
+  for (let i = 0; i < subscriberIds.length; i += 200) {
+    const chunk = subscriberIds.slice(i, i + 200);
+    const { data: subs, error: subsError } = await supabaseAdmin
+      .from('newsletter_subscribers')
+      .select('id, status')
+      .in('id', chunk);
+    if (subsError) throw new Error(subsError.message);
+    for (const sub of subs || []) {
+      statusBySubscriberId.set(sub.id as string, sub.status as string);
+    }
+  }
 
   const counts = new Map<string, { all: number; active: number }>();
-  for (const row of members || []) {
-    const groupId = row.group_id as string;
-    const current = counts.get(groupId) || { all: 0, active: 0 };
+  for (const row of members) {
+    const current = counts.get(row.group_id) || { all: 0, active: 0 };
     current.all += 1;
-    const sub = row.newsletter_subscribers as { status?: string } | null;
-    if (sub?.status === 'active') current.active += 1;
-    counts.set(groupId, current);
+    if (statusBySubscriberId.get(row.subscriber_id) === 'active') {
+      current.active += 1;
+    }
+    counts.set(row.group_id, current);
   }
 
   return (groups || []).map((group) => {
@@ -343,17 +374,35 @@ export async function listGroupMembers(params: {
   if (error) throw new Error(error.message);
 
   const totals: Record<string, number> = { all: 0, active: 0, unsubscribed: 0, bounced: 0 };
-  // Counts for the whole group (not filtered)
-  const { data: allMembers, error: allError } = await supabaseAdmin
-    .from('newsletter_group_members')
-    .select('newsletter_subscribers(status)')
-    .eq('group_id', params.groupId);
+  // Counts for the whole group (not filtered by search/status)
+  const allIds: string[] = [];
+  const pageSize = 1000;
+  for (let from = 0; ; from += pageSize) {
+    const { data: page, error: pageError } = await supabaseAdmin
+      .from('newsletter_group_members')
+      .select('subscriber_id')
+      .eq('group_id', params.groupId)
+      .range(from, from + pageSize - 1);
+    if (pageError) throw new Error(pageError.message);
+    const chunk = page || [];
+    for (const row of chunk) allIds.push(row.subscriber_id as string);
+    if (chunk.length < pageSize) break;
+  }
 
-  if (allError) throw new Error(allError.message);
-  for (const row of allMembers || []) {
-    totals.all += 1;
-    const status = (row.newsletter_subscribers as { status?: string } | null)?.status;
-    if (status && status in totals) totals[status] += 1;
+  if (allIds.length > 0) {
+    for (let i = 0; i < allIds.length; i += 200) {
+      const chunk = allIds.slice(i, i + 200);
+      const { data: statusRows, error: statusError } = await supabaseAdmin
+        .from('newsletter_subscribers')
+        .select('status')
+        .in('id', chunk);
+      if (statusError) throw new Error(statusError.message);
+      for (const row of statusRows || []) {
+        totals.all += 1;
+        const status = row.status as string;
+        if (status in totals) totals[status] += 1;
+      }
+    }
   }
 
   return {
@@ -380,12 +429,21 @@ export async function getActiveMembersForGroups(
   >();
 
   for (const row of data || []) {
-    const sub = row.newsletter_subscribers as {
-      id?: string;
-      email?: string;
-      unsubscribe_token?: string;
-      status?: string;
-    } | null;
+    const raw = row.newsletter_subscribers as
+      | {
+          id?: string;
+          email?: string;
+          unsubscribe_token?: string;
+          status?: string;
+        }
+      | Array<{
+          id?: string;
+          email?: string;
+          unsubscribe_token?: string;
+          status?: string;
+        }>
+      | null;
+    const sub = Array.isArray(raw) ? raw[0] : raw;
     if (!sub?.id || !sub.email || !sub.unsubscribe_token) continue;
     if (sub.status !== 'active') continue;
     byEmail.set(sub.email, {

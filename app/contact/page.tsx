@@ -3,11 +3,14 @@ import Link from 'next/link';
 import { Clock, Mail, MessageSquare } from 'lucide-react';
 import { StaticPageLayout } from '@/components/layout/static-page-layout';
 import { ContactForm } from '@/components/contact/contact-form';
+import { buildPageMetadata } from '@/lib/seo';
 
-export const metadata: Metadata = {
-  title: 'Contact Us | Ticket95.com',
-  description: 'Contact Ticket95.com support for account, ticket, organizer, and payment help.',
-};
+export const metadata: Metadata = buildPageMetadata({
+  title: 'Contact Us',
+  description:
+    'Contact Ticket95 support for account, ticket, organizer, and payment help.',
+  path: '/contact',
+});
 
 const SUPPORT_EMAIL = 'support@ticket95.com';
 

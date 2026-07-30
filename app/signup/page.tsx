@@ -3,8 +3,9 @@ import { AuthPageShell } from '@/components/auth/auth-page-shell';
 import Link from 'next/link';
 
 export const metadata = {
-  title: 'Registration - Ticket95.com',
-  description: 'Create your Ticket95 profile',
+  title: 'Sign Up',
+  description: 'Create your Ticket95 profile to buy tickets, track orders, and discover events.',
+  robots: { index: false, follow: false },
 };
 
 export default function SignupPage() {

@@ -4,7 +4,14 @@ import { Analytics } from '@vercel/analytics/next'
 import { AuthProvider } from '@/lib/supabase-auth-context'
 import { EventSearchProvider } from '@/lib/event-search-context'
 import { VerifierSwCleanup } from '@/components/verify/verifier-sw-cleanup'
+import { JsonLd } from '@/components/seo/json-ld'
 import { BRAND_ICON_PATHS, brandAssetUrl } from '@/lib/brand-assets'
+import {
+  DEFAULT_DESCRIPTION,
+  SITE_NAME,
+  buildOrganizationJsonLd,
+  buildWebsiteJsonLd,
+} from '@/lib/seo'
 import { getSiteUrl } from '@/lib/site-url'
 import './globals.css'
 
@@ -17,10 +24,29 @@ const lexend = Lexend({
 
 export const metadata: Metadata = {
   metadataBase: new URL(getSiteUrl()),
-  title: 'Ticket95.com - Event Ticketing Platform',
-  description: 'Buy and sell event tickets online. Create events, manage approvals, and discover amazing events.',
-  generator: 'v0.app',
-  applicationName: 'Ticket95.com',
+  title: {
+    default: `${SITE_NAME} — Event Ticketing Platform`,
+    template: `%s | ${SITE_NAME}`,
+  },
+  description: DEFAULT_DESCRIPTION,
+  applicationName: SITE_NAME,
+  keywords: [
+    'event tickets',
+    'buy tickets online',
+    'Uganda events',
+    'Kampala concerts',
+    'sports tickets',
+    'Ticket95',
+    'e-tickets',
+  ],
+  authors: [{ name: SITE_NAME, url: getSiteUrl() }],
+  creator: SITE_NAME,
+  publisher: SITE_NAME,
+  formatDetection: {
+    email: false,
+    address: false,
+    telephone: false,
+  },
   icons: {
     icon: [
       { url: brandAssetUrl(BRAND_ICON_PATHS.ico), sizes: 'any' },
@@ -37,27 +63,37 @@ export const metadata: Metadata = {
     shortcut: [brandAssetUrl(BRAND_ICON_PATHS.ico)],
   },
   appleWebApp: {
-    title: 'Ticket95',
+    title: SITE_NAME,
     statusBarStyle: 'black-translucent',
   },
+  alternates: {
+    canonical: '/',
+  },
   openGraph: {
-    title: 'Ticket95.com',
-    description: 'Buy and sell event tickets online. Create events, manage approvals, and discover amazing events.',
-    images: [
-      {
-        url: brandAssetUrl(BRAND_ICON_PATHS.manifest512),
-        width: 512,
-        height: 512,
-        alt: 'Ticket95.com',
-      },
-    ],
+    type: 'website',
+    siteName: SITE_NAME,
+    locale: 'en_UG',
+    title: `${SITE_NAME} — Event Ticketing Platform`,
+    description: DEFAULT_DESCRIPTION,
+    url: getSiteUrl(),
   },
   twitter: {
-    card: 'summary',
-    title: 'Ticket95.com',
-    description: 'Buy and sell event tickets online.',
-    images: [brandAssetUrl(BRAND_ICON_PATHS.manifest512)],
+    card: 'summary_large_image',
+    title: `${SITE_NAME} — Event Ticketing Platform`,
+    description: DEFAULT_DESCRIPTION,
   },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-image-preview': 'large',
+      'max-snippet': -1,
+      'max-video-preview': -1,
+    },
+  },
+  category: 'entertainment',
 }
 
 export default function RootLayout({
@@ -68,6 +104,8 @@ export default function RootLayout({
   return (
     <html lang="en" className={lexend.variable}>
       <body className="font-sans antialiased">
+        <JsonLd data={buildOrganizationJsonLd()} />
+        <JsonLd data={buildWebsiteJsonLd()} />
         <VerifierSwCleanup />
         <AuthProvider>
           <EventSearchProvider>

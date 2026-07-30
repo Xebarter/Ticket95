@@ -11,7 +11,14 @@ export async function GET() {
   try {
     await requireAdmin();
     const groups = await listGroups();
-    return NextResponse.json({ groups });
+    return NextResponse.json(
+      { groups },
+      {
+        headers: {
+          'Cache-Control': 'no-store, max-age=0',
+        },
+      }
+    );
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to load groups';
     const status = message.includes('Admin') || message.includes('session') ? 401 : 500;

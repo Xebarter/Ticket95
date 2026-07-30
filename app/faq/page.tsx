@@ -8,11 +8,16 @@ import {
   AccordionTrigger,
 } from '@/components/ui/accordion';
 import { StaticPageLayout } from '@/components/layout/static-page-layout';
+import { JsonLd } from '@/components/seo/json-ld';
+import { FAQ_SCHEMA_ITEMS } from '@/lib/faq-schema';
+import { buildFaqJsonLd, buildPageMetadata } from '@/lib/seo';
 
-export const metadata: Metadata = {
-  title: 'FAQ | Ticket95.com',
-  description: 'Frequently asked questions about accounts, tickets, refunds, and organizer workflows.',
-};
+export const metadata: Metadata = buildPageMetadata({
+  title: 'FAQ',
+  description:
+    'Frequently asked questions about Ticket95 accounts, buying tickets, refunds, payments, and organizer workflows.',
+  path: '/faq',
+});
 
 export default function FaqPage() {
   return (
@@ -21,6 +26,7 @@ export default function FaqPage() {
       description="Quick answers for buyers, organizers, and event staff using Ticket95.com."
       lastUpdated="July 21, 2026"
     >
+      <JsonLd data={buildFaqJsonLd(FAQ_SCHEMA_ITEMS)} />
       <div className="space-y-6">
         <div className="rounded-2xl border border-border/70 bg-muted/30 p-5">
           <div className="flex items-start gap-3">

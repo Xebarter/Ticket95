@@ -2,11 +2,14 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { StaticPageLayout } from '@/components/layout/static-page-layout';
 import { getOrRestoreSession } from '@/lib/session-restore';
+import { getApprovedEventsForLanding } from '@/lib/supabase-db';
+import { buildPageMetadata } from '@/lib/seo';
 
-export const metadata: Metadata = {
-  title: 'Sitemap | Ticket95.com',
-  description: 'Browse all primary Ticket95.com pages from one location.',
-};
+export const metadata: Metadata = buildPageMetadata({
+  title: 'Sitemap',
+  description: 'Browse all primary Ticket95 pages and upcoming events from one location.',
+  path: '/sitemap',
+});
 
 const publicGroups = [
   {
@@ -14,13 +17,9 @@ const publicGroups = [
     links: [
       { href: '/', label: 'Home' },
       { href: '/events', label: 'Events' },
-    ],
-  },
-  {
-    title: 'Account',
-    links: [
-      { href: '/login', label: 'Login' },
-      { href: '/signup', label: 'Sign up' },
+      { href: '/events?category=concert', label: 'Concerts' },
+      { href: '/events?category=sports', label: 'Sports' },
+      { href: '/events?category=movies', label: 'Movies' },
     ],
   },
   {
@@ -59,14 +58,22 @@ const signedInGroups = [
 export default async function SitemapPage() {
   const session = await getOrRestoreSession();
   const pageGroups = session
-    ? [publicGroups[0], ...signedInGroups, publicGroups[2]]
+    ? [publicGroups[0], ...signedInGroups, publicGroups[1]]
     : publicGroups;
+
+  let upcomingEvents: Array<{ id: string; name: string }> = [];
+  try {
+    const events = await getApprovedEventsForLanding(40);
+    upcomingEvents = events.map((event) => ({ id: event.id, name: event.name }));
+  } catch {
+    upcomingEvents = [];
+  }
 
   return (
     <StaticPageLayout
       title="Sitemap"
-      description="Quick navigation to Ticket95.com pages for buyers and organizers."
-      lastUpdated="March 16, 2026"
+      description="Quick navigation to Ticket95 pages for buyers and organizers."
+      lastUpdated="July 30, 2026"
     >
       <div className="grid gap-4 sm:grid-cols-2">
         {pageGroups.map((group) => (
@@ -83,6 +90,24 @@ export default async function SitemapPage() {
             </ul>
           </section>
         ))}
+
+        {upcomingEvents.length > 0 ? (
+          <section className="rounded-xl border border-border/70 p-5 sm:col-span-2">
+            <h2 className="text-lg font-semibold">Upcoming events</h2>
+            <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+              {upcomingEvents.map((event) => (
+                <li key={event.id}>
+                  <Link
+                    href={`/events/${event.id}`}
+                    className="text-sm text-primary hover:underline"
+                  >
+                    {event.name}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
       </div>
     </StaticPageLayout>
   );

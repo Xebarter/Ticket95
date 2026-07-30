@@ -3,6 +3,7 @@ import type { Metadata } from 'next'
 export const metadata: Metadata = {
   title: 'Ticket95 Verifier',
   description: 'Door ticket check-in',
+  robots: { index: false, follow: false },
   appleWebApp: {
     capable: true,
     title: 'Ticket95 Verifier',

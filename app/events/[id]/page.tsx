@@ -1,23 +1,29 @@
 import type { Metadata } from 'next';
 import { Suspense } from 'react';
+import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getEventById, getSponsorsByEvent, getTicketTypesForEvent } from '@/lib/supabase-db';
 import { AffiliateRefCapture } from '@/components/affiliates/affiliate-ref-capture';
 import { EventDetailsView } from '@/components/events/event-details-view';
 import { HeaderClient } from '@/components/layout/header-client';
 import { Footer } from '@/components/layout/footer';
-import { getEventShareImage, getSiteUrl, toAbsoluteUrl } from '@/lib/site-url';
+import { JsonLd } from '@/components/seo/json-ld';
+import { BRAND_ICON_PATHS, brandAssetUrl } from '@/lib/brand-assets';
+import {
+  absoluteUrl,
+  buildBreadcrumbJsonLd,
+  buildEventJsonLd,
+  buildEventMetaDescription,
+  buildEventTitle,
+  truncateMetaDescription,
+} from '@/lib/seo';
+import { getEventShareImage, toAbsoluteUrl } from '@/lib/site-url';
 
 interface EventPageProps {
   params: Promise<{ id: string }> | { id: string };
   searchParams?:
     | Promise<Record<string, string | string[] | undefined>>
     | Record<string, string | string[] | undefined>;
-}
-
-function firstQueryValue(value: string | string[] | undefined): string {
-  if (Array.isArray(value)) return value[0] || '';
-  return value || '';
 }
 
 function guessImageMime(url: string): string | undefined {
@@ -29,24 +35,22 @@ function guessImageMime(url: string): string | undefined {
   return undefined;
 }
 
-export async function generateMetadata({ params, searchParams }: EventPageProps): Promise<Metadata> {
+export async function generateMetadata({ params }: EventPageProps): Promise<Metadata> {
   const resolved = await Promise.resolve(params);
-  const query = searchParams ? await Promise.resolve(searchParams) : {};
-  const ref = firstQueryValue(query.ref).trim();
-
   const event = await getEventById(resolved.id);
 
   if (!event || event.status !== 'approved') {
-    return { title: 'Event not found | Ticket95' };
+    return {
+      title: 'Event not found',
+      robots: { index: false, follow: false },
+    };
   }
 
-  const siteUrl = getSiteUrl();
-  const path = `/events/${resolved.id}${ref ? `?ref=${encodeURIComponent(ref)}` : ''}`;
-  const pageUrl = `${siteUrl}${path}`;
-  const description =
-    (event.description || '').trim() ||
-    `Get tickets for ${event.name} at ${event.venue} on Ticket95.`;
+  const canonical = toAbsoluteUrl(`/events/${resolved.id}`) || absoluteUrl(`/events/${resolved.id}`);
+  const description = buildEventMetaDescription(event);
+  const title = buildEventTitle(event);
   const shareImage = getEventShareImage(event);
+  const fallbackImage = absoluteUrl(brandAssetUrl(BRAND_ICON_PATHS.manifest512));
   const ogImages = shareImage
     ? [
         {
@@ -56,28 +60,38 @@ export async function generateMetadata({ params, searchParams }: EventPageProps)
           type: guessImageMime(shareImage.url),
         },
       ]
-    : undefined;
+    : [{ url: fallbackImage, alt: 'Ticket95' }];
 
   return {
-    title: `${event.name} | Ticket95`,
+    title,
     description,
     alternates: {
-      canonical: toAbsoluteUrl(`/events/${resolved.id}`) || pageUrl,
+      canonical,
     },
     openGraph: {
       type: 'website',
       siteName: 'Ticket95',
       title: event.name,
-      description,
-      url: pageUrl,
-      locale: 'en_US',
+      description: truncateMetaDescription(description),
+      url: canonical,
+      locale: 'en_UG',
       images: ogImages,
     },
     twitter: {
-      card: shareImage ? 'summary_large_image' : 'summary',
+      card: 'summary_large_image',
       title: event.name,
-      description,
-      images: shareImage ? [shareImage.url] : undefined,
+      description: truncateMetaDescription(description),
+      images: shareImage ? [shareImage.url] : [fallbackImage],
+    },
+    robots: {
+      index: true,
+      follow: true,
+      googleBot: {
+        index: true,
+        follow: true,
+        'max-image-preview': 'large',
+        'max-snippet': -1,
+      },
     },
   };
 }
@@ -95,13 +109,44 @@ export default async function EventPage({ params }: EventPageProps) {
     getSponsorsByEvent(resolved.id),
   ]);
 
+  const breadcrumbLd = buildBreadcrumbJsonLd([
+    { name: 'Home', path: '/' },
+    { name: 'Events', path: '/events' },
+    { name: event.name, path: `/events/${event.id}` },
+  ]);
+
   return (
     <main className="flex min-h-screen flex-col bg-slate-50">
+      <JsonLd data={buildEventJsonLd(event, ticketTypes)} />
+      <JsonLd data={breadcrumbLd} />
       <HeaderClient />
 
       <Suspense fallback={null}>
         <AffiliateRefCapture />
       </Suspense>
+
+      <nav
+        aria-label="Breadcrumb"
+        className="border-b border-slate-200 bg-white"
+      >
+        <ol className="mx-auto flex max-w-6xl flex-wrap items-center gap-1.5 px-4 py-2.5 text-xs text-slate-500 sm:px-6 lg:px-8">
+          <li>
+            <Link href="/" className="hover:text-slate-800">
+              Home
+            </Link>
+          </li>
+          <li aria-hidden="true">/</li>
+          <li>
+            <Link href="/events" className="hover:text-slate-800">
+              Events
+            </Link>
+          </li>
+          <li aria-hidden="true">/</li>
+          <li className="truncate font-medium text-slate-800" aria-current="page">
+            {event.name}
+          </li>
+        </ol>
+      </nav>
 
       <Suspense
         fallback={

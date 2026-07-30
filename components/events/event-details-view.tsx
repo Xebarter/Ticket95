@@ -2,10 +2,8 @@
 
 import { useEffect, useMemo } from 'react';
 import Image from 'next/image';
-import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import {
-  ArrowLeft,
   Calendar,
   Clock3,
   MapPin,
@@ -62,17 +60,6 @@ export function EventDetailsView({
 
   return (
     <>
-      <div className="border-b border-slate-200 bg-white">
-        <div className="mx-auto max-w-6xl px-4 py-3 sm:px-6 lg:px-8">
-          <Button asChild variant="ghost" size="sm" className="h-8 -ml-2 rounded-lg px-2 text-slate-600">
-            <Link href="/events">
-              <ArrowLeft className="mr-1.5 h-4 w-4" />
-              All events
-            </Link>
-          </Button>
-        </div>
-      </div>
-
       <div className="mx-auto max-w-6xl px-4 pb-24 pt-6 sm:px-6 sm:pt-8 lg:px-8 lg:pb-12">
         <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-10">
           <div className="min-w-0 space-y-8">
@@ -173,7 +160,13 @@ export function EventDetailsView({
                       key={`${src}-${index}`}
                       className="relative aspect-[4/3] overflow-hidden rounded-xl border border-slate-200 bg-slate-100"
                     >
-                      <Image src={src} alt="" fill className="object-cover" sizes="200px" />
+                      <Image
+                        src={src}
+                        alt={`${event.name} gallery image ${index + 1}`}
+                        fill
+                        className="object-cover"
+                        sizes="200px"
+                      />
                     </div>
                   ))}
                 </div>
@@ -187,7 +180,7 @@ export function EventDetailsView({
                   <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl border border-slate-200 bg-white">
                     <Image
                       src={event.organizer_logo_url}
-                      alt=""
+                      alt={`${event.organizer_name || 'Organizer'} logo`}
                       fill
                       className="object-contain p-1"
                     />
@@ -226,7 +219,7 @@ export function EventDetailsView({
                         <div className="relative h-8 w-8 overflow-hidden rounded-md bg-slate-50">
                           <Image
                             src={sponsor.logo_url}
-                            alt=""
+                            alt={`${sponsor.name} logo`}
                             fill
                             className="object-contain p-0.5"
                           />

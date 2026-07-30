@@ -1,10 +1,16 @@
+import type { Metadata } from 'next';
 import { FooterServer } from '@/components/layout/footer-server';
 import { HeaderClient } from '@/components/layout/header-client';
 import { HomeClient } from './home-client';
 import { getApprovedEventsForLanding, getFeaturedEvents } from '@/lib/supabase-db';
-
-
+import { buildPageMetadata, DEFAULT_DESCRIPTION } from '@/lib/seo';
 import type { Event } from '@/lib/supabase-client';
+
+export const metadata: Metadata = buildPageMetadata({
+  title: 'Discover Events & Buy Tickets Online',
+  description: DEFAULT_DESCRIPTION,
+  path: '/',
+});
 
 export default async function Home() {
   let events: Event[];

@@ -3,8 +3,9 @@ import { AuthPageShell } from '@/components/auth/auth-page-shell';
 import Link from 'next/link';
 
 export const metadata = {
-  title: 'Log In - Ticket95.com',
-  description: 'Log in to your Ticket95.com account',
+  title: 'Log In',
+  description: 'Log in to your Ticket95 account to access tickets, orders, and your event dashboard.',
+  robots: { index: false, follow: false },
 };
 
 export default function LoginPage() {
