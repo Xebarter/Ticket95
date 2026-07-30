@@ -499,6 +499,225 @@ export type SendCampaignResult = {
   configured: boolean;
 };
 
+const EDITABLE_CAMPAIGN_STATUSES = new Set(['draft', 'failed']);
+
+async function replaceCampaignRecipients(
+  campaignId: string,
+  groupIds: string[],
+  extraEmailsInput?: string
+): Promise<number> {
+  const recipients = await resolveCampaignRecipients({
+    groupIds,
+    extraEmailsInput,
+  });
+
+  const { error: deleteError } = await supabaseAdmin
+    .from('marketing_campaign_recipients')
+    .delete()
+    .eq('campaign_id', campaignId);
+
+  if (deleteError) throw new Error(deleteError.message);
+
+  if (recipients.length > 0) {
+    const rows = recipients.map((recipient) => ({
+      campaign_id: campaignId,
+      subscriber_id: recipient.subscriberId,
+      email: recipient.email,
+      status: 'pending' as const,
+    }));
+
+    for (let i = 0; i < rows.length; i += 200) {
+      const chunk = rows.slice(i, i + 200);
+      const { error: insertError } = await supabaseAdmin
+        .from('marketing_campaign_recipients')
+        .insert(chunk);
+      if (insertError) throw new Error(insertError.message);
+    }
+  }
+
+  return recipients.length;
+}
+
+/** Update content and/or recipients for draft or failed campaigns. */
+export async function updateCampaign(params: {
+  id: string;
+  subject?: string;
+  previewText?: string;
+  body?: string;
+  groupIds?: string[];
+  extraEmailsInput?: string;
+  /** When true (default if groupIds/extraEmails provided), re-resolve the recipient list. */
+  replaceRecipients?: boolean;
+}): Promise<MarketingCampaign> {
+  const { data: existing, error } = await supabaseAdmin
+    .from('marketing_campaigns')
+    .select('*')
+    .eq('id', params.id)
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+  if (!existing) throw new Error('Campaign not found');
+
+  if (!EDITABLE_CAMPAIGN_STATUSES.has(existing.status)) {
+    throw new Error('Only draft or failed campaigns can be edited');
+  }
+
+  const patch: Record<string, unknown> = {
+    updated_at: new Date().toISOString(),
+    status: 'draft',
+    sent_count: 0,
+    failed_count: 0,
+    skipped_count: 0,
+    sent_at: null,
+  };
+
+  if (typeof params.subject === 'string') {
+    const subject = params.subject.trim();
+    if (!subject) throw new Error('Subject is required');
+    patch.subject = subject;
+  }
+
+  if (typeof params.previewText === 'string') {
+    patch.preview_text = params.previewText.trim() || null;
+  }
+
+  if (typeof params.body === 'string') {
+    const body = params.body.trim();
+    if (!body || !bodyToPlainText(body)) throw new Error('Email body is required');
+    patch.body_html = bodyToHtml(body);
+    patch.body_text = bodyToPlainText(body);
+  }
+
+  const groupIdsProvided = Array.isArray(params.groupIds);
+  const groupIds = groupIdsProvided
+    ? params.groupIds!.filter((id) => typeof id === 'string' && id.trim())
+    : ((existing.target_group_ids as string[]) || []);
+  const extras = (params.extraEmailsInput || '').trim();
+  const shouldReplaceRecipients =
+    params.replaceRecipients === true ||
+    groupIdsProvided ||
+    typeof params.extraEmailsInput === 'string';
+
+  if (shouldReplaceRecipients) {
+    if (groupIds.length === 0 && !extras) {
+      throw new Error('Select at least one recipient group or paste email addresses');
+    }
+    const count = await replaceCampaignRecipients(params.id, groupIds, params.extraEmailsInput);
+    patch.target_group_ids = groupIds;
+    patch.recipient_count = count;
+  }
+
+  const { data: updated, error: updateError } = await supabaseAdmin
+    .from('marketing_campaigns')
+    .update(patch)
+    .eq('id', params.id)
+    .select('*')
+    .single();
+
+  if (updateError || !updated) {
+    throw new Error(updateError?.message || 'Failed to update campaign');
+  }
+
+  return updated as MarketingCampaign;
+}
+
+/** Clone a campaign into a new draft, optionally with a different audience. */
+export async function duplicateCampaign(params: {
+  sourceId: string;
+  createdBy?: string | null;
+  subject?: string;
+  previewText?: string;
+  body?: string;
+  groupIds?: string[];
+  extraEmailsInput?: string;
+}): Promise<MarketingCampaign> {
+  const { data: source, error } = await supabaseAdmin
+    .from('marketing_campaigns')
+    .select('*')
+    .eq('id', params.sourceId)
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+  if (!source) throw new Error('Campaign not found');
+
+  const sourceSubject = (source.subject || '').trim() || 'Untitled campaign';
+  const subject =
+    typeof params.subject === 'string'
+      ? params.subject.trim()
+      : `Copy of ${sourceSubject}`;
+  const previewText =
+    typeof params.previewText === 'string'
+      ? params.previewText
+      : (source.preview_text as string | null) || '';
+  const body =
+    typeof params.body === 'string'
+      ? params.body
+      : (source.body_html as string) || (source.body_text as string) || '';
+
+  const groupIds = Array.isArray(params.groupIds)
+    ? params.groupIds.filter((id) => typeof id === 'string' && id.trim())
+    : ((source.target_group_ids as string[]) || []);
+
+  let extras = (params.extraEmailsInput || '').trim();
+  if (groupIds.length === 0 && !extras) {
+    // Campaigns sent only to pasted emails have no stored extras — recover from recipient rows.
+    const { data: recipientRows, error: recipientError } = await supabaseAdmin
+      .from('marketing_campaign_recipients')
+      .select('email')
+      .eq('campaign_id', params.sourceId)
+      .limit(2000);
+    if (recipientError) throw new Error(recipientError.message);
+    extras = (recipientRows || []).map((r) => r.email as string).filter(Boolean).join('\n');
+  }
+
+  if (groupIds.length === 0 && !extras) {
+    throw new Error('Select at least one recipient group or paste email addresses');
+  }
+
+  const result = await createCampaign({
+    subject,
+    previewText,
+    body,
+    createdBy: params.createdBy,
+    groupIds,
+    extraEmailsInput: extras || undefined,
+    sendNow: false,
+  });
+
+  return result.campaign;
+}
+
+export async function cancelCampaign(campaignId: string): Promise<MarketingCampaign> {
+  const { data: existing, error } = await supabaseAdmin
+    .from('marketing_campaigns')
+    .select('*')
+    .eq('id', campaignId)
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+  if (!existing) throw new Error('Campaign not found');
+
+  if (!EDITABLE_CAMPAIGN_STATUSES.has(existing.status)) {
+    throw new Error('Only draft or failed campaigns can be cancelled');
+  }
+
+  const { data: updated, error: updateError } = await supabaseAdmin
+    .from('marketing_campaigns')
+    .update({
+      status: 'cancelled',
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', campaignId)
+    .select('*')
+    .single();
+
+  if (updateError || !updated) {
+    throw new Error(updateError?.message || 'Failed to cancel campaign');
+  }
+
+  return updated as MarketingCampaign;
+}
+
 export async function sendCampaign(campaignId: string): Promise<SendCampaignResult> {
   if (!isEmailConfigured()) {
     throw new Error('Email is not configured. Set RESEND_API_KEY (and optionally EMAIL_FROM).');
@@ -515,6 +734,10 @@ export async function sendCampaign(campaignId: string): Promise<SendCampaignResu
 
   if (campaign.status === 'sending') {
     throw new Error('Campaign is already sending');
+  }
+
+  if (campaign.status === 'cancelled') {
+    throw new Error('Cancelled campaigns cannot be sent');
   }
 
   const { data: pending, error: pendingError } = await supabaseAdmin
@@ -546,6 +769,19 @@ export async function sendCampaign(campaignId: string): Promise<SendCampaignResu
     throw new Error('No pending recipients for this campaign');
   }
 
+  // Preserve already-finalized counts; only recount outcomes from this run's queue.
+  const { data: finalizedRows, error: finalizedError } = await supabaseAdmin
+    .from('marketing_campaign_recipients')
+    .select('status')
+    .eq('campaign_id', campaignId)
+    .in('status', ['sent', 'skipped']);
+
+  if (finalizedError) throw new Error(finalizedError.message);
+
+  let sent = (finalizedRows || []).filter((r) => r.status === 'sent').length;
+  let skipped = (finalizedRows || []).filter((r) => r.status === 'skipped').length;
+  let failed = 0;
+
   await supabaseAdmin
     .from('marketing_campaigns')
     .update({ status: 'sending' })
@@ -572,10 +808,6 @@ export async function sendCampaign(campaignId: string): Promise<SendCampaignResu
       }
     }
   }
-
-  let sent = campaign.sent_count || 0;
-  let failed = campaign.failed_count || 0;
-  let skipped = campaign.skipped_count || 0;
 
   for (let i = 0; i < recipients.length; i += SEND_BATCH_SIZE) {
     const batch = recipients.slice(i, i + SEND_BATCH_SIZE);

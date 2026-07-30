@@ -22,6 +22,7 @@ import {
 import {
   Archive,
   Circle,
+  Copy,
   FolderPlus,
   Inbox,
   Loader2,
@@ -29,6 +30,7 @@ import {
   MailOpen,
   Megaphone,
   Paperclip,
+  Pencil,
   Plus,
   RefreshCw,
   Reply,
@@ -38,7 +40,13 @@ import {
   UserMinus,
   UserPlus,
   Users,
+  X,
 } from 'lucide-react';
+import {
+  NewsletterCampaignsPanel,
+  type CampaignDetail,
+  type CampaignListItem,
+} from './newsletter-campaigns-panel';
 
 function replyInitials(name: string | null, email: string): string {
   const source = (name || email || '?').trim();
@@ -91,17 +99,12 @@ type NewsletterGroup = {
   active_member_count?: number;
 };
 
-type Campaign = {
-  id: string;
-  subject: string;
-  status: string;
-  recipient_count: number;
-  sent_count: number;
-  failed_count: number;
-  skipped_count: number;
-  created_at: string;
-  sent_at: string | null;
-};
+type Campaign = CampaignListItem;
+
+type ComposeMode =
+  | { type: 'new' }
+  | { type: 'edit'; campaignId: string; status: string }
+  | { type: 'reuse'; sourceId: string; sourceSubject: string };
 
 type InboxReply = {
   id: string;
@@ -163,6 +166,7 @@ export default function NewsletterAdminClient() {
   const [previewText, setPreviewText] = useState('');
   const [body, setBody] = useState('');
   const [extraEmails, setExtraEmails] = useState('');
+  const [composeMode, setComposeMode] = useState<ComposeMode>({ type: 'new' });
 
   const loadGroups = useCallback(async () => {
     const res = await fetch('/api/admin/newsletter/groups');
@@ -555,6 +559,57 @@ export default function NewsletterAdminClient() {
     }
   };
 
+  const resetCompose = (mode: ComposeMode = { type: 'new' }) => {
+    setSubject('');
+    setPreviewText('');
+    setBody('');
+    setExtraEmails('');
+    setComposeMode(mode);
+    const website = groups.find((g) => g.slug === 'website');
+    setComposeGroupIds(website ? [website.id] : []);
+  };
+
+  const startNewCampaign = () => {
+    resetCompose({ type: 'new' });
+    setTab('compose');
+  };
+
+  const startEditCampaign = (detail: CampaignDetail) => {
+    setComposeMode({
+      type: 'edit',
+      campaignId: detail.id,
+      status: detail.status,
+    });
+    setSubject(detail.subject || '');
+    setPreviewText(detail.preview_text || '');
+    setBody(detail.body_html || detail.body_text || '');
+    setExtraEmails('');
+    setComposeGroupIds(
+      (detail.target_group_ids || []).filter((id) => groups.some((g) => g.id === id))
+    );
+    setTab('compose');
+  };
+
+  const startReuseCampaign = (detail: CampaignDetail) => {
+    setComposeMode({
+      type: 'reuse',
+      sourceId: detail.id,
+      sourceSubject: detail.subject,
+    });
+    setSubject(detail.subject || '');
+    setPreviewText(detail.preview_text || '');
+    setBody(detail.body_html || detail.body_text || '');
+    setExtraEmails('');
+    setComposeGroupIds(
+      (detail.target_group_ids || []).filter((id) => groups.some((g) => g.id === id))
+    );
+    setTab('compose');
+    toast({
+      title: 'Reusing campaign',
+      description: 'Content loaded — choose a different audience if needed, then save or send.',
+    });
+  };
+
   const createCampaign = async (sendNow: boolean) => {
     if (!subject.trim() || isRichTextEmpty(body)) {
       toast({ title: 'Subject and body are required', variant: 'destructive' });
@@ -579,34 +634,96 @@ export default function NewsletterAdminClient() {
 
     setSending(true);
     try {
-      const res = await fetch('/api/admin/newsletter/campaigns', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          subject,
-          previewText,
-          body,
-          groupIds: composeGroupIds,
-          extraEmails,
-          sendNow,
-        }),
-      });
-      const payload = await res.json();
-      if (!res.ok) throw new Error(payload.error || 'Campaign failed');
-
-      if (sendNow && payload.sendResult) {
-        toast({
-          title: 'Campaign sent',
-          description: `Sent ${payload.sendResult.sent}, failed ${payload.sendResult.failed}, skipped ${payload.sendResult.skipped}.`,
+      if (composeMode.type === 'edit') {
+        const patchRes = await fetch(`/api/admin/newsletter/campaigns/${composeMode.campaignId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            subject,
+            previewText,
+            body,
+            groupIds: composeGroupIds,
+            extraEmails,
+            replaceRecipients: true,
+          }),
         });
+        const patchPayload = await patchRes.json();
+        if (!patchRes.ok) throw new Error(patchPayload.error || 'Update failed');
+
+        if (sendNow) {
+          const sendRes = await fetch(
+            `/api/admin/newsletter/campaigns/${composeMode.campaignId}/send`,
+            { method: 'POST' }
+          );
+          const sendPayload = await sendRes.json();
+          if (!sendRes.ok) throw new Error(sendPayload.error || 'Send failed');
+          toast({
+            title: 'Campaign sent',
+            description: `Sent ${sendPayload.sent}, failed ${sendPayload.failed}, skipped ${sendPayload.skipped}.`,
+          });
+        } else {
+          toast({
+            title: 'Campaign updated',
+            description: 'Saved as a draft with the latest content and recipients.',
+          });
+        }
+      } else if (composeMode.type === 'reuse') {
+        const res = await fetch(
+          `/api/admin/newsletter/campaigns/${composeMode.sourceId}/duplicate`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              subject,
+              previewText,
+              body,
+              groupIds: composeGroupIds,
+              extraEmails,
+              sendNow,
+            }),
+          }
+        );
+        const payload = await res.json();
+        if (!res.ok) throw new Error(payload.error || 'Reuse failed');
+
+        if (sendNow && payload.sendResult) {
+          toast({
+            title: 'Campaign sent',
+            description: `Sent ${payload.sendResult.sent}, failed ${payload.sendResult.failed}, skipped ${payload.sendResult.skipped}.`,
+          });
+        } else {
+          toast({
+            title: 'New draft created',
+            description: 'Campaign content applied to the selected audience.',
+          });
+        }
       } else {
-        toast({ title: 'Draft saved' });
+        const res = await fetch('/api/admin/newsletter/campaigns', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            subject,
+            previewText,
+            body,
+            groupIds: composeGroupIds,
+            extraEmails,
+            sendNow,
+          }),
+        });
+        const payload = await res.json();
+        if (!res.ok) throw new Error(payload.error || 'Campaign failed');
+
+        if (sendNow && payload.sendResult) {
+          toast({
+            title: 'Campaign sent',
+            description: `Sent ${payload.sendResult.sent}, failed ${payload.sendResult.failed}, skipped ${payload.sendResult.skipped}.`,
+          });
+        } else {
+          toast({ title: 'Draft saved' });
+        }
       }
 
-      setSubject('');
-      setPreviewText('');
-      setBody('');
-      setExtraEmails('');
+      resetCompose({ type: 'new' });
       setTab('campaigns');
       await loadCampaigns();
       await loadGroups();
@@ -1403,16 +1520,61 @@ export default function NewsletterAdminClient() {
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200/70 bg-white/70 px-4 py-3.5 backdrop-blur-sm sm:px-5">
             <div className="flex items-center gap-2">
               <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-sky-100/80 text-sky-700">
-                <Megaphone className="h-4 w-4" />
+                {composeMode.type === 'edit' ? (
+                  <Pencil className="h-4 w-4" />
+                ) : composeMode.type === 'reuse' ? (
+                  <Copy className="h-4 w-4" />
+                ) : (
+                  <Megaphone className="h-4 w-4" />
+                )}
               </div>
               <div>
-                <h2 className="text-sm font-semibold tracking-tight text-slate-900">Compose campaign</h2>
-                <p className="text-xs text-slate-500">Write once, send to selected groups</p>
+                <h2 className="text-sm font-semibold tracking-tight text-slate-900">
+                  {composeMode.type === 'edit'
+                    ? 'Edit campaign'
+                    : composeMode.type === 'reuse'
+                      ? 'Reuse campaign'
+                      : 'Compose campaign'}
+                </h2>
+                <p className="text-xs text-slate-500">
+                  {composeMode.type === 'edit'
+                    ? 'Update content and recipients, then save or send'
+                    : composeMode.type === 'reuse'
+                      ? `Based on “${composeMode.sourceSubject}” — pick any audience`
+                      : 'Write once, send to selected groups'}
+                </p>
               </div>
             </div>
+            {composeMode.type !== 'new' ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="rounded-xl border-slate-200 bg-white text-slate-700"
+                onClick={() => {
+                  resetCompose({ type: 'new' });
+                }}
+              >
+                <X className="mr-1.5 h-3.5 w-3.5" />
+                Clear
+              </Button>
+            ) : null}
           </div>
 
           <div className="space-y-5 bg-gradient-to-b from-white via-white to-slate-50/50 p-4 sm:p-6">
+            {composeMode.type === 'edit' ? (
+              <div className="rounded-2xl border border-amber-200/80 bg-amber-50/70 px-4 py-3 text-sm text-amber-900">
+                Editing a {composeMode.status} campaign. Saving replaces the recipient list from the
+                groups and emails below, and resets it to a draft.
+              </div>
+            ) : null}
+            {composeMode.type === 'reuse' ? (
+              <div className="rounded-2xl border border-sky-200/80 bg-sky-50/70 px-4 py-3 text-sm text-sky-900">
+                Creates a <span className="font-medium">new</span> campaign with this content. Change
+                groups freely — the original send history stays untouched.
+              </div>
+            ) : null}
+
             <div className="grid gap-5 lg:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="campaign-subject" className="text-xs font-medium text-slate-600">
@@ -1454,7 +1616,31 @@ export default function NewsletterAdminClient() {
             </div>
 
             <div className="space-y-3">
-              <Label className="text-xs font-medium text-slate-600">Send to groups</Label>
+              <div className="flex flex-wrap items-end justify-between gap-2">
+                <Label className="text-xs font-medium text-slate-600">
+                  {composeMode.type === 'reuse' ? 'Send to groups (choose any)' : 'Send to groups'}
+                </Label>
+                <div className="flex flex-wrap gap-1.5">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 rounded-lg px-2 text-[11px] text-slate-500"
+                    onClick={() => setComposeGroupIds(groups.map((g) => g.id))}
+                  >
+                    Select all
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 rounded-lg px-2 text-[11px] text-slate-500"
+                    onClick={() => setComposeGroupIds([])}
+                  >
+                    Clear
+                  </Button>
+                </div>
+              </div>
               <div className="grid gap-2 sm:grid-cols-2">
                 {groups.map((group) => {
                   const checked = composeGroupIds.includes(group.id);
@@ -1508,7 +1694,11 @@ export default function NewsletterAdminClient() {
 
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200/70 pt-4">
               <p className="text-[11px] text-slate-400">
-                Drafts stay here until you send. Replies go to your reply inbox.
+                {composeMode.type === 'edit'
+                  ? 'Saving keeps this campaign ID and refreshes recipients.'
+                  : composeMode.type === 'reuse'
+                    ? 'Saving creates a brand-new campaign for the audience you selected.'
+                    : 'Drafts stay here until you send. Replies go to your reply inbox.'}
               </p>
               <div className="flex flex-wrap gap-2">
                 <Button
@@ -1518,7 +1708,11 @@ export default function NewsletterAdminClient() {
                   disabled={sending}
                   onClick={() => void createCampaign(false)}
                 >
-                  Save draft
+                  {composeMode.type === 'edit'
+                    ? 'Save changes'
+                    : composeMode.type === 'reuse'
+                      ? 'Save as new draft'
+                      : 'Save draft'}
                 </Button>
                 <Button
                   type="button"
@@ -1531,7 +1725,11 @@ export default function NewsletterAdminClient() {
                   ) : (
                     <Send className="mr-2 h-4 w-4" />
                   )}
-                  Send now
+                  {composeMode.type === 'edit'
+                    ? 'Save & send'
+                    : composeMode.type === 'reuse'
+                      ? 'Send to this audience'
+                      : 'Send now'}
                 </Button>
               </div>
             </div>
@@ -1540,111 +1738,17 @@ export default function NewsletterAdminClient() {
       ) : null}
 
       {tab === 'campaigns' ? (
-        <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-gradient-to-br from-slate-50 via-white to-sky-50/40 shadow-sm shadow-slate-200/40">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200/70 bg-white/70 px-4 py-3.5 backdrop-blur-sm sm:px-5">
-            <div className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-sky-100/80 text-sky-700">
-                <Send className="h-4 w-4" />
-              </div>
-              <div>
-                <h2 className="text-sm font-semibold tracking-tight text-slate-900">Campaigns</h2>
-                <p className="text-xs text-slate-500">
-                  {campaigns.length === 0
-                    ? 'No campaigns yet'
-                    : `${campaigns.length} campaign${campaigns.length === 1 ? '' : 's'}`}
-                </p>
-              </div>
-            </div>
-            <Button
-              type="button"
-              size="sm"
-              className="rounded-xl bg-sky-600 hover:bg-sky-700"
-              onClick={() => setTab('compose')}
-            >
-              <Plus className="mr-1.5 h-3.5 w-3.5" />
-              New campaign
-            </Button>
-          </div>
-
-          <div className="bg-gradient-to-b from-white via-white to-slate-50/50 p-4 sm:p-5">
-            {campaigns.length === 0 ? (
-              <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-slate-200 bg-slate-50/50 px-6 py-16 text-center">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-sky-50 text-sky-600/70 ring-1 ring-sky-100">
-                  <Megaphone className="h-5 w-5" />
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-slate-800">No campaigns yet</p>
-                  <p className="mt-1 text-xs text-slate-500">
-                    Compose your first message and send it to a subscriber group.
-                  </p>
-                </div>
-                <Button
-                  type="button"
-                  size="sm"
-                  className="mt-1 rounded-xl bg-sky-600 hover:bg-sky-700"
-                  onClick={() => setTab('compose')}
-                >
-                  Compose campaign
-                </Button>
-              </div>
-            ) : (
-              <div className="space-y-2.5">
-                {campaigns.map((campaign) => {
-                  const when = campaign.sent_at || campaign.created_at;
-                  const statusTone =
-                    campaign.status === 'sent'
-                      ? 'bg-emerald-50 text-emerald-700'
-                      : campaign.status === 'failed'
-                        ? 'bg-rose-50 text-rose-700'
-                        : campaign.status === 'sending'
-                          ? 'bg-sky-50 text-sky-700'
-                          : 'bg-slate-100 text-slate-600';
-                  return (
-                    <div
-                      key={campaign.id}
-                      className="flex flex-col gap-3 rounded-2xl border border-slate-200/70 bg-white px-4 py-4 shadow-sm shadow-slate-100/60 sm:flex-row sm:items-center sm:justify-between sm:px-5"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span
-                            className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold capitalize ${statusTone}`}
-                          >
-                            {campaign.status}
-                          </span>
-                          <span className="text-[11px] text-slate-400">
-                            {formatReplyFullWhen(when)}
-                          </span>
-                        </div>
-                        <h3 className="mt-1.5 truncate text-sm font-semibold text-slate-900 sm:text-base">
-                          {campaign.subject}
-                        </h3>
-                        <p className="mt-1 text-xs text-slate-500">
-                          <span className="font-medium tabular-nums text-slate-700">
-                            {campaign.recipient_count}
-                          </span>{' '}
-                          recipients · {campaign.sent_count} sent · {campaign.failed_count} failed ·{' '}
-                          {campaign.skipped_count} skipped
-                        </p>
-                      </div>
-                      {(campaign.status === 'draft' || campaign.status === 'failed') && (
-                        <Button
-                          type="button"
-                          size="sm"
-                          className="shrink-0 rounded-xl bg-sky-600 hover:bg-sky-700"
-                          disabled={sending || !emailConfigured}
-                          onClick={() => void resendCampaign(campaign.id)}
-                        >
-                          <Send className="mr-1.5 h-3.5 w-3.5" />
-                          Send
-                        </Button>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </div>
+        <NewsletterCampaignsPanel
+          campaigns={campaigns}
+          groups={groups}
+          emailConfigured={emailConfigured}
+          sending={sending}
+          onNewCampaign={startNewCampaign}
+          onEditCampaign={startEditCampaign}
+          onReuseCampaign={startReuseCampaign}
+          onSendCampaign={resendCampaign}
+          onCancelled={loadCampaigns}
+        />
       ) : null}
     </div>
   );
