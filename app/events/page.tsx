@@ -9,6 +9,12 @@ import { cache } from 'react';
 import type { Event } from '@/lib/supabase-client';
 import { getEventCategoryLabel, isEventCategoryId } from '@/lib/event-categories';
 import { buildPageMetadata } from '@/lib/seo';
+import {
+  CATEGORY_KEYWORDS,
+  EVENTS_LISTING_DESCRIPTION,
+  LOCAL_SEO_KEYWORDS,
+  uniqueKeywords,
+} from '@/lib/seo-keywords';
 
 interface EventsPageProps {
   searchParams?: Promise<{
@@ -26,26 +32,39 @@ export async function generateMetadata({ searchParams }: EventsPageProps): Promi
   if (isEventCategoryId(category)) {
     const label = getEventCategoryLabel(category);
     return buildPageMetadata({
-      title: `${label} Events & Tickets`,
-      description: `Browse upcoming ${label.toLowerCase()} events and buy tickets online on Ticket95. Secure checkout and instant e-tickets.`,
+      title: `${label} Events & Tickets in Uganda`,
+      description: `Buy ${label.toLowerCase()} tickets online on Ticket95 — event ticketing for ${label.toLowerCase()} in Kampala and across Uganda. Digital tickets, QR code ticketing, and secure checkout.`,
       path: `/events?category=${encodeURIComponent(category)}`,
+      keywords: uniqueKeywords([
+        `${label} tickets`,
+        `${label} Uganda`,
+        `Kampala ${label.toLowerCase()}`,
+        ...LOCAL_SEO_KEYWORDS.slice(0, 8),
+        ...CATEGORY_KEYWORDS.slice(0, 8),
+      ]),
     });
   }
 
   if (search) {
     return buildPageMetadata({
       title: `Events matching “${search.slice(0, 60)}”`,
-      description: `Find events related to “${search.slice(0, 80)}” and buy tickets on Ticket95.`,
+      description: `Find events related to “${search.slice(0, 80)}” and buy tickets online on Ticket95.`,
       path: `/events?search=${encodeURIComponent(search)}`,
       noIndex: true,
     });
   }
 
   return buildPageMetadata({
-    title: 'Upcoming Events & Tickets',
-    description:
-      'Browse upcoming concerts, sports, movies, and live events. Filter by category and buy tickets securely on Ticket95.',
+    title: 'Uganda Events — Buy Tickets Online',
+    description: EVENTS_LISTING_DESCRIPTION,
     path: '/events',
+    keywords: uniqueKeywords([
+      ...LOCAL_SEO_KEYWORDS,
+      ...CATEGORY_KEYWORDS.slice(0, 16),
+      'buy tickets online',
+      'event tickets',
+      'Ticket95',
+    ]),
   });
 }
 

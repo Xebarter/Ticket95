@@ -8,6 +8,8 @@ import { JsonLd } from '@/components/seo/json-ld'
 import { BRAND_ICON_PATHS, brandAssetUrl } from '@/lib/brand-assets'
 import {
   DEFAULT_DESCRIPTION,
+  DEFAULT_TITLE,
+  META_KEYWORDS,
   SITE_NAME,
   buildOrganizationJsonLd,
   buildWebsiteJsonLd,
@@ -25,25 +27,12 @@ const lexend = Lexend({
 export const metadata: Metadata = {
   metadataBase: new URL(getSiteUrl()),
   title: {
-    default: `${SITE_NAME} — Event Tickets in Uganda | Ticket 95`,
+    default: DEFAULT_TITLE,
     template: `%s | ${SITE_NAME}`,
   },
   description: DEFAULT_DESCRIPTION,
   applicationName: SITE_NAME,
-  keywords: [
-    'Ticket95',
-    'Ticket 95',
-    'Ticket95 Uganda',
-    'event tickets Uganda',
-    'buy tickets online Uganda',
-    'Kampala events',
-    'Kampala concerts',
-    'Uganda concerts',
-    'sports tickets Uganda',
-    'movie tickets',
-    'e-tickets Uganda',
-    'event ticketing platform',
-  ],
+  keywords: META_KEYWORDS,
   authors: [{ name: SITE_NAME, url: getSiteUrl() }],
   creator: SITE_NAME,
   publisher: SITE_NAME,
@@ -78,13 +67,13 @@ export const metadata: Metadata = {
     type: 'website',
     siteName: SITE_NAME,
     locale: 'en_UG',
-    title: `${SITE_NAME} — Event Tickets in Uganda | Ticket 95`,
+    title: DEFAULT_TITLE,
     description: DEFAULT_DESCRIPTION,
     url: getSiteUrl(),
   },
   twitter: {
     card: 'summary_large_image',
-    title: `${SITE_NAME} — Event Tickets in Uganda | Ticket 95`,
+    title: DEFAULT_TITLE,
     description: DEFAULT_DESCRIPTION,
   },
   robots: {

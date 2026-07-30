@@ -1,19 +1,27 @@
 import { BRAND_ICON_PATHS, brandAssetUrl } from '@/lib/brand-assets';
 import {
   BRAND_ALTERNATE_NAMES,
-  BRAND_AREA_SERVED,
   BRAND_PHONE_E164,
   BRAND_SUPPORT_EMAIL,
 } from '@/lib/brand-contact';
 import { getEventCategoryLabel } from '@/lib/event-categories';
 import { getStartingPrice, isEventSoldOut, isFreePrice } from '@/lib/event-display';
+import {
+  DEFAULT_SEO_DESCRIPTION,
+  DEFAULT_SEO_TITLE,
+  KNOWS_ABOUT_TOPICS,
+  META_KEYWORDS,
+  SERVICE_AREAS,
+  uniqueKeywords,
+} from '@/lib/seo-keywords';
 import { getSiteUrl, toAbsoluteUrl, getEventShareImage } from '@/lib/site-url';
 import type { Event, TicketType } from '@/lib/supabase-client';
 import type { Metadata } from 'next';
 
 export const SITE_NAME = 'Ticket95';
-export const DEFAULT_DESCRIPTION =
-  'Ticket95 (Ticket 95) is Uganda’s event ticketing platform — buy tickets for concerts, sports, movies, and live events in Kampala and across Uganda. Call +256 750 225 159. Secure checkout and instant e-tickets.';
+export const DEFAULT_DESCRIPTION = DEFAULT_SEO_DESCRIPTION;
+export const DEFAULT_TITLE = DEFAULT_SEO_TITLE;
+export { META_KEYWORDS, HOMEPAGE_FOCUS_KEYWORDS, HOMEPAGE_SEO_PILLARS } from '@/lib/seo-keywords';
 
 /** Strip tags and collapse whitespace for meta / JSON-LD text. */
 export function plainText(value: string | null | undefined): string {
@@ -49,16 +57,19 @@ export function buildPageMetadata(input: {
   image?: string | null;
   noIndex?: boolean;
   type?: 'website' | 'article';
+  keywords?: string[];
 }): Metadata {
   const url = absoluteUrl(input.path);
   const description = truncateMetaDescription(input.description);
   const imageUrl =
     toAbsoluteUrl(input.image) ||
     absoluteUrl(brandAssetUrl(BRAND_ICON_PATHS.manifest512));
+  const keywords = uniqueKeywords(input.keywords || META_KEYWORDS);
 
   return {
     title: input.title,
     description,
+    keywords,
     alternates: { canonical: url },
     robots: input.noIndex
       ? { index: false, follow: false }
@@ -111,17 +122,17 @@ export function buildOrganizationJsonLd() {
       addressLocality: 'Kampala',
       addressCountry: 'UG',
     },
-    areaServed: [
-      { '@type': 'Country', name: BRAND_AREA_SERVED },
-      { '@type': 'City', name: 'Kampala' },
-    ],
+    areaServed: SERVICE_AREAS.map((area) => ({
+      '@type': area.type,
+      name: area.name,
+    })),
     contactPoint: [
       {
         '@type': 'ContactPoint',
         telephone: BRAND_PHONE_E164,
         contactType: 'customer support',
         email: BRAND_SUPPORT_EMAIL,
-        areaServed: 'UG',
+        areaServed: ['UG', 'KE', 'RW', 'TZ'],
         availableLanguage: ['English'],
         url: absoluteUrl('/contact'),
       },
@@ -129,17 +140,12 @@ export function buildOrganizationJsonLd() {
         '@type': 'ContactPoint',
         telephone: BRAND_PHONE_E164,
         contactType: 'sales',
-        areaServed: 'UG',
+        areaServed: ['UG', 'KE', 'RW', 'TZ'],
         availableLanguage: ['English'],
       },
     ],
-    knowsAbout: [
-      'event tickets Uganda',
-      'concert tickets Kampala',
-      'sports tickets',
-      'online ticketing',
-      'e-tickets',
-    ],
+    knowsAbout: uniqueKeywords(KNOWS_ABOUT_TOPICS),
+    slogan: 'Online ticketing platform for Uganda events',
   };
 }
 

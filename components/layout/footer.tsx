@@ -74,8 +74,9 @@ export function Footer() {
               <BrandLogo size="md" />
             </div>
             <p className="max-w-xs text-sm leading-relaxed text-slate-400">
-              Uganda’s event ticketing platform — discover concerts, sports, movies, and live
-              events in Kampala and beyond. Buy tickets online with Ticket95 (Ticket 95).
+              Online ticketing platform for Uganda events — buy tickets online or sell tickets
+              online for concerts, festivals, sports, conferences, tours, and adventure booking
+              with Ticket95 (Ticket 95).
             </p>
             <div className="flex gap-3">
               {[

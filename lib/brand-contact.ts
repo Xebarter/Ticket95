@@ -7,4 +7,12 @@ export const BRAND_PHONE_TEL = 'tel:+256750225159';
 export const BRAND_WHATSAPP_URL = `https://wa.me/256750225159`;
 export const BRAND_ADDRESS_LINE = 'Mutungo Zone 1, Nakawa, Kampala, Uganda';
 export const BRAND_AREA_SERVED = 'Uganda';
-export const BRAND_ALTERNATE_NAMES = ['Ticket 95', 'Ticket95.com', 'Ticket 95 Uganda'] as const;
+export const BRAND_ALTERNATE_NAMES = [
+  'Ticket 95',
+  'Ticket95.com',
+  'Ticket 95 Uganda',
+  'Ticket95 Uganda',
+  'Ticket95 Africa',
+  'Ticket95 events',
+  'Ticket95 tickets',
+] as const;

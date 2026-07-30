@@ -16,10 +16,11 @@ const publicGroups = [
     title: 'Discover',
     links: [
       { href: '/', label: 'Home' },
-      { href: '/events', label: 'Events' },
-      { href: '/events?category=concert', label: 'Concerts' },
-      { href: '/events?category=sports', label: 'Sports' },
-      { href: '/events?category=movies', label: 'Movies' },
+      { href: '/events', label: 'Uganda Events' },
+      { href: '/events?category=concert', label: 'Concert Tickets' },
+      { href: '/events?category=sports', label: 'Sports Tickets' },
+      { href: '/events?category=movies', label: 'Movie Tickets' },
+      { href: '/events?category=other', label: 'Festivals, Tours & More' },
     ],
   },
   {

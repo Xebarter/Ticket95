@@ -7,7 +7,7 @@ import { buildPageMetadata, DEFAULT_DESCRIPTION } from '@/lib/seo';
 import type { Event } from '@/lib/supabase-client';
 
 export const metadata: Metadata = buildPageMetadata({
-  title: 'Discover Event Tickets in Uganda',
+  title: 'Online Ticketing Platform for Uganda Events',
   description: DEFAULT_DESCRIPTION,
   path: '/',
 });
