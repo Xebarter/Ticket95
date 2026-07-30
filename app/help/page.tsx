@@ -25,7 +25,7 @@ export const metadata: Metadata = buildPageMetadata({
 });
 
 const CONTACT_EMAIL = 'support@ticket95.com';
-const CONTACT_WHATSAPP_PHONE = '+256783676313';
+const CONTACT_WHATSAPP_PHONE = '+256750225159';
 const CONTACT_WEBSITE = 'Ticket95.com';
 
 export default function HelpCenterPage() {

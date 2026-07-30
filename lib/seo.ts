@@ -1,4 +1,10 @@
 import { BRAND_ICON_PATHS, brandAssetUrl } from '@/lib/brand-assets';
+import {
+  BRAND_ALTERNATE_NAMES,
+  BRAND_AREA_SERVED,
+  BRAND_PHONE_E164,
+  BRAND_SUPPORT_EMAIL,
+} from '@/lib/brand-contact';
 import { getEventCategoryLabel } from '@/lib/event-categories';
 import { getStartingPrice, isEventSoldOut, isFreePrice } from '@/lib/event-display';
 import { getSiteUrl, toAbsoluteUrl, getEventShareImage } from '@/lib/site-url';
@@ -7,7 +13,7 @@ import type { Metadata } from 'next';
 
 export const SITE_NAME = 'Ticket95';
 export const DEFAULT_DESCRIPTION =
-  'Discover and buy tickets for concerts, sports, movies, and live events across Uganda and beyond. Secure checkout, instant e-tickets, and trusted organizers on Ticket95.';
+  'Ticket95 (Ticket 95) is Uganda’s event ticketing platform — buy tickets for concerts, sports, movies, and live events in Kampala and across Uganda. Call +256 750 225 159. Secure checkout and instant e-tickets.';
 
 /** Strip tags and collapse whitespace for meta / JSON-LD text. */
 export function plainText(value: string | null | undefined): string {
@@ -77,36 +83,85 @@ export function buildPageMetadata(input: {
 
 export function buildOrganizationJsonLd() {
   const url = getSiteUrl();
+  // Prefer a stable square mark Google can crawl (no cache-bust query for schema).
+  const logoUrl = absoluteUrl(BRAND_ICON_PATHS.apple);
+
   return {
     '@context': 'https://schema.org',
-    '@type': 'Organization',
+    '@type': ['Organization', 'OnlineBusiness'],
     name: SITE_NAME,
+    legalName: 'Ticket95',
+    alternateName: [...BRAND_ALTERNATE_NAMES],
     url,
-    logo: absoluteUrl(brandAssetUrl(BRAND_ICON_PATHS.manifest512)),
-    contactPoint: {
-      '@type': 'ContactPoint',
-      contactType: 'customer support',
-      url: absoluteUrl('/contact'),
-      availableLanguage: ['English'],
+    logo: {
+      '@type': 'ImageObject',
+      url: logoUrl,
+      contentUrl: logoUrl,
+      width: 180,
+      height: 180,
+      caption: 'Ticket95 logo',
     },
+    image: logoUrl,
+    description: DEFAULT_DESCRIPTION,
+    email: BRAND_SUPPORT_EMAIL,
+    telephone: BRAND_PHONE_E164,
+    address: {
+      '@type': 'PostalAddress',
+      streetAddress: 'Mutungo Zone 1, Nakawa',
+      addressLocality: 'Kampala',
+      addressCountry: 'UG',
+    },
+    areaServed: [
+      { '@type': 'Country', name: BRAND_AREA_SERVED },
+      { '@type': 'City', name: 'Kampala' },
+    ],
+    contactPoint: [
+      {
+        '@type': 'ContactPoint',
+        telephone: BRAND_PHONE_E164,
+        contactType: 'customer support',
+        email: BRAND_SUPPORT_EMAIL,
+        areaServed: 'UG',
+        availableLanguage: ['English'],
+        url: absoluteUrl('/contact'),
+      },
+      {
+        '@type': 'ContactPoint',
+        telephone: BRAND_PHONE_E164,
+        contactType: 'sales',
+        areaServed: 'UG',
+        availableLanguage: ['English'],
+      },
+    ],
+    knowsAbout: [
+      'event tickets Uganda',
+      'concert tickets Kampala',
+      'sports tickets',
+      'online ticketing',
+      'e-tickets',
+    ],
   };
 }
 
 export function buildWebsiteJsonLd() {
   const url = getSiteUrl();
+  const logoUrl = absoluteUrl(BRAND_ICON_PATHS.apple);
   return {
     '@context': 'https://schema.org',
     '@type': 'WebSite',
     name: SITE_NAME,
+    alternateName: [...BRAND_ALTERNATE_NAMES],
     url,
     description: DEFAULT_DESCRIPTION,
+    inLanguage: 'en-UG',
     publisher: {
       '@type': 'Organization',
       name: SITE_NAME,
       logo: {
         '@type': 'ImageObject',
-        url: absoluteUrl(brandAssetUrl(BRAND_ICON_PATHS.manifest512)),
+        url: logoUrl,
       },
+      telephone: BRAND_PHONE_E164,
     },
     potentialAction: {
       '@type': 'SearchAction',

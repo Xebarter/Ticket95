@@ -14,6 +14,12 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import { BrandLogo } from '@/components/brand/brand-logo';
+import {
+  BRAND_ADDRESS_LINE,
+  BRAND_PHONE_DISPLAY,
+  BRAND_PHONE_TEL,
+  BRAND_SUPPORT_EMAIL,
+} from '@/lib/brand-contact';
 
 export function Footer() {
   const [email, setEmail] = useState('');
@@ -68,8 +74,8 @@ export function Footer() {
               <BrandLogo size="md" />
             </div>
             <p className="max-w-xs text-sm leading-relaxed text-slate-400">
-              Your premier destination for discovering and booking tickets to the most exciting
-              events worldwide.
+              Uganda’s event ticketing platform — discover concerts, sports, movies, and live
+              events in Kampala and beyond. Buy tickets online with Ticket95 (Ticket 95).
             </p>
             <div className="flex gap-3">
               {[
@@ -192,21 +198,21 @@ export function Footer() {
           <div className="grid grid-cols-1 gap-4 text-sm text-slate-400 md:grid-cols-3">
             <div className="flex items-center gap-2">
               <MapPin className="h-4 w-4 shrink-0 text-[#d4b46a]" />
-              <span>Mutungo Zone 1, Nakawa, Kampala Uganda</span>
+              <span>{BRAND_ADDRESS_LINE}</span>
             </div>
             <div className="flex items-center gap-2">
               <Phone className="h-4 w-4 shrink-0 text-[#d4b46a]" />
-              <a href="tel:+256783676313" className="transition-colors hover:text-[#d4b46a]">
-                +256783676313
+              <a href={BRAND_PHONE_TEL} className="transition-colors hover:text-[#d4b46a]">
+                {BRAND_PHONE_DISPLAY}
               </a>
             </div>
             <div className="flex items-center gap-2">
               <Mail className="h-4 w-4 shrink-0 text-[#d4b46a]" />
               <a
-                href="mailto:support@ticket95.com"
+                href={`mailto:${BRAND_SUPPORT_EMAIL}`}
                 className="transition-colors hover:text-[#d4b46a]"
               >
-                support@ticket95.com
+                {BRAND_SUPPORT_EMAIL}
               </a>
             </div>
           </div>

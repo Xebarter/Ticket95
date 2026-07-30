@@ -169,10 +169,11 @@ export function HomeClient({ events, featuredEvents }: HomeClientProps) {
       <section className="border-b bg-gradient-to-br from-slate-50 to-blue-50 py-8 sm:py-12">
         <div className="mx-auto max-w-7xl px-4 text-center sm:px-6 lg:px-8">
           <h1 className="mb-3 text-3xl font-bold tracking-tight sm:text-4xl">
-            Discover Amazing Events
+            Event Tickets in Uganda — Ticket95
           </h1>
           <p className="mx-auto max-w-2xl text-lg text-muted-foreground">
-            Find concerts, conferences, workshops, and more. Book your tickets today!
+            Buy tickets for concerts, sports, movies, and live events in Kampala and across Uganda.
+            Ticket 95 makes booking secure and simple.
           </p>
         </div>
       </section>
