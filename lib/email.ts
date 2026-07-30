@@ -217,6 +217,68 @@ export type SendMarketingEmailResult =
   | { ok: true; messageId: string | null; rfcMessageId: string | null }
   | { ok: false; error: string };
 
+export function isRateLimitError(
+  message: string | null | undefined,
+  meta?: { name?: string | null; statusCode?: number | null }
+): boolean {
+  if (meta?.name === 'rate_limit_exceeded' || meta?.statusCode === 429) return true;
+  if (!message) return false;
+  const lower = message.toLowerCase();
+  return (
+    lower.includes('too many requests') ||
+    lower.includes('rate_limit') ||
+    lower.includes('rate limit') ||
+    lower.includes('rate_limit_exceeded')
+  );
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Serialize Resend API calls so we stay under ~10 req/s even with concurrent senders. */
+let resendGate: Promise<void> = Promise.resolve();
+const MIN_RESEND_GAP_MS = 130;
+
+async function withResendRateLimit<T>(fn: () => Promise<T>): Promise<T> {
+  let release!: () => void;
+  const previous = resendGate;
+  resendGate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await previous;
+  try {
+    await sleep(MIN_RESEND_GAP_MS);
+    return await fn();
+  } finally {
+    release();
+  }
+}
+
+const RATE_LIMIT_MAX_ATTEMPTS = 7;
+
+async function withRateLimitRetries<T extends { error?: { message?: string; name?: string; statusCode?: number | null } | null }>(
+  operation: () => Promise<T>
+): Promise<T> {
+  let last: T | null = null;
+  for (let attempt = 0; attempt < RATE_LIMIT_MAX_ATTEMPTS; attempt++) {
+    last = await withResendRateLimit(operation);
+    if (
+      !last.error ||
+      !isRateLimitError(last.error.message, {
+        name: last.error.name,
+        statusCode: last.error.statusCode,
+      })
+    ) {
+      return last;
+    }
+    // 1s, 2s, 4s, 8s, 16s, 20s (capped)
+    const backoffMs = Math.min(20_000, 1000 * 2 ** attempt);
+    await sleep(backoffMs);
+  }
+  return last as T;
+}
+
 export async function sendMarketingEmail(
   input: SendMarketingEmailInput
 ): Promise<SendMarketingEmailResult> {
@@ -242,26 +304,28 @@ export async function sendMarketingEmail(
   const replyTo = getEmailReplyToAddress();
 
   try {
-    const { data, error } = await resend.emails.send(
-      {
-        from: getEmailFromAddress(),
-        to: input.to,
-        subject: input.subject,
-        html,
-        text,
-        ...(replyTo ? { replyTo } : {}),
-        headers: {
-          'List-Unsubscribe': `<${unsubscribeUrl}>`,
+    const { data, error } = await withRateLimitRetries(() =>
+      resend.emails.send(
+        {
+          from: getEmailFromAddress(),
+          to: input.to,
+          subject: input.subject,
+          html,
+          text,
+          ...(replyTo ? { replyTo } : {}),
+          headers: {
+            'List-Unsubscribe': `<${unsubscribeUrl}>`,
+          },
         },
-      },
-      input.idempotencyKey
-        ? {
-            idempotencyKey: createHash('sha256')
-              .update(input.idempotencyKey)
-              .digest('hex')
-              .slice(0, 32),
-          }
-        : undefined
+        input.idempotencyKey
+          ? {
+              idempotencyKey: createHash('sha256')
+                .update(input.idempotencyKey)
+                .digest('hex')
+                .slice(0, 32),
+            }
+          : undefined
+      )
     );
 
     if (error) {
@@ -272,9 +336,10 @@ export async function sendMarketingEmail(
     let rfcMessageId: string | null = null;
 
     // Fetch RFC Message-ID so inbound replies can be threaded via In-Reply-To.
+    // Also rate-limited + retried — this used to double-burst the API during campaigns.
     if (messageId) {
       try {
-        const retrieved = await resend.emails.get(messageId);
+        const retrieved = await withRateLimitRetries(() => resend.emails.get(messageId));
         if (retrieved.data?.message_id) {
           rfcMessageId = retrieved.data.message_id;
         }
@@ -314,19 +379,21 @@ export async function sendThreadedReplyEmail(input: {
   if (input.references) headers.References = input.references;
 
   try {
-    const { data, error } = await resend.emails.send({
-      from: getEmailFromAddress(),
-      to: input.to,
-      subject: input.subject,
-      html: wrapMarketingEmailHtml({
+    const { data, error } = await withRateLimitRetries(() =>
+      resend.emails.send({
+        from: getEmailFromAddress(),
+        to: input.to,
         subject: input.subject,
-        bodyHtml,
-        unsubscribeUrl: `${getSiteUrl()}/unsubscribe`,
-      }),
-      text: input.bodyText,
-      ...(replyTo ? { replyTo } : {}),
-      ...(Object.keys(headers).length > 0 ? { headers } : {}),
-    });
+        html: wrapMarketingEmailHtml({
+          subject: input.subject,
+          bodyHtml,
+          unsubscribeUrl: `${getSiteUrl()}/unsubscribe`,
+        }),
+        text: input.bodyText,
+        ...(replyTo ? { replyTo } : {}),
+        ...(Object.keys(headers).length > 0 ? { headers } : {}),
+      })
+    );
 
     if (error) {
       return { ok: false, error: error.message || 'Failed to send reply' };
@@ -336,7 +403,7 @@ export async function sendThreadedReplyEmail(input: {
     let rfcMessageId: string | null = null;
     if (messageId) {
       try {
-        const retrieved = await resend.emails.get(messageId);
+        const retrieved = await withRateLimitRetries(() => resend.emails.get(messageId));
         if (retrieved.data?.message_id) {
           rfcMessageId = retrieved.data.message_id;
         }

@@ -9,6 +9,7 @@ import {
   bodyToPlainText,
   createUnsubscribeToken,
   isEmailConfigured,
+  isRateLimitError,
   parseEmailList,
   sendMarketingEmail,
 } from '@/lib/email';
@@ -47,11 +48,32 @@ export type MarketingCampaign = {
   sent_at: string | null;
 };
 
-const SEND_BATCH_SIZE = 25;
-const SEND_BATCH_DELAY_MS = 400;
+const SEND_CONCURRENCY = 3;
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  worker: (item: T, index: number) => Promise<R>
+): Promise<R[]> {
+  if (items.length === 0) return [];
+  const results = new Array<R>(items.length);
+  let nextIndex = 0;
+
+  async function runWorker() {
+    while (nextIndex < items.length) {
+      const current = nextIndex;
+      nextIndex += 1;
+      results[current] = await worker(items[current], current);
+    }
+  }
+
+  const workers = Array.from({ length: Math.min(concurrency, items.length) }, () => runWorker());
+  await Promise.all(workers);
+  return results;
 }
 
 export type UpsertSubscribersResult = {
@@ -809,61 +831,70 @@ export async function sendCampaign(campaignId: string): Promise<SendCampaignResu
     }
   }
 
-  for (let i = 0; i < recipients.length; i += SEND_BATCH_SIZE) {
-    const batch = recipients.slice(i, i + SEND_BATCH_SIZE);
+  type RecipientOutcome = 'sent' | 'failed' | 'skipped';
 
-    await Promise.all(
-      batch.map(async (recipient) => {
-        const token = recipient.subscriber_id
-          ? tokenBySubscriberId.get(recipient.subscriber_id)
-          : null;
+  async function deliverOne(recipient: (typeof recipients)[number]): Promise<RecipientOutcome> {
+    const token = recipient.subscriber_id
+      ? tokenBySubscriberId.get(recipient.subscriber_id)
+      : null;
 
-        if (!token) {
-          skipped += 1;
-          await supabaseAdmin
-            .from('marketing_campaign_recipients')
-            .update({
-              status: 'skipped',
-              error_message: 'Subscriber inactive or missing unsubscribe token',
-            })
-            .eq('id', recipient.id);
-          return;
-        }
+    if (!token) {
+      await supabaseAdmin
+        .from('marketing_campaign_recipients')
+        .update({
+          status: 'skipped',
+          error_message: 'Subscriber inactive or missing unsubscribe token',
+        })
+        .eq('id', recipient.id);
+      return 'skipped';
+    }
 
-        const result = await sendMarketingEmail({
-          to: recipient.email,
-          subject: campaign.subject,
-          previewText: campaign.preview_text,
-          bodyHtml: campaign.body_html,
-          bodyText: campaign.body_text,
-          unsubscribeToken: token,
-          idempotencyKey: `${campaignId}:${recipient.id}`,
-        });
+    const result = await sendMarketingEmail({
+      to: recipient.email,
+      subject: campaign.subject,
+      previewText: campaign.preview_text,
+      bodyHtml: campaign.body_html,
+      bodyText: campaign.body_text,
+      unsubscribeToken: token,
+      idempotencyKey: `${campaignId}:${recipient.id}`,
+    });
 
-        if (result.ok) {
-          sent += 1;
-          await supabaseAdmin
-            .from('marketing_campaign_recipients')
-            .update({
-              status: 'sent',
-              provider_message_id: result.messageId,
-              provider_rfc_message_id: result.rfcMessageId,
-              sent_at: new Date().toISOString(),
-              error_message: null,
-            })
-            .eq('id', recipient.id);
-        } else {
-          failed += 1;
-          await supabaseAdmin
-            .from('marketing_campaign_recipients')
-            .update({
-              status: 'failed',
-              error_message: result.error,
-            })
-            .eq('id', recipient.id);
-        }
+    if (result.ok) {
+      await supabaseAdmin
+        .from('marketing_campaign_recipients')
+        .update({
+          status: 'sent',
+          provider_message_id: result.messageId,
+          provider_rfc_message_id: result.rfcMessageId,
+          sent_at: new Date().toISOString(),
+          error_message: null,
+        })
+        .eq('id', recipient.id);
+      return 'sent';
+    }
+
+    await supabaseAdmin
+      .from('marketing_campaign_recipients')
+      .update({
+        status: 'failed',
+        error_message: result.error,
       })
+      .eq('id', recipient.id);
+    return 'failed';
+  }
+
+  // Process in small chunks with low concurrency. Each Resend call is also
+  // gated + auto-retried on "Too many requests" inside sendMarketingEmail.
+  const PROGRESS_CHUNK = 12;
+  for (let i = 0; i < recipients.length; i += PROGRESS_CHUNK) {
+    const chunk = recipients.slice(i, i + PROGRESS_CHUNK);
+    const outcomes = await mapWithConcurrency(chunk, SEND_CONCURRENCY, async (recipient) =>
+      deliverOne(recipient)
     );
+
+    sent += outcomes.filter((o) => o === 'sent').length;
+    failed += outcomes.filter((o) => o === 'failed').length;
+    skipped += outcomes.filter((o) => o === 'skipped').length;
 
     await supabaseAdmin
       .from('marketing_campaigns')
@@ -873,10 +904,37 @@ export async function sendCampaign(campaignId: string): Promise<SendCampaignResu
         skipped_count: skipped,
       })
       .eq('id', campaignId);
+  }
 
-    if (i + SEND_BATCH_SIZE < recipients.length) {
-      await sleep(SEND_BATCH_DELAY_MS);
-    }
+  // One automatic recovery pass for any remaining rate-limit failures.
+  const { data: failedRows } = await supabaseAdmin
+    .from('marketing_campaign_recipients')
+    .select('id, email, subscriber_id, error_message')
+    .eq('campaign_id', campaignId)
+    .eq('status', 'failed');
+
+  const rateLimitedFailed = (failedRows || []).filter((r) => isRateLimitError(r.error_message));
+
+  if (rateLimitedFailed.length > 0) {
+    await sleep(2000);
+    await supabaseAdmin
+      .from('marketing_campaign_recipients')
+      .update({ status: 'pending', error_message: null })
+      .in(
+        'id',
+        rateLimitedFailed.map((r) => r.id)
+      );
+
+    const retryOutcomes = await mapWithConcurrency(rateLimitedFailed, 2, async (recipient) =>
+      deliverOne(recipient)
+    );
+
+    const recovered = retryOutcomes.filter((o) => o === 'sent').length;
+    const stillFailed = retryOutcomes.filter((o) => o === 'failed').length;
+    const retrySkipped = retryOutcomes.filter((o) => o === 'skipped').length;
+    sent += recovered;
+    skipped += retrySkipped;
+    failed = failed - rateLimitedFailed.length + stillFailed;
   }
 
   const finalStatus = failed > 0 && sent === 0 ? 'failed' : 'sent';
