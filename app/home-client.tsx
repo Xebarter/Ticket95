@@ -14,7 +14,6 @@ import {
   isDiscoveryFilterId,
 } from '@/lib/event-discovery-filters';
 import { useNearMeLocation } from '@/hooks/use-near-me-location';
-import { HOMEPAGE_SEO_PILLARS } from '@/lib/seo-keywords';
 import type { Event } from '@/lib/supabase-client';
 
 interface HomeClientProps {
@@ -170,38 +169,11 @@ export function HomeClient({ events, featuredEvents }: HomeClientProps) {
       <section className="border-b bg-gradient-to-br from-slate-50 to-blue-50 py-8 sm:py-12">
         <div className="mx-auto max-w-7xl px-4 text-center sm:px-6 lg:px-8">
           <h1 className="mb-3 text-3xl font-bold tracking-tight sm:text-4xl">
-            Online Ticketing Platform for Uganda Events — Ticket95
+            Discover Amazing Events
           </h1>
-          <p className="mx-auto max-w-3xl text-lg text-muted-foreground">
-            Buy tickets online or sell tickets online with Ticket 95. Event ticketing for concerts,
-            festivals, sports, conference registration, tour booking, and adventure experiences
-            across Kampala and Uganda — with QR code ticketing and secure mobile money payments.
+          <p className="mx-auto max-w-2xl text-lg text-muted-foreground">
+            Find concerts, conferences, workshops, and more. Book your tickets today!
           </p>
-        </div>
-      </section>
-
-      <section className="border-b bg-white py-8 sm:py-10">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <h2 className="text-center text-lg font-semibold tracking-tight text-slate-900 sm:text-xl">
-            Event ticketing, tourism booking & digital tickets
-          </h2>
-          <p className="mx-auto mt-2 max-w-3xl text-center text-sm text-slate-500">
-            Ticket95 is built for organizers and attendees — from concert tickets and festival
-            tickets to safari tickets, event check-in, ticket verification, and affiliate ticket
-            sales.
-          </p>
-          <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {HOMEPAGE_SEO_PILLARS.map((pillar) => (
-              <Link
-                key={pillar.title}
-                href={pillar.href}
-                className="rounded-2xl border border-slate-200/80 bg-slate-50/60 px-4 py-4 text-left transition-colors hover:border-sky-200 hover:bg-sky-50/50"
-              >
-                <h3 className="text-sm font-semibold text-slate-900">{pillar.title}</h3>
-                <p className="mt-1.5 text-xs leading-relaxed text-slate-500">{pillar.body}</p>
-              </Link>
-            ))}
-          </div>
         </div>
       </section>
 
