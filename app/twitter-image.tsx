@@ -1,1 +1,15 @@
-export { default, alt, size, contentType, runtime } from './opengraph-image';
+import { ImageResponse } from 'next/og';
+import {
+  BrandOgMarkup,
+  OG_IMAGE_ALT,
+  OG_IMAGE_CONTENT_TYPE,
+  OG_IMAGE_SIZE,
+} from '@/components/seo/brand-og-markup';
+
+export const alt = OG_IMAGE_ALT;
+export const size = OG_IMAGE_SIZE;
+export const contentType = OG_IMAGE_CONTENT_TYPE;
+
+export default function TwitterImage() {
+  return new ImageResponse(<BrandOgMarkup />, { ...size });
+}
