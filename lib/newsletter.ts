@@ -418,7 +418,7 @@ export async function createCampaign(params: {
   const subject = params.subject.trim();
   const body = params.body.trim();
   if (!subject) throw new Error('Subject is required');
-  if (!body) throw new Error('Email body is required');
+  if (!body || !bodyToPlainText(body)) throw new Error('Email body is required');
 
   let groupIds = Array.isArray(params.groupIds)
     ? params.groupIds.filter((id) => typeof id === 'string' && id.trim())

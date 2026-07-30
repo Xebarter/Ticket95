@@ -15,6 +15,11 @@ import {
 } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
 import {
+  RichHtml,
+  RichTextEditor,
+  isRichTextEmpty,
+} from '@/components/admin/rich-text-editor';
+import {
   Archive,
   Circle,
   FolderPlus,
@@ -114,6 +119,7 @@ type InboxReply = {
 type AdminReply = {
   id: string;
   body_text: string;
+  body_html?: string | null;
   created_at: string;
 };
 
@@ -329,7 +335,7 @@ export default function NewsletterAdminClient() {
   };
 
   const sendReply = async () => {
-    if (!selectedReplyId || !replyDraft.trim()) {
+    if (!selectedReplyId || isRichTextEmpty(replyDraft)) {
       toast({ title: 'Write a reply first', variant: 'destructive' });
       return;
     }
@@ -550,7 +556,7 @@ export default function NewsletterAdminClient() {
   };
 
   const createCampaign = async (sendNow: boolean) => {
-    if (!subject.trim() || !body.trim()) {
+    if (!subject.trim() || isRichTextEmpty(body)) {
       toast({ title: 'Subject and body are required', variant: 'destructive' });
       return;
     }
@@ -996,7 +1002,7 @@ export default function NewsletterAdminClient() {
                         <p className="text-[15px] leading-7 whitespace-pre-wrap text-slate-700">
                           {selectedReply.body_text ||
                             (selectedReply.body_html
-                              ? selectedReply.body_html.replace(/<[^>]+>/g, ' ').trim()
+                              ? selectedReply.body_html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
                               : 'No content')}
                         </p>
                       </div>
@@ -1023,9 +1029,13 @@ export default function NewsletterAdminClient() {
                           {adminReplies.map((item) => (
                             <div
                               key={item.id}
-                              className="rounded-2xl border border-emerald-100/80 bg-gradient-to-br from-emerald-50/70 to-white px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap text-slate-700 shadow-sm shadow-emerald-50/50"
+                              className="rounded-2xl border border-emerald-100/80 bg-gradient-to-br from-emerald-50/70 to-white px-4 py-3 text-sm leading-relaxed text-slate-700 shadow-sm shadow-emerald-50/50"
                             >
-                              {item.body_text}
+                              {item.body_html && !isRichTextEmpty(item.body_html) ? (
+                                <RichHtml html={item.body_html} />
+                              ) : (
+                                <p className="whitespace-pre-wrap">{item.body_text}</p>
+                              )}
                               <p className="mt-2 text-[11px] text-emerald-700/70">
                                 Sent {formatReplyFullWhen(item.created_at)}
                               </p>
@@ -1043,21 +1053,23 @@ export default function NewsletterAdminClient() {
                         <Reply className="h-3.5 w-3.5 text-sky-600" />
                         Write a reply
                       </Label>
-                      <Textarea
+                      <RichTextEditor
                         id="admin-reply-body"
                         value={replyDraft}
-                        onChange={(e) => setReplyDraft(e.target.value)}
+                        onChange={setReplyDraft}
                         placeholder={`Reply to ${selectedReply.from_name || selectedReply.from_email}…`}
-                        className="min-h-[120px] rounded-2xl border-slate-200 bg-slate-50/50 text-sm leading-relaxed focus-visible:ring-sky-200"
+                        minHeight={120}
                       />
                       <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
                         <p className="text-[11px] text-slate-400">
-                          Sends from your Ticket95 reply address and keeps the thread.
+                          Format with bold, color, lists, and more. Sends from your Ticket95 reply address.
                         </p>
                         <Button
                           type="button"
                           className="rounded-xl bg-sky-600 hover:bg-sky-700"
-                          disabled={replySending || !emailConfigured || !replyDraft.trim()}
+                          disabled={
+                            replySending || !emailConfigured || isRichTextEmpty(replyDraft)
+                          }
                           onClick={() => void sendReply()}
                         >
                           {replySending ? (
@@ -1432,12 +1444,12 @@ export default function NewsletterAdminClient() {
               <Label htmlFor="campaign-body" className="text-xs font-medium text-slate-600">
                 Body
               </Label>
-              <Textarea
+              <RichTextEditor
                 id="campaign-body"
                 value={body}
-                onChange={(e) => setBody(e.target.value)}
-                placeholder="Write your message. Plain text is fine — line breaks become paragraphs. HTML is also supported."
-                className="min-h-[240px] rounded-2xl border-slate-200 bg-slate-50/40 text-sm leading-relaxed focus-visible:ring-sky-200"
+                onChange={setBody}
+                placeholder="Write your campaign message. Use the toolbar for bold, italics, color, bullets, and links."
+                minHeight={240}
               />
             </div>
 

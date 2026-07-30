@@ -390,7 +390,9 @@ export async function sendAdminReply(params: {
   createdBy?: string | null;
 }): Promise<{ adminReply: MarketingEmailAdminReply; reply: MarketingEmailReply }> {
   const body = params.body.trim();
-  if (!body) throw new Error('Reply body is required');
+  if (!body || !bodyToPlainText(body)) {
+    throw new Error('Reply body is required');
+  }
 
   const detail = await getReply(params.replyId);
   if (!detail) throw new Error('Reply not found');

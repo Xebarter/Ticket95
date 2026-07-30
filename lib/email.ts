@@ -74,9 +74,9 @@ export function bodyToHtml(body: string): string {
   const trimmed = (body || '').trim();
   if (!trimmed) return '';
 
-  // If it already looks like HTML, keep it (admin-authored).
+  // If it already looks like HTML (rich editor / admin-authored), polish for email clients.
   if (/<[a-z][\s\S]*>/i.test(trimmed)) {
-    return trimmed;
+    return polishRichBodyHtml(trimmed);
   }
 
   return trimmed
@@ -86,6 +86,33 @@ export function bodyToHtml(body: string): string {
       return `<p style="margin:0 0 16px;line-height:1.6;color:#1e293b;font-size:15px;">${lines}</p>`;
     })
     .join('');
+}
+
+/** Add inline styles TipTap HTML needs for reliable email rendering. */
+function polishRichBodyHtml(html: string): string {
+  return html
+    .replace(
+      /<p(?![^>]*style=)/gi,
+      '<p style="margin:0 0 16px;line-height:1.65;color:#1e293b;font-size:15px;"'
+    )
+    .replace(
+      /<h2(?![^>]*style=)/gi,
+      '<h2 style="margin:0 0 12px;font-size:20px;line-height:1.3;color:#0f172a;font-weight:700;"'
+    )
+    .replace(
+      /<h3(?![^>]*style=)/gi,
+      '<h3 style="margin:0 0 10px;font-size:17px;line-height:1.35;color:#0f172a;font-weight:650;"'
+    )
+    .replace(
+      /<ul(?![^>]*style=)/gi,
+      '<ul style="margin:0 0 16px;padding-left:22px;color:#1e293b;font-size:15px;line-height:1.65;"'
+    )
+    .replace(
+      /<ol(?![^>]*style=)/gi,
+      '<ol style="margin:0 0 16px;padding-left:22px;color:#1e293b;font-size:15px;line-height:1.65;"'
+    )
+    .replace(/<li(?![^>]*style=)/gi, '<li style="margin:0 0 6px;"')
+    .replace(/<a(?![^>]*style=)/gi, '<a style="color:#0284c7;text-decoration:underline;"');
 }
 
 export function bodyToPlainText(body: string): string {
