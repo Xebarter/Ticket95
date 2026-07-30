@@ -426,9 +426,69 @@ export function verifyResendWebhook(payload: string, headers: Headers) {
     throw new Error('RESEND_WEBHOOK_SECRET or RESEND_API_KEY is not configured');
   }
 
+  // Resend SDK expects { id, timestamp, signature }, not the raw Headers object.
+  // See: https://resend.com/docs/webhooks/verify-webhooks-requests
+  const id = headers.get('svix-id') || headers.get('webhook-id') || '';
+  const timestamp = headers.get('svix-timestamp') || headers.get('webhook-timestamp') || '';
+  const signature = headers.get('svix-signature') || headers.get('webhook-signature') || '';
+
+  if (!id || !timestamp || !signature) {
+    throw new Error('Missing webhook signature headers');
+  }
+
   return resend.webhooks.verify({
     payload,
-    headers,
+    headers: {
+      id,
+      timestamp,
+      signature,
+    } as unknown as Headers,
     webhookSecret: secret,
   });
+}
+
+/** Pull recent inbound emails from Resend into the admin inbox (backfill / webhook fallback). */
+export async function syncReceivedEmailsFromResend(limit = 50): Promise<{
+  imported: number;
+  skipped: number;
+  errors: string[];
+}> {
+  const resend = getResendClient();
+  if (!resend) {
+    throw new Error('RESEND_API_KEY is not configured');
+  }
+
+  const { data, error } = await resend.emails.receiving.list({ limit: Math.min(Math.max(limit, 1), 100) });
+  if (error) {
+    throw new Error(error.message || 'Failed to list received emails');
+  }
+
+  const items = data?.data || [];
+  let imported = 0;
+  let skipped = 0;
+  const errors: string[] = [];
+
+  for (const item of items) {
+    try {
+      const { data: existing } = await supabaseAdmin
+        .from('marketing_email_replies')
+        .select('id')
+        .eq('resend_email_id', item.id)
+        .maybeSingle();
+
+      if (existing) {
+        skipped += 1;
+        continue;
+      }
+
+      await ingestReceivedEmail(item.id);
+      imported += 1;
+    } catch (err) {
+      errors.push(
+        `${item.id}: ${err instanceof Error ? err.message : 'import failed'}`
+      );
+    }
+  }
+
+  return { imported, skipped, errors };
 }

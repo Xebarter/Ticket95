@@ -114,6 +114,7 @@ export default function NewsletterAdminClient() {
   const [adminReplies, setAdminReplies] = useState<AdminReply[]>([]);
   const [replyDraft, setReplyDraft] = useState('');
   const [replySending, setReplySending] = useState(false);
+  const [syncingReplies, setSyncingReplies] = useState(false);
 
   const [subject, setSubject] = useState('');
   const [previewText, setPreviewText] = useState('');
@@ -258,6 +259,30 @@ export default function NewsletterAdminClient() {
       });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const syncRepliesFromResend = async () => {
+    setSyncingReplies(true);
+    try {
+      const res = await fetch('/api/admin/newsletter/replies/sync', { method: 'POST' });
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload.error || 'Sync failed');
+      toast({
+        title: 'Synced from Resend',
+        description: `Imported ${payload.imported}, already had ${payload.skipped}${
+          payload.errors?.length ? `, ${payload.errors.length} errors` : ''
+        }.`,
+      });
+      await loadReplies();
+    } catch (error) {
+      toast({
+        title: 'Sync failed',
+        description: error instanceof Error ? error.message : 'Try again',
+        variant: 'destructive',
+      });
+    } finally {
+      setSyncingReplies(false);
     }
   };
 
@@ -654,6 +679,21 @@ export default function NewsletterAdminClient() {
                 {value}
               </Button>
             ))}
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="rounded-xl"
+              disabled={syncingReplies}
+              onClick={() => void syncRepliesFromResend()}
+            >
+              {syncingReplies ? (
+                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+              )}
+              Sync from Resend
+            </Button>
           </div>
 
           <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
