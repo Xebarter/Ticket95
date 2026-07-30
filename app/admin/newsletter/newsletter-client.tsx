@@ -17,19 +17,56 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import {
   Archive,
+  Circle,
   FolderPlus,
   Inbox,
   Loader2,
+  Mail,
+  MailOpen,
   Megaphone,
+  Paperclip,
   Plus,
   RefreshCw,
   Reply,
+  Search,
   Send,
   Trash2,
   UserMinus,
   UserPlus,
   Users,
 } from 'lucide-react';
+
+function replyInitials(name: string | null, email: string): string {
+  const source = (name || email || '?').trim();
+  const parts = source.split(/[\s@.]+/).filter(Boolean);
+  if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+  return source.slice(0, 2).toUpperCase();
+}
+
+function formatReplyWhen(iso: string): string {
+  const date = new Date(iso);
+  const now = Date.now();
+  const diffMs = now - date.getTime();
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1) return 'Just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+function formatReplyFullWhen(iso: string): string {
+  return new Date(iso).toLocaleString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
 
 type Subscriber = {
   id: string;
@@ -673,211 +710,360 @@ export default function NewsletterAdminClient() {
 
       {tab === 'replies' ? (
         <div className="space-y-4">
-          <div className="flex flex-wrap items-center gap-2">
-            <Input
-              value={replySearch}
-              onChange={(e) => setReplySearch(e.target.value)}
-              placeholder="Search replies…"
-              className="max-w-xs rounded-xl"
-            />
-            {(['inbox', 'unread', 'archived', 'all'] as const).map((value) => (
+          <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-gradient-to-br from-slate-50 via-white to-sky-50/40 shadow-sm shadow-slate-200/40">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200/70 bg-white/70 px-4 py-3.5 backdrop-blur-sm sm:px-5">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-sky-100/80 text-sky-700">
+                    <Inbox className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <h2 className="text-sm font-semibold tracking-tight text-slate-900">Reply inbox</h2>
+                    <p className="text-xs text-slate-500">
+                      {unreadCount > 0
+                        ? `${unreadCount} unread · ${replies.length} shown`
+                        : `${replies.length} message${replies.length === 1 ? '' : 's'} shown`}
+                      {emailReplyTo ? ` · ${emailReplyTo}` : ''}
+                    </p>
+                  </div>
+                </div>
+              </div>
               <Button
-                key={value}
+                type="button"
                 size="sm"
-                variant={replyFilter === value ? 'default' : 'outline'}
-                className="rounded-xl capitalize"
-                onClick={() => setReplyFilter(value)}
+                variant="outline"
+                className="rounded-xl border-slate-200 bg-white/90 text-slate-700 hover:bg-sky-50 hover:text-sky-800"
+                disabled={syncingReplies}
+                onClick={() => void syncRepliesFromResend()}
               >
-                {value}
+                {syncingReplies ? (
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+                )}
+                Sync from Resend
               </Button>
-            ))}
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              className="rounded-xl"
-              disabled={syncingReplies}
-              onClick={() => void syncRepliesFromResend()}
-            >
-              {syncingReplies ? (
-                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
-              )}
-              Sync from Resend
-            </Button>
-          </div>
-
-          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
-            <div className="overflow-hidden rounded-xl border border-border/70">
-              {loading && replies.length === 0 ? (
-                <div className="flex justify-center py-12">
-                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                </div>
-              ) : replies.length === 0 ? (
-                <div className="flex flex-col items-center gap-2 px-4 py-12 text-center">
-                  <Inbox className="h-8 w-8 text-muted-foreground" />
-                  <p className="text-sm text-muted-foreground">No replies yet</p>
-                </div>
-              ) : (
-                <ul className="divide-y divide-border/60">
-                  {replies.map((reply) => {
-                    const active = selectedReplyId === reply.id;
-                    return (
-                      <li key={reply.id}>
-                        <button
-                          type="button"
-                          onClick={() => void openReply(reply.id)}
-                          className={`w-full px-4 py-3 text-left transition-colors hover:bg-muted/40 ${
-                            active ? 'bg-muted/50' : ''
-                          } ${reply.status === 'unread' ? 'font-medium' : ''}`}
-                        >
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="min-w-0">
-                              <p className="truncate text-sm">
-                                {reply.from_name || reply.from_email}
-                                {reply.status === 'unread' ? (
-                                  <span className="ml-2 inline-block h-1.5 w-1.5 rounded-full bg-primary" />
-                                ) : null}
-                              </p>
-                              <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                                {reply.subject || '(no subject)'}
-                              </p>
-                              <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
-                                {reply.body_text || '—'}
-                              </p>
-                            </div>
-                            <span className="shrink-0 text-[10px] text-muted-foreground">
-                              {new Date(reply.received_at).toLocaleString('en-US', {
-                                month: 'short',
-                                day: 'numeric',
-                                hour: 'numeric',
-                                minute: '2-digit',
-                              })}
-                            </span>
-                          </div>
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
             </div>
 
-            <div className="rounded-xl border border-border/70 p-4 sm:p-5">
-              {!selectedReply ? (
-                <div className="flex min-h-[240px] flex-col items-center justify-center gap-2 text-center">
-                  <Inbox className="h-8 w-8 text-muted-foreground" />
-                  <p className="text-sm text-muted-foreground">Select a reply to read it</p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <h2 className="text-base font-semibold">{selectedReply.subject || '(no subject)'}</h2>
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        From {selectedReply.from_name || selectedReply.from_email}{' '}
-                        <span className="text-xs">&lt;{selectedReply.from_email}&gt;</span>
+            <div className="flex flex-col gap-3 border-b border-slate-200/60 bg-white/50 px-4 py-3 sm:flex-row sm:items-center sm:px-5">
+              <div className="relative min-w-0 flex-1">
+                <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <Input
+                  value={replySearch}
+                  onChange={(e) => setReplySearch(e.target.value)}
+                  placeholder="Search by sender, subject, or message…"
+                  className="rounded-xl border-slate-200 bg-white pl-9 shadow-none focus-visible:ring-sky-200"
+                />
+              </div>
+              <div className="inline-flex rounded-xl border border-slate-200/80 bg-slate-100/70 p-1">
+                {(
+                  [
+                    ['inbox', 'Inbox'],
+                    ['unread', 'Unread'],
+                    ['archived', 'Archived'],
+                    ['all', 'All'],
+                  ] as const
+                ).map(([value, label]) => {
+                  const active = replyFilter === value;
+                  return (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setReplyFilter(value)}
+                      className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                        active
+                          ? 'bg-white text-slate-900 shadow-sm shadow-slate-200/80'
+                          : 'text-slate-500 hover:text-slate-800'
+                      }`}
+                    >
+                      {label}
+                      {value === 'unread' && unreadCount > 0 ? (
+                        <span className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-sky-100 px-1 text-[10px] font-semibold text-sky-700">
+                          {unreadCount}
+                        </span>
+                      ) : null}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="grid min-h-[520px] lg:grid-cols-[minmax(280px,0.95fr)_minmax(0,1.35fr)]">
+              <div className="max-h-[70vh] overflow-y-auto border-b border-slate-200/70 lg:border-r lg:border-b-0">
+                {loading && replies.length === 0 ? (
+                  <div className="flex justify-center py-16">
+                    <Loader2 className="h-6 w-6 animate-spin text-sky-500/70" />
+                  </div>
+                ) : replies.length === 0 ? (
+                  <div className="flex flex-col items-center gap-3 px-6 py-16 text-center">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
+                      <MailOpen className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-slate-700">No replies here</p>
+                      <p className="mt-1 text-xs leading-relaxed text-slate-500">
+                        Synced inbound mail will appear in this list. Try another filter or Sync from Resend.
                       </p>
-                      {selectedReply.campaign_subject ? (
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          Campaign: {selectedReply.campaign_subject}
+                    </div>
+                  </div>
+                ) : (
+                  <ul className="p-2">
+                    {replies.map((reply) => {
+                      const active = selectedReplyId === reply.id;
+                      const unread = reply.status === 'unread';
+                      return (
+                        <li key={reply.id}>
+                          <button
+                            type="button"
+                            onClick={() => void openReply(reply.id)}
+                            className={`group mb-1 flex w-full gap-3 rounded-xl px-3 py-3 text-left transition-all ${
+                              active
+                                ? 'bg-sky-50/90 ring-1 ring-sky-200/80 shadow-sm shadow-sky-100/60'
+                                : 'hover:bg-slate-50/90'
+                            }`}
+                          >
+                            <div
+                              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-xs font-semibold tracking-wide ${
+                                unread
+                                  ? 'bg-sky-600 text-white'
+                                  : 'bg-slate-200/80 text-slate-600'
+                              }`}
+                            >
+                              {replyInitials(reply.from_name, reply.from_email)}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-start justify-between gap-2">
+                                <p
+                                  className={`truncate text-sm ${
+                                    unread ? 'font-semibold text-slate-900' : 'font-medium text-slate-700'
+                                  }`}
+                                >
+                                  {reply.from_name || reply.from_email}
+                                </p>
+                                <span
+                                  className={`shrink-0 text-[11px] tabular-nums ${
+                                    unread ? 'font-medium text-sky-700' : 'text-slate-400'
+                                  }`}
+                                >
+                                  {formatReplyWhen(reply.received_at)}
+                                </span>
+                              </div>
+                              <p
+                                className={`mt-0.5 truncate text-[13px] ${
+                                  unread ? 'font-medium text-slate-800' : 'text-slate-600'
+                                }`}
+                              >
+                                {reply.subject || '(no subject)'}
+                              </p>
+                              <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-slate-500">
+                                {reply.body_text || '—'}
+                              </p>
+                              <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                                {unread ? (
+                                  <span className="inline-flex items-center gap-1 rounded-full bg-sky-100/90 px-2 py-0.5 text-[10px] font-semibold text-sky-700">
+                                    <Circle className="h-1.5 w-1.5 fill-current" />
+                                    Unread
+                                  </span>
+                                ) : null}
+                                {reply.status === 'archived' ? (
+                                  <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-500">
+                                    Archived
+                                  </span>
+                                ) : null}
+                                {reply.campaign_subject ? (
+                                  <span className="inline-flex max-w-[10rem] truncate rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-800/80">
+                                    {reply.campaign_subject}
+                                  </span>
+                                ) : null}
+                                {reply.attachment_meta?.length ? (
+                                  <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-500">
+                                    <Paperclip className="h-2.5 w-2.5" />
+                                    {reply.attachment_meta.length}
+                                  </span>
+                                ) : null}
+                              </div>
+                            </div>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+
+              <div className="flex min-h-[420px] flex-col bg-gradient-to-b from-white via-white to-slate-50/60">
+                {!selectedReply ? (
+                  <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 py-16 text-center">
+                    <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-50 to-slate-100 text-sky-600/70 ring-1 ring-sky-100">
+                      <Mail className="h-6 w-6" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-slate-800">Select a message</p>
+                      <p className="mt-1 max-w-xs text-xs leading-relaxed text-slate-500">
+                        Choose a reply from the list to read the full thread and send a response.
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="border-b border-slate-200/70 px-4 py-4 sm:px-6">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            {selectedReply.status === 'unread' ? (
+                              <span className="inline-flex items-center rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-semibold text-sky-700">
+                                Unread
+                              </span>
+                            ) : selectedReply.status === 'archived' ? (
+                              <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-500">
+                                Archived
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700">
+                                Read
+                              </span>
+                            )}
+                            <p className="text-[11px] text-slate-400">
+                              {formatReplyFullWhen(selectedReply.received_at)}
+                            </p>
+                          </div>
+                          <h2 className="mt-2 text-lg font-semibold tracking-tight text-slate-900 sm:text-xl">
+                            {selectedReply.subject || '(no subject)'}
+                          </h2>
+                          <div className="mt-3 flex items-center gap-3">
+                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sky-100 text-xs font-semibold text-sky-800">
+                              {replyInitials(selectedReply.from_name, selectedReply.from_email)}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-medium text-slate-800">
+                                {selectedReply.from_name || selectedReply.from_email}
+                              </p>
+                              <p className="truncate text-xs text-slate-500">{selectedReply.from_email}</p>
+                            </div>
+                          </div>
+                          {selectedReply.campaign_subject ? (
+                            <p className="mt-3 inline-flex max-w-full items-center truncate rounded-lg bg-amber-50/80 px-2.5 py-1 text-xs text-amber-900/80 ring-1 ring-amber-100">
+                              In reply to campaign: {selectedReply.campaign_subject}
+                            </p>
+                          ) : null}
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="rounded-xl border-slate-200 bg-white text-slate-700"
+                            disabled={saving}
+                            onClick={() =>
+                              void updateReplyStatus(
+                                selectedReply.id,
+                                selectedReply.status === 'unread' ? 'read' : 'unread'
+                              )
+                            }
+                          >
+                            {selectedReply.status === 'unread' ? (
+                              <MailOpen className="mr-1.5 h-3.5 w-3.5" />
+                            ) : (
+                              <Mail className="mr-1.5 h-3.5 w-3.5" />
+                            )}
+                            Mark {selectedReply.status === 'unread' ? 'read' : 'unread'}
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="rounded-xl border-slate-200 bg-white text-slate-700"
+                            disabled={saving || selectedReply.status === 'archived'}
+                            onClick={() => void updateReplyStatus(selectedReply.id, 'archived')}
+                          >
+                            <Archive className="mr-1.5 h-3.5 w-3.5" />
+                            Archive
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex-1 space-y-4 overflow-y-auto px-4 py-5 sm:px-6">
+                      <div className="rounded-2xl border border-slate-200/70 bg-white px-4 py-4 shadow-sm shadow-slate-100/80 sm:px-5">
+                        <p className="text-[15px] leading-7 whitespace-pre-wrap text-slate-700">
+                          {selectedReply.body_text ||
+                            (selectedReply.body_html
+                              ? selectedReply.body_html.replace(/<[^>]+>/g, ' ').trim()
+                              : 'No content')}
                         </p>
+                      </div>
+
+                      {selectedReply.attachment_meta?.length ? (
+                        <div className="flex flex-wrap gap-2">
+                          {selectedReply.attachment_meta.map((a, idx) => (
+                            <span
+                              key={`${a.filename || a.content_type || 'file'}-${idx}`}
+                              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs text-slate-600"
+                            >
+                              <Paperclip className="h-3 w-3 text-slate-400" />
+                              {a.filename || a.content_type || 'Attachment'}
+                            </span>
+                          ))}
+                        </div>
+                      ) : null}
+
+                      {adminReplies.length > 0 ? (
+                        <div className="space-y-3">
+                          <p className="text-[11px] font-semibold tracking-[0.14em] text-slate-400 uppercase">
+                            Your replies
+                          </p>
+                          {adminReplies.map((item) => (
+                            <div
+                              key={item.id}
+                              className="rounded-2xl border border-emerald-100/80 bg-gradient-to-br from-emerald-50/70 to-white px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap text-slate-700 shadow-sm shadow-emerald-50/50"
+                            >
+                              {item.body_text}
+                              <p className="mt-2 text-[11px] text-emerald-700/70">
+                                Sent {formatReplyFullWhen(item.created_at)}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
                       ) : null}
                     </div>
-                    <div className="flex flex-wrap gap-1.5">
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        className="rounded-lg"
-                        disabled={saving}
-                        onClick={() =>
-                          void updateReplyStatus(
-                            selectedReply.id,
-                            selectedReply.status === 'unread' ? 'read' : 'unread'
-                          )
-                        }
+
+                    <div className="border-t border-slate-200/70 bg-white/90 px-4 py-4 backdrop-blur-sm sm:px-6">
+                      <Label
+                        htmlFor="admin-reply-body"
+                        className="mb-2 flex items-center gap-1.5 text-xs font-medium text-slate-600"
                       >
-                        Mark {selectedReply.status === 'unread' ? 'read' : 'unread'}
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        className="rounded-lg"
-                        disabled={saving}
-                        onClick={() => void updateReplyStatus(selectedReply.id, 'archived')}
-                      >
-                        <Archive className="mr-1.5 h-3.5 w-3.5" />
-                        Archive
-                      </Button>
-                    </div>
-                  </div>
-
-                  <div className="rounded-xl bg-muted/30 px-4 py-3 text-sm whitespace-pre-wrap leading-relaxed">
-                    {selectedReply.body_text ||
-                      (selectedReply.body_html
-                        ? selectedReply.body_html.replace(/<[^>]+>/g, ' ').trim()
-                        : 'No content')}
-                  </div>
-
-                  {selectedReply.attachment_meta?.length ? (
-                    <p className="text-xs text-muted-foreground">
-                      Attachments:{' '}
-                      {selectedReply.attachment_meta
-                        .map((a) => a.filename || a.content_type || 'file')
-                        .join(', ')}
-                    </p>
-                  ) : null}
-
-                  {adminReplies.length > 0 ? (
-                    <div className="space-y-2">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                        Your replies
-                      </p>
-                      {adminReplies.map((item) => (
-                        <div
-                          key={item.id}
-                          className="rounded-xl border border-border/60 px-3 py-2 text-sm whitespace-pre-wrap"
+                        <Reply className="h-3.5 w-3.5 text-sky-600" />
+                        Write a reply
+                      </Label>
+                      <Textarea
+                        id="admin-reply-body"
+                        value={replyDraft}
+                        onChange={(e) => setReplyDraft(e.target.value)}
+                        placeholder={`Reply to ${selectedReply.from_name || selectedReply.from_email}…`}
+                        className="min-h-[120px] rounded-2xl border-slate-200 bg-slate-50/50 text-sm leading-relaxed focus-visible:ring-sky-200"
+                      />
+                      <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-[11px] text-slate-400">
+                          Sends from your Ticket95 reply address and keeps the thread.
+                        </p>
+                        <Button
+                          type="button"
+                          className="rounded-xl bg-sky-600 hover:bg-sky-700"
+                          disabled={replySending || !emailConfigured || !replyDraft.trim()}
+                          onClick={() => void sendReply()}
                         >
-                          {item.body_text}
-                          <p className="mt-1 text-[10px] text-muted-foreground">
-                            {new Date(item.created_at).toLocaleString()}
-                          </p>
-                        </div>
-                      ))}
+                          {replySending ? (
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          ) : (
+                            <Send className="mr-2 h-4 w-4" />
+                          )}
+                          Send reply
+                        </Button>
+                      </div>
                     </div>
-                  ) : null}
-
-                  <div className="space-y-2 border-t border-border/60 pt-4">
-                    <Label htmlFor="admin-reply-body" className="flex items-center gap-1.5">
-                      <Reply className="h-3.5 w-3.5" />
-                      Reply
-                    </Label>
-                    <Textarea
-                      id="admin-reply-body"
-                      value={replyDraft}
-                      onChange={(e) => setReplyDraft(e.target.value)}
-                      placeholder="Write a reply…"
-                      className="min-h-[110px] rounded-xl"
-                    />
-                    <Button
-                      type="button"
-                      className="rounded-xl"
-                      disabled={replySending || !emailConfigured}
-                      onClick={() => void sendReply()}
-                    >
-                      {replySending ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      ) : (
-                        <Send className="mr-2 h-4 w-4" />
-                      )}
-                      Send reply
-                    </Button>
-                  </div>
-                </div>
-              )}
+                  </>
+                )}
+              </div>
             </div>
           </div>
         </div>
