@@ -34,6 +34,17 @@ export function getEmailFromAddress(): string {
   return 'Ticket95 <noreply@ticket95.com>';
 }
 
+/** Address that must be on a Resend receiving domain so campaign replies are captured. */
+export function getEmailReplyToAddress(): string | null {
+  const configured = (process.env.EMAIL_REPLY_TO || '').trim();
+  return configured || null;
+}
+
+export function getResendWebhookSecret(): string | null {
+  const configured = (process.env.RESEND_WEBHOOK_SECRET || '').trim();
+  return configured || null;
+}
+
 export function getResendClient(): Resend | null {
   const apiKey = (process.env.RESEND_API_KEY || '').trim();
   if (!apiKey) return null;
@@ -42,6 +53,10 @@ export function getResendClient(): Resend | null {
 
 export function isEmailConfigured(): boolean {
   return Boolean((process.env.RESEND_API_KEY || '').trim());
+}
+
+export function isReplyInboxConfigured(): boolean {
+  return Boolean(getEmailReplyToAddress() && getResendWebhookSecret() && isEmailConfigured());
 }
 
 function escapeHtml(value: string): string {
@@ -156,7 +171,7 @@ export type SendMarketingEmailInput = {
 };
 
 export type SendMarketingEmailResult =
-  | { ok: true; messageId: string | null }
+  | { ok: true; messageId: string | null; rfcMessageId: string | null }
   | { ok: false; error: string };
 
 export async function sendMarketingEmail(
@@ -181,6 +196,8 @@ export async function sendMarketingEmail(
     (input.bodyText || bodyToPlainText(input.bodyHtml)) +
     `\n\nUnsubscribe: ${unsubscribeUrl}`;
 
+  const replyTo = getEmailReplyToAddress();
+
   try {
     const { data, error } = await resend.emails.send(
       {
@@ -189,6 +206,7 @@ export async function sendMarketingEmail(
         subject: input.subject,
         html,
         text,
+        ...(replyTo ? { replyTo } : {}),
         headers: {
           'List-Unsubscribe': `<${unsubscribeUrl}>`,
         },
@@ -207,11 +225,88 @@ export async function sendMarketingEmail(
       return { ok: false, error: error.message || 'Failed to send email' };
     }
 
-    return { ok: true, messageId: data?.id || null };
+    const messageId = data?.id || null;
+    let rfcMessageId: string | null = null;
+
+    // Fetch RFC Message-ID so inbound replies can be threaded via In-Reply-To.
+    if (messageId) {
+      try {
+        const retrieved = await resend.emails.get(messageId);
+        if (retrieved.data?.message_id) {
+          rfcMessageId = retrieved.data.message_id;
+        }
+      } catch {
+        // Non-fatal — recipient still marked sent with provider id.
+      }
+    }
+
+    return { ok: true, messageId, rfcMessageId };
   } catch (error) {
     return {
       ok: false,
       error: error instanceof Error ? error.message : 'Failed to send email',
+    };
+  }
+}
+
+export async function sendThreadedReplyEmail(input: {
+  to: string;
+  subject: string;
+  bodyText: string;
+  inReplyTo?: string | null;
+  references?: string | null;
+}): Promise<SendMarketingEmailResult> {
+  const resend = getResendClient();
+  if (!resend) {
+    return {
+      ok: false,
+      error: 'Email is not configured. Set RESEND_API_KEY and EMAIL_FROM.',
+    };
+  }
+
+  const replyTo = getEmailReplyToAddress();
+  const bodyHtml = bodyToHtml(input.bodyText);
+  const headers: Record<string, string> = {};
+  if (input.inReplyTo) headers['In-Reply-To'] = input.inReplyTo;
+  if (input.references) headers.References = input.references;
+
+  try {
+    const { data, error } = await resend.emails.send({
+      from: getEmailFromAddress(),
+      to: input.to,
+      subject: input.subject,
+      html: wrapMarketingEmailHtml({
+        subject: input.subject,
+        bodyHtml,
+        unsubscribeUrl: `${getSiteUrl()}/unsubscribe`,
+      }),
+      text: input.bodyText,
+      ...(replyTo ? { replyTo } : {}),
+      ...(Object.keys(headers).length > 0 ? { headers } : {}),
+    });
+
+    if (error) {
+      return { ok: false, error: error.message || 'Failed to send reply' };
+    }
+
+    const messageId = data?.id || null;
+    let rfcMessageId: string | null = null;
+    if (messageId) {
+      try {
+        const retrieved = await resend.emails.get(messageId);
+        if (retrieved.data?.message_id) {
+          rfcMessageId = retrieved.data.message_id;
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    return { ok: true, messageId, rfcMessageId };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : 'Failed to send reply',
     };
   }
 }

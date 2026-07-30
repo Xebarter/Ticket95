@@ -23,7 +23,10 @@ export async function POST(request: NextRequest) {
     const subject = typeof body?.subject === 'string' ? body.subject : '';
     const previewText = typeof body?.previewText === 'string' ? body.previewText : '';
     const bodyContent = typeof body?.body === 'string' ? body.body : '';
-    const includeAllActive = body?.includeAllActive !== false;
+    const groupIds = Array.isArray(body?.groupIds)
+      ? body.groupIds.filter((id: unknown) => typeof id === 'string')
+      : [];
+    const includeAllActive = body?.includeAllActive === true;
     const extraEmails = typeof body?.extraEmails === 'string' ? body.extraEmails : '';
     const sendNow = Boolean(body?.sendNow);
 
@@ -32,6 +35,7 @@ export async function POST(request: NextRequest) {
       previewText,
       body: bodyContent,
       createdBy: session.userId,
+      groupIds,
       includeAllActive,
       extraEmailsInput: extraEmails,
       sendNow,

@@ -263,6 +263,16 @@ For issues or questions about the database schema:
 
 ## Version History
 
+### v1.3.0
+- Added newsletter recipient groups (`029_newsletter_groups.sql`)
+  - `newsletter_groups`, `newsletter_group_members`
+  - System group: Website subscribers (footer signups)
+
+### v1.2.0
+- Added marketing reply inbox (`028_marketing_email_replies.sql`)
+  - `marketing_email_replies`, `marketing_email_admin_replies`
+  - `provider_rfc_message_id` on campaign recipients
+
 ### v1.1.0
 - Added marketing email engine (`026_marketing_emails.sql`)
   - `newsletter_subscribers`, `marketing_campaigns`, `marketing_campaign_recipients`

@@ -15,9 +15,10 @@ export async function GET(request: NextRequest) {
       | SubscriberStatus
       | 'all';
     const q = request.nextUrl.searchParams.get('q') || '';
+    const groupId = request.nextUrl.searchParams.get('groupId') || undefined;
     const limit = Number(request.nextUrl.searchParams.get('limit') || 500);
 
-    const data = await listSubscribers({ status, q, limit });
+    const data = await listSubscribers({ status, q, limit, groupId });
     return NextResponse.json(data);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to load subscribers';
@@ -47,6 +48,12 @@ export async function POST(request: NextRequest) {
       emailsInput,
       source: 'admin',
       notes: typeof body?.notes === 'string' ? body.notes : 'Added by admin',
+      groupIds: Array.isArray(body?.groupIds)
+        ? body.groupIds.filter((id: unknown) => typeof id === 'string')
+        : typeof body?.groupId === 'string'
+          ? [body.groupId]
+          : undefined,
+      skipWebsiteAutoJoin: true,
     });
 
     if (result.emails.length === 0) {

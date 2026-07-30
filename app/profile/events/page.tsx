@@ -6,7 +6,7 @@ import { useProfileData } from '../use-profile-data';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Calendar, Plus, RefreshCw } from 'lucide-react';
+import { Calendar, Plus, RefreshCw, ShieldAlert } from 'lucide-react';
 import { EventManagementHeader } from './components/event-management-header';
 import { EventOverviewCards } from './components/event-overview-cards';
 import { EventPurchasesTable } from './components/event-purchases-table';
@@ -16,6 +16,7 @@ import { useEventManagement } from './use-event-management';
 import { ProfileEmptyState } from '@/components/profile/profile-ui';
 import { OrganizerEarningsPanel } from '@/components/payouts/organizer-earnings-panel';
 import { cn } from '@/lib/utils';
+import { getEventLifecycleStatus } from '@/lib/event-status';
 
 export default function ProfileEventsPage() {
   const { loading, myEvents, patchEvent } = useProfileData();
@@ -46,6 +47,7 @@ export default function ProfileEventsPage() {
   const showBootstrapSkeleton = loading;
   const showManagementSkeleton =
     Boolean(selectedEvent) && loadingManagement && (!data || data.event.id !== selectedEvent?.id);
+  const isPendingApproval = data ? getEventLifecycleStatus(data.event) === 'pending' : false;
 
   if (showBootstrapSkeleton) {
     return (
@@ -117,11 +119,34 @@ export default function ProfileEventsPage() {
             </div>
           ) : data ? (
             <>
-              <EventOverviewCards metrics={data.metrics} currency={data.event.currency || 'USD'} />
+              {isPendingApproval ? (
+                <div className="rounded-xl border border-amber-300/70 bg-amber-50/80 px-4 py-3 text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-100">
+                  <div className="flex items-start gap-2.5">
+                    <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
+                    <div>
+                      <p className="text-sm font-semibold">Pending approval</p>
+                      <p className="mt-0.5 text-sm text-amber-800/90 dark:text-amber-100/90">
+                        This event is under review. Management controls are inactive until approval.
+                        You can still edit the event and preview its public card.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
 
-              <OrganizerEarningsPanel selectedEventId={data.event.id} />
+              <div className={cn(isPendingApproval ? 'pointer-events-none select-none opacity-60' : '')}>
+                <EventOverviewCards metrics={data.metrics} currency={data.event.currency || 'USD'} />
+              </div>
 
-              <Tabs value={tab} onValueChange={setTab} className="gap-4">
+              <div className={cn(isPendingApproval ? 'pointer-events-none select-none opacity-60' : '')}>
+                <OrganizerEarningsPanel selectedEventId={data.event.id} />
+              </div>
+
+              <Tabs
+                value={tab}
+                onValueChange={setTab}
+                className={cn('gap-4', isPendingApproval ? 'pointer-events-none select-none opacity-60' : '')}
+              >
                 <TabsList className="h-auto w-full justify-start gap-1 overflow-x-auto rounded-xl border border-border/70 bg-slate-50/90 p-1 dark:bg-slate-900/60">
                   {(
                     [

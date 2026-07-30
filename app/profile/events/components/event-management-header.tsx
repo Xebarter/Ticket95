@@ -66,6 +66,7 @@ export function EventManagementHeader({
 
   const previewEvents = useMemo(() => (event ? [event as Event] : []), [event]);
   const lifecycleStatus = event ? getEventLifecycleStatus(event) : null;
+  const isPendingApproval = lifecycleStatus === 'pending';
   const cover = event?.image_url || event?.image_urls?.[0];
 
   const filteredEvents = useMemo(() => {
@@ -196,6 +197,7 @@ export function EventManagementHeader({
                 const active = listedEvent.id === selectedEventId;
                 const thumb = listedEvent.image_url || listedEvent.image_urls?.[0];
                 const status = getEventLifecycleStatus(listedEvent);
+                const pending = status === 'pending';
 
                 return (
                   <button
@@ -206,7 +208,9 @@ export function EventManagementHeader({
                       'group flex min-w-[240px] max-w-[280px] shrink-0 items-center gap-3 rounded-xl border p-2.5 text-left transition-colors',
                       active
                         ? 'border-slate-900 bg-slate-900 text-white dark:border-slate-100 dark:bg-slate-100 dark:text-slate-900'
-                        : 'border-border/70 bg-background hover:border-slate-300 hover:bg-muted/40'
+                        : pending
+                          ? 'border-amber-300/60 bg-amber-50/70 text-amber-950 hover:border-amber-400/70 hover:bg-amber-50 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100'
+                          : 'border-border/70 bg-background hover:border-slate-300 hover:bg-muted/40'
                     )}
                   >
                     <div
@@ -241,11 +245,20 @@ export function EventManagementHeader({
                       <p
                         className={cn(
                           'mt-0.5 truncate text-[11px]',
-                          active ? 'text-white/65 dark:text-slate-600' : 'text-muted-foreground'
+                          active
+                            ? 'text-white/65 dark:text-slate-600'
+                            : pending
+                              ? 'text-amber-900/80 dark:text-amber-100/85'
+                              : 'text-muted-foreground'
                         )}
                       >
                         {statusLabel(status)} · {formatDateTime(listedEvent.date)}
                       </p>
+                      {pending ? (
+                        <span className="mt-1 inline-flex rounded-md border border-amber-400/40 bg-amber-100/80 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/20 dark:text-amber-100">
+                          Awaiting approval
+                        </span>
+                      ) : null}
                     </div>
                   </button>
                 );
@@ -309,18 +322,31 @@ export function EventManagementHeader({
               </div>
 
               <div className="space-y-3 border-t border-border/60 p-3 sm:p-4">
-                <EventAffiliateControl
-                  event={event}
-                  onUpdated={(patch) => onEventPatched(event.id, patch)}
-                />
+                {isPendingApproval ? (
+                  <div className="rounded-lg border border-amber-300/60 bg-amber-50/70 px-3 py-2 text-xs text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-100">
+                    Affiliate and verification controls will activate after approval.
+                  </div>
+                ) : (
+                  <EventAffiliateControl
+                    event={event}
+                    onUpdated={(patch) => onEventPatched(event.id, patch)}
+                  />
+                )}
 
                 <div className="flex flex-wrap gap-2 border-t border-border/50 pt-3">
-                  <Button asChild size="sm" className="h-9 rounded-lg">
-                    <Link href={`/profile/verify?event=${event.id}`}>
+                  {isPendingApproval ? (
+                    <Button size="sm" className="h-9 rounded-lg" disabled>
                       <QrCode className="mr-1.5 h-4 w-4" />
                       Verify tickets
-                    </Link>
-                  </Button>
+                    </Button>
+                  ) : (
+                    <Button asChild size="sm" className="h-9 rounded-lg">
+                      <Link href={`/profile/verify?event=${event.id}`}>
+                        <QrCode className="mr-1.5 h-4 w-4" />
+                        Verify tickets
+                      </Link>
+                    </Button>
+                  )}
                   <Button asChild variant="outline" size="sm" className="h-9 rounded-lg">
                     <Link href={`/organizer/dashboard/edit/${event.id}`}>
                       <Pencil className="mr-1.5 h-4 w-4" />
@@ -336,12 +362,19 @@ export function EventManagementHeader({
                     <Eye className="mr-1.5 h-4 w-4" />
                     Preview card
                   </Button>
-                  <Button asChild variant="ghost" size="sm" className="h-9 rounded-lg text-muted-foreground">
-                    <Link href={`/events/${event.id}`}>
+                  {isPendingApproval ? (
+                    <Button variant="ghost" size="sm" className="h-9 rounded-lg text-muted-foreground" disabled>
                       <ExternalLink className="mr-1.5 h-4 w-4" />
                       Public page
-                    </Link>
-                  </Button>
+                    </Button>
+                  ) : (
+                    <Button asChild variant="ghost" size="sm" className="h-9 rounded-lg text-muted-foreground">
+                      <Link href={`/events/${event.id}`}>
+                        <ExternalLink className="mr-1.5 h-4 w-4" />
+                        Public page
+                      </Link>
+                    </Button>
+                  )}
                 </div>
               </div>
             </div>

@@ -96,20 +96,24 @@ function GuestProfileMenu() {
           <User className="h-[1.125rem] w-[1.125rem] stroke-[1.75]" />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-52 p-1.5">
-        <DropdownMenuLabel className="px-2 py-1.5 text-[11px] font-medium uppercase tracking-wide text-slate-400">
+      <DropdownMenuContent
+        align="end"
+        sideOffset={8}
+        className="w-56 rounded-xl border-slate-200/80 p-2 shadow-xl"
+      >
+        <DropdownMenuLabel className="px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">
           Account
         </DropdownMenuLabel>
-        <DropdownMenuItem asChild className="cursor-pointer rounded-md px-2 py-2">
+        <DropdownMenuItem asChild className="cursor-pointer rounded-lg px-2.5 py-2.5">
           <Link href="/login">
             <LogIn className="h-4 w-4 text-slate-500" />
-            <span className="font-medium">Sign In</span>
+            <span className="font-medium text-slate-800">Sign in</span>
           </Link>
         </DropdownMenuItem>
-        <DropdownMenuItem asChild className="cursor-pointer rounded-md px-2 py-2">
+        <DropdownMenuItem asChild className="cursor-pointer rounded-lg px-2.5 py-2.5">
           <Link href="/signup">
             <UserPlus className="h-4 w-4 text-slate-500" />
-            <span className="font-medium">Sign Up</span>
+            <span className="font-medium text-slate-800">Create account</span>
           </Link>
         </DropdownMenuItem>
       </DropdownMenuContent>
@@ -148,39 +152,44 @@ function UserProfileMenu({
           </Avatar>
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-56 p-1.5">
-        <DropdownMenuLabel className="px-2 py-2">
+      <DropdownMenuContent
+        align="end"
+        sideOffset={8}
+        className="w-64 rounded-xl border-slate-200/80 p-2 shadow-xl"
+      >
+        <DropdownMenuLabel className="rounded-lg bg-slate-50/80 px-2.5 py-2">
           <p className="truncate text-sm font-semibold text-slate-900">
             {name || 'Account'}
           </p>
           {role ? (
-            <p className="mt-0.5 text-[11px] font-medium capitalize text-slate-400">
+            <p className="mt-0.5 text-[11px] font-medium capitalize text-slate-500">
               {role}
             </p>
           ) : null}
         </DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem asChild className="cursor-pointer rounded-md px-2 py-2">
+        <DropdownMenuSeparator className="my-2" />
+        <DropdownMenuItem asChild className="cursor-pointer rounded-lg px-2.5 py-2.5">
           <Link href="/profile">
             <User className="h-4 w-4 text-slate-500" />
-            <span className="font-medium">Profile</span>
+            <span className="font-medium text-slate-800">Profile</span>
           </Link>
         </DropdownMenuItem>
         {role === 'admin' && (
           <DropdownMenuItem
-            className="cursor-pointer rounded-md px-2 py-2"
+            className="cursor-pointer rounded-lg px-2.5 py-2.5"
             onClick={onAdmin}
           >
             <Settings className="h-4 w-4 text-slate-500" />
-            <span className="font-medium">Admin</span>
+            <span className="font-medium text-slate-800">Admin dashboard</span>
           </DropdownMenuItem>
         )}
-        <DropdownMenuSeparator />
+        <DropdownMenuSeparator className="my-2" />
         <DropdownMenuItem
-          className="cursor-pointer rounded-md px-2 py-2 text-slate-700"
+          variant="destructive"
+          className="cursor-pointer rounded-lg px-2.5 py-2.5"
           onClick={onLogout}
         >
-          <LogOut className="h-4 w-4 text-slate-500" />
+          <LogOut className="h-4 w-4" />
           <span className="font-medium">Log out</span>
         </DropdownMenuItem>
       </DropdownMenuContent>

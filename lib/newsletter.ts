@@ -1,5 +1,10 @@
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import {
+  addSubscribersToGroups,
+  ensureWebsiteGroup,
+  getActiveMembersForGroups,
+} from '@/lib/newsletter-groups';
+import {
   bodyToHtml,
   bodyToPlainText,
   createUnsubscribeToken,
@@ -36,6 +41,7 @@ export type MarketingCampaign = {
   sent_count: number;
   failed_count: number;
   skipped_count: number;
+  target_group_ids?: string[];
   created_at: string;
   updated_at: string;
   sent_at: string | null;
@@ -54,12 +60,17 @@ export type UpsertSubscribersResult = {
   alreadyActive: number;
   invalid: string[];
   emails: string[];
+  joinedGroup?: number;
 };
 
 export async function upsertSubscribers(params: {
   emailsInput: string | string[];
   source: SubscriberSource;
   notes?: string | null;
+  groupIds?: string[];
+  addedBy?: string | null;
+  /** When true, do not auto-add footer sources to Website subscribers (caller handles groups). */
+  skipWebsiteAutoJoin?: boolean;
 }): Promise<UpsertSubscribersResult> {
   const emails =
     typeof params.emailsInput === 'string'
@@ -146,7 +157,6 @@ export async function upsertSubscribers(params: {
   }
 
   if (toInsert.length > 0) {
-    // Chunk inserts for large pastes
     for (let i = 0; i < toInsert.length; i += 200) {
       const chunk = toInsert.slice(i, i + 200);
       const { error: insertError } = await supabaseAdmin
@@ -158,7 +168,31 @@ export async function upsertSubscribers(params: {
     }
   }
 
-  return { added, reactivated, alreadyActive, invalid, emails };
+  const { data: allSubs, error: allError } = await supabaseAdmin
+    .from('newsletter_subscribers')
+    .select('id')
+    .in('email', emails);
+
+  if (allError) throw new Error(allError.message);
+  const subscriberIds = (allSubs || []).map((s) => s.id as string);
+
+  let joinedGroup = 0;
+  const groupIds = [...(params.groupIds || [])];
+
+  if (params.source === 'footer' && !params.skipWebsiteAutoJoin) {
+    const website = await ensureWebsiteGroup();
+    if (!groupIds.includes(website.id)) groupIds.push(website.id);
+  }
+
+  if (groupIds.length > 0 && subscriberIds.length > 0) {
+    joinedGroup = await addSubscribersToGroups({
+      subscriberIds,
+      groupIds,
+      addedBy: params.addedBy,
+    });
+  }
+
+  return { added, reactivated, alreadyActive, invalid, emails, joinedGroup };
 }
 
 export async function unsubscribeByToken(token: string): Promise<{ email: string } | null> {
@@ -226,7 +260,18 @@ export async function listSubscribers(params?: {
   status?: SubscriberStatus | 'all';
   q?: string;
   limit?: number;
+  groupId?: string;
 }): Promise<{ subscribers: NewsletterSubscriber[]; totals: Record<string, number> }> {
+  if (params?.groupId) {
+    const { listGroupMembers } = await import('@/lib/newsletter-groups');
+    return listGroupMembers({
+      groupId: params.groupId,
+      status: params.status,
+      q: params.q,
+      limit: params.limit,
+    });
+  }
+
   const limit = Math.min(Math.max(params?.limit || 500, 1), 2000);
   let query = supabaseAdmin
     .from('newsletter_subscribers')
@@ -311,7 +356,7 @@ export async function getCampaign(id: string): Promise<{
 }
 
 async function resolveCampaignRecipients(params: {
-  includeAllActive: boolean;
+  groupIds: string[];
   extraEmailsInput?: string;
 }): Promise<Array<{ subscriberId: string | null; email: string; unsubscribeToken: string }>> {
   const byEmail = new Map<
@@ -319,30 +364,24 @@ async function resolveCampaignRecipients(params: {
     { subscriberId: string | null; email: string; unsubscribeToken: string }
   >();
 
-  if (params.includeAllActive) {
-    const { data, error } = await supabaseAdmin
-      .from('newsletter_subscribers')
-      .select('id, email, unsubscribe_token')
-      .eq('status', 'active');
-
-    if (error) throw new Error(error.message);
-
-    for (const row of data || []) {
+  if (params.groupIds.length > 0) {
+    const members = await getActiveMembersForGroups(params.groupIds);
+    for (const row of members) {
       byEmail.set(row.email, {
-        subscriberId: row.id,
+        subscriberId: row.subscriberId,
         email: row.email,
-        unsubscribeToken: row.unsubscribe_token,
+        unsubscribeToken: row.unsubscribeToken,
       });
     }
   }
 
   const extras = parseEmailList(params.extraEmailsInput || '');
   if (extras.length > 0) {
-    // Ensure pasted emails are subscribed (or already active)
     await upsertSubscribers({
       emailsInput: extras,
       source: 'admin',
       notes: 'Added via campaign compose',
+      skipWebsiteAutoJoin: true,
     });
 
     const { data, error } = await supabaseAdmin
@@ -370,7 +409,9 @@ export async function createCampaign(params: {
   previewText?: string;
   body: string;
   createdBy?: string | null;
-  includeAllActive: boolean;
+  groupIds?: string[];
+  /** @deprecated use groupIds */
+  includeAllActive?: boolean;
   extraEmailsInput?: string;
   sendNow?: boolean;
 }): Promise<{ campaign: MarketingCampaign; sendResult?: SendCampaignResult }> {
@@ -379,11 +420,26 @@ export async function createCampaign(params: {
   if (!subject) throw new Error('Subject is required');
   if (!body) throw new Error('Email body is required');
 
+  let groupIds = Array.isArray(params.groupIds)
+    ? params.groupIds.filter((id) => typeof id === 'string' && id.trim())
+    : [];
+
+  // Backward compat: old clients sending includeAllActive
+  if (groupIds.length === 0 && params.includeAllActive) {
+    const website = await ensureWebsiteGroup();
+    groupIds = [website.id];
+  }
+
+  const extras = (params.extraEmailsInput || '').trim();
+  if (groupIds.length === 0 && !extras) {
+    throw new Error('Select at least one recipient group or paste email addresses');
+  }
+
   const bodyHtml = bodyToHtml(body);
   const bodyText = bodyToPlainText(body);
 
   const recipients = await resolveCampaignRecipients({
-    includeAllActive: params.includeAllActive,
+    groupIds,
     extraEmailsInput: params.extraEmailsInput,
   });
 
@@ -401,6 +457,7 @@ export async function createCampaign(params: {
       status: 'draft',
       created_by: params.createdBy || null,
       recipient_count: recipients.length,
+      target_group_ids: groupIds,
     })
     .select('*')
     .single();
@@ -558,6 +615,7 @@ export async function sendCampaign(campaignId: string): Promise<SendCampaignResu
             .update({
               status: 'sent',
               provider_message_id: result.messageId,
+              provider_rfc_message_id: result.rfcMessageId,
               sent_at: new Date().toISOString(),
               error_message: null,
             })
