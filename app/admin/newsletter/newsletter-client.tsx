@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -640,10 +639,10 @@ export default function NewsletterAdminClient() {
 
   return (
     <div className="space-y-6">
-      <header className="flex flex-wrap items-end justify-between gap-3">
+      <header className="flex flex-wrap items-end justify-between gap-3 rounded-2xl border border-slate-200/80 bg-gradient-to-br from-slate-50 via-white to-sky-50/50 px-4 py-4 shadow-sm shadow-slate-200/30 sm:px-5">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Marketing emails</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Marketing emails</h1>
+          <p className="mt-1 text-sm text-slate-500">
             Manage subscribers, send campaigns, and read replies.
           </p>
         </div>
@@ -651,7 +650,7 @@ export default function NewsletterAdminClient() {
           type="button"
           variant="outline"
           size="sm"
-          className="rounded-xl"
+          className="rounded-xl border-slate-200 bg-white/90 text-slate-700 hover:bg-sky-50 hover:text-sky-800"
           onClick={() => void loadAll()}
           disabled={loading}
         >
@@ -661,14 +660,14 @@ export default function NewsletterAdminClient() {
       </header>
 
       {!emailConfigured ? (
-        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-950">
+        <div className="rounded-2xl border border-amber-200/80 bg-amber-50/80 px-4 py-3 text-sm text-amber-950">
           Outbound email is not configured. Add <code className="font-mono">RESEND_API_KEY</code> and{' '}
           <code className="font-mono">EMAIL_FROM</code> to your environment to send campaigns.
         </div>
       ) : null}
 
       {!replyInboxConfigured ? (
-        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-950">
+        <div className="rounded-2xl border border-amber-200/80 bg-amber-50/80 px-4 py-3 text-sm text-amber-950">
           Reply inbox is not fully configured. Set <code className="font-mono">EMAIL_REPLY_TO</code> (Resend
           receiving address) and <code className="font-mono">RESEND_WEBHOOK_SECRET</code>, then point a Resend
           webhook at <code className="font-mono">/api/webhooks/resend</code> for <code className="font-mono">email.received</code>.
@@ -679,33 +678,42 @@ export default function NewsletterAdminClient() {
       ) : null}
 
       {receivingAccessError ? (
-        <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-950">
+        <div className="rounded-2xl border border-rose-200/80 bg-rose-50/80 px-4 py-3 text-sm text-rose-950">
           Cannot import replies from Resend: {receivingAccessError}
         </div>
       ) : null}
 
-      <div className="flex flex-wrap gap-1.5">
+      <div className="inline-flex flex-wrap rounded-xl border border-slate-200/80 bg-slate-100/70 p-1">
         {(
           [
-            ['replies', 'Replies'],
-            ['subscribers', 'Subscribers'],
-            ['compose', 'Compose'],
-            ['campaigns', 'Campaigns'],
+            ['replies', 'Replies', Inbox],
+            ['subscribers', 'Subscribers', Users],
+            ['compose', 'Compose', Megaphone],
+            ['campaigns', 'Campaigns', Send],
           ] as const
-        ).map(([key, label]) => (
-          <Button
-            key={key}
-            size="sm"
-            variant={tab === key ? 'default' : 'outline'}
-            className="rounded-xl"
-            onClick={() => setTab(key)}
-          >
-            {label}
-            {key === 'replies' && unreadCount > 0 ? (
-              <Badge className="ml-2 rounded-full px-1.5 py-0 text-[10px]">{unreadCount}</Badge>
-            ) : null}
-          </Button>
-        ))}
+        ).map(([key, label, Icon]) => {
+          const active = tab === key;
+          return (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setTab(key)}
+              className={`inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-sm font-medium transition-colors ${
+                active
+                  ? 'bg-white text-slate-900 shadow-sm shadow-slate-200/80'
+                  : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              <Icon className={`h-3.5 w-3.5 ${active ? 'text-sky-600' : 'text-slate-400'}`} />
+              {label}
+              {key === 'replies' && unreadCount > 0 ? (
+                <span className="ml-0.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-sky-100 px-1.5 text-[10px] font-semibold text-sky-700">
+                  {unreadCount}
+                </span>
+              ) : null}
+            </button>
+          );
+        })}
       </div>
 
       {tab === 'replies' ? (
@@ -1070,418 +1078,560 @@ export default function NewsletterAdminClient() {
       ) : null}
 
       {tab === 'subscribers' ? (
-        <div className="grid gap-4 lg:grid-cols-[16rem_1fr]">
-          <aside className="space-y-3 rounded-xl border border-border/70 p-3">
-            <div className="flex items-center gap-2 px-1">
-              <Users className="h-4 w-4 text-primary" />
-              <h2 className="text-sm font-semibold">Groups</h2>
-            </div>
-            <ul className="space-y-1">
-              {groups.map((group) => (
-                <li key={group.id}>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedGroupId(group.id)}
-                    className={`flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-sm transition-colors ${
-                      selectedGroupId === group.id
-                        ? 'bg-primary/10 font-medium text-primary'
-                        : 'hover:bg-muted/50'
-                    }`}
-                  >
-                    <span className="min-w-0 truncate">
-                      {group.name}
-                      {group.is_system ? (
-                        <span className="ml-1 text-[10px] text-muted-foreground">system</span>
-                      ) : null}
-                    </span>
-                    <span className="ml-2 tabular-nums text-xs text-muted-foreground">
-                      {group.active_member_count ?? group.member_count ?? 0}
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-            <div className="space-y-2 border-t border-border/60 pt-3">
-              <Input
-                value={newGroupName}
-                onChange={(e) => setNewGroupName(e.target.value)}
-                placeholder="New group name"
-                className="rounded-xl"
-              />
-              <Button
-                type="button"
-                size="sm"
-                className="w-full rounded-xl"
-                disabled={saving}
-                onClick={() => void createGroup()}
-              >
-                <FolderPlus className="mr-1.5 h-3.5 w-3.5" />
-                Create group
-              </Button>
-            </div>
-          </aside>
-
-          <div className="space-y-5">
-            <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-gradient-to-br from-slate-50 via-white to-sky-50/40 shadow-sm shadow-slate-200/40">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200/70 bg-white/70 px-4 py-3.5 backdrop-blur-sm sm:px-5">
+            <div className="flex items-center gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-sky-100/80 text-sky-700">
+                <Users className="h-4 w-4" />
+              </div>
               <div>
-                <h2 className="text-lg font-semibold">{selectedGroup?.name || 'Select a group'}</h2>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {selectedGroup?.description ||
-                    (selectedGroup?.is_system
-                      ? 'Footer signups land here automatically.'
-                      : 'Add or remove members for this audience.')}
+                <h2 className="text-sm font-semibold tracking-tight text-slate-900">Audience</h2>
+                <p className="text-xs text-slate-500">
+                  Organize groups and manage who receives campaigns
                 </p>
               </div>
-              {selectedGroup && !selectedGroup.is_system ? (
+            </div>
+          </div>
+
+          <div className="grid gap-0 lg:grid-cols-[17rem_1fr]">
+            <aside className="space-y-3 border-b border-slate-200/70 bg-white/50 p-3 lg:border-r lg:border-b-0 sm:p-4">
+              <p className="px-1 text-[11px] font-semibold tracking-[0.14em] text-slate-400 uppercase">
+                Groups
+              </p>
+              <ul className="space-y-1">
+                {groups.map((group) => {
+                  const active = selectedGroupId === group.id;
+                  return (
+                    <li key={group.id}>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedGroupId(group.id)}
+                        className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-sm transition-all ${
+                          active
+                            ? 'bg-sky-50/90 font-medium text-slate-900 ring-1 ring-sky-200/80 shadow-sm shadow-sky-100/60'
+                            : 'text-slate-600 hover:bg-slate-50'
+                        }`}
+                      >
+                        <span className="min-w-0 truncate">
+                          {group.name}
+                          {group.is_system ? (
+                            <span className="ml-1.5 rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-800/80">
+                              system
+                            </span>
+                          ) : null}
+                        </span>
+                        <span
+                          className={`ml-2 tabular-nums text-xs ${
+                            active ? 'text-sky-700' : 'text-slate-400'
+                          }`}
+                        >
+                          {group.active_member_count ?? group.member_count ?? 0}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+              <div className="space-y-2 border-t border-slate-200/60 pt-3">
+                <Input
+                  value={newGroupName}
+                  onChange={(e) => setNewGroupName(e.target.value)}
+                  placeholder="New group name"
+                  className="rounded-xl border-slate-200 bg-white focus-visible:ring-sky-200"
+                />
                 <Button
                   type="button"
                   size="sm"
-                  variant="outline"
-                  className="rounded-xl text-destructive"
+                  className="w-full rounded-xl bg-sky-600 hover:bg-sky-700"
                   disabled={saving}
-                  onClick={() => void deleteSelectedGroup()}
+                  onClick={() => void createGroup()}
                 >
-                  <Trash2 className="mr-1.5 h-3.5 w-3.5" />
-                  Delete group
+                  <FolderPlus className="mr-1.5 h-3.5 w-3.5" />
+                  Create group
                 </Button>
-              ) : null}
-            </div>
+              </div>
+            </aside>
 
-            <div className="grid gap-3 sm:grid-cols-3">
-              {[
-                { label: 'In group', value: totals.all || 0 },
-                { label: 'Active', value: totals.active || 0 },
-                { label: 'Unsubscribed', value: totals.unsubscribed || 0 },
-              ].map((stat) => (
-                <div key={stat.label} className="rounded-xl border border-border/70 px-4 py-3">
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">{stat.label}</p>
-                  <p className="mt-1 text-2xl font-semibold tabular-nums">{stat.value}</p>
+            <div className="space-y-5 bg-gradient-to-b from-white via-white to-slate-50/50 p-4 sm:p-5">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-lg font-semibold tracking-tight text-slate-900">
+                    {selectedGroup?.name || 'Select a group'}
+                  </h3>
+                  <p className="mt-1 text-sm text-slate-500">
+                    {selectedGroup?.description ||
+                      (selectedGroup?.is_system
+                        ? 'Footer signups land here automatically.'
+                        : 'Add or remove members for this audience.')}
+                  </p>
                 </div>
-              ))}
-            </div>
-
-            <div className="rounded-xl border border-border/70 p-4 space-y-3">
-              <div className="flex items-center gap-2">
-                <Plus className="h-4 w-4 text-primary" />
-                <h3 className="text-sm font-semibold">Add to this group</h3>
+                {selectedGroup && !selectedGroup.is_system ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="rounded-xl border-rose-200 bg-white text-rose-700 hover:bg-rose-50"
+                    disabled={saving}
+                    onClick={() => void deleteSelectedGroup()}
+                  >
+                    <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                    Delete group
+                  </Button>
+                ) : null}
               </div>
-              <p className="text-xs text-muted-foreground">
-                Paste one or many emails — separated by commas, spaces, or new lines.
-              </p>
-              <Textarea
-                value={bulkEmails}
-                onChange={(e) => setBulkEmails(e.target.value)}
-                placeholder={'name@example.com\nfriend@example.com, another@example.com'}
-                className="min-h-[110px] rounded-xl"
-              />
-              <Button
-                type="button"
-                className="rounded-xl"
-                onClick={() => void addSubscribers()}
-                disabled={saving || !selectedGroupId}
-              >
-                {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UserPlus className="mr-2 h-4 w-4" />}
-                Add to group
-              </Button>
-            </div>
 
-            <div className="flex flex-wrap items-center gap-2">
-              <Input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search email…"
-                className="max-w-xs rounded-xl"
-              />
-              {['all', 'active', 'unsubscribed', 'bounced'].map((value) => (
+              <div className="grid gap-3 sm:grid-cols-3">
+                {[
+                  { label: 'In group', value: totals.all || 0, tone: 'from-slate-50 to-white' },
+                  { label: 'Active', value: totals.active || 0, tone: 'from-emerald-50/80 to-white' },
+                  {
+                    label: 'Unsubscribed',
+                    value: totals.unsubscribed || 0,
+                    tone: 'from-amber-50/70 to-white',
+                  },
+                ].map((stat) => (
+                  <div
+                    key={stat.label}
+                    className={`rounded-2xl border border-slate-200/70 bg-gradient-to-br ${stat.tone} px-4 py-3.5 shadow-sm shadow-slate-100/60`}
+                  >
+                    <p className="text-[11px] font-semibold tracking-[0.12em] text-slate-400 uppercase">
+                      {stat.label}
+                    </p>
+                    <p className="mt-1.5 text-2xl font-semibold tabular-nums text-slate-900">
+                      {stat.value}
+                    </p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="space-y-3 rounded-2xl border border-slate-200/70 bg-white p-4 shadow-sm shadow-slate-100/70">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-sky-100/80 text-sky-700">
+                    <Plus className="h-3.5 w-3.5" />
+                  </div>
+                  <h4 className="text-sm font-semibold text-slate-900">Add to this group</h4>
+                </div>
+                <p className="text-xs leading-relaxed text-slate-500">
+                  Paste one or many emails — separated by commas, spaces, or new lines.
+                </p>
+                <Textarea
+                  value={bulkEmails}
+                  onChange={(e) => setBulkEmails(e.target.value)}
+                  placeholder={'name@example.com\nfriend@example.com, another@example.com'}
+                  className="min-h-[110px] rounded-2xl border-slate-200 bg-slate-50/40 focus-visible:ring-sky-200"
+                />
                 <Button
-                  key={value}
-                  size="sm"
-                  variant={statusFilter === value ? 'default' : 'outline'}
-                  className="rounded-xl capitalize"
-                  onClick={() => setStatusFilter(value)}
+                  type="button"
+                  className="rounded-xl bg-sky-600 hover:bg-sky-700"
+                  onClick={() => void addSubscribers()}
+                  disabled={saving || !selectedGroupId}
                 >
-                  {value}
+                  {saving ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <UserPlus className="mr-2 h-4 w-4" />
+                  )}
+                  Add to group
                 </Button>
-              ))}
-            </div>
+              </div>
 
-            {!selectedGroupId ? (
-              <p className="py-10 text-center text-sm text-muted-foreground">Select a group</p>
-            ) : loading && subscribers.length === 0 ? (
-              <div className="flex justify-center py-12">
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                <div className="relative min-w-0 flex-1">
+                  <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <Input
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Search email…"
+                    className="rounded-xl border-slate-200 bg-white pl-9 focus-visible:ring-sky-200"
+                  />
+                </div>
+                <div className="inline-flex rounded-xl border border-slate-200/80 bg-slate-100/70 p-1">
+                  {['all', 'active', 'unsubscribed', 'bounced'].map((value) => {
+                    const active = statusFilter === value;
+                    return (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => setStatusFilter(value)}
+                        className={`rounded-lg px-3 py-1.5 text-xs font-medium capitalize transition-colors ${
+                          active
+                            ? 'bg-white text-slate-900 shadow-sm shadow-slate-200/80'
+                            : 'text-slate-500 hover:text-slate-800'
+                        }`}
+                      >
+                        {value}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-            ) : subscribers.length === 0 ? (
-              <p className="py-10 text-center text-sm text-muted-foreground">No members in this group</p>
-            ) : (
-              <div className="overflow-x-auto rounded-xl border border-border/70">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Email</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Source</TableHead>
-                      <TableHead>Subscribed</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {subscribers.map((sub) => (
-                      <TableRow key={sub.id}>
-                        <TableCell className="font-medium">{sub.email}</TableCell>
-                        <TableCell>
-                          <Badge
-                            variant={sub.status === 'active' ? 'default' : 'secondary'}
-                            className="rounded-full text-[10px] capitalize"
-                          >
-                            {sub.status}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="capitalize text-muted-foreground">{sub.source}</TableCell>
-                        <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
-                          {new Date(sub.subscribed_at).toLocaleString('en-US', {
-                            month: 'short',
-                            day: 'numeric',
-                            year: 'numeric',
-                          })}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="inline-flex gap-1">
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="ghost"
-                              className="h-8 rounded-lg"
-                              title="Remove from group"
-                              onClick={() => void removeFromGroup(sub.id)}
-                              disabled={saving}
-                            >
-                              <UserMinus className="h-3.5 w-3.5" />
-                            </Button>
-                            {sub.status === 'active' ? (
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="ghost"
-                                className="h-8 rounded-lg"
-                                title="Unsubscribe globally"
-                                onClick={() => void updateStatus(sub.id, 'unsubscribed')}
-                                disabled={saving}
+
+              {!selectedGroupId ? (
+                <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/50 py-14 text-center">
+                  <p className="text-sm text-slate-500">Select a group to view members</p>
+                </div>
+              ) : loading && subscribers.length === 0 ? (
+                <div className="flex justify-center py-14">
+                  <Loader2 className="h-6 w-6 animate-spin text-sky-500/70" />
+                </div>
+              ) : subscribers.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/50 py-14 text-center">
+                  <p className="text-sm font-medium text-slate-700">No members in this group</p>
+                  <p className="mt-1 text-xs text-slate-500">Add emails above to get started.</p>
+                </div>
+              ) : (
+                <div className="overflow-hidden rounded-2xl border border-slate-200/70 bg-white shadow-sm shadow-slate-100/70">
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="border-slate-200/70 hover:bg-transparent">
+                          <TableHead className="text-slate-500">Email</TableHead>
+                          <TableHead className="text-slate-500">Status</TableHead>
+                          <TableHead className="text-slate-500">Source</TableHead>
+                          <TableHead className="text-slate-500">Subscribed</TableHead>
+                          <TableHead className="text-right text-slate-500">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {subscribers.map((sub) => (
+                          <TableRow key={sub.id} className="border-slate-100 hover:bg-slate-50/70">
+                            <TableCell>
+                              <div className="flex items-center gap-2.5">
+                                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100 text-[10px] font-semibold text-slate-600">
+                                  {replyInitials(null, sub.email)}
+                                </div>
+                                <span className="font-medium text-slate-800">{sub.email}</span>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <span
+                                className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold capitalize ${
+                                  sub.status === 'active'
+                                    ? 'bg-emerald-50 text-emerald-700'
+                                    : sub.status === 'bounced'
+                                      ? 'bg-rose-50 text-rose-700'
+                                      : 'bg-slate-100 text-slate-600'
+                                }`}
                               >
-                                Unsub
-                              </Button>
-                            ) : (
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="ghost"
-                                className="h-8 rounded-lg"
-                                onClick={() => void updateStatus(sub.id, 'active')}
-                                disabled={saving}
-                              >
-                                <UserPlus className="h-3.5 w-3.5" />
-                              </Button>
-                            )}
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="ghost"
-                              className="h-8 rounded-lg text-destructive hover:text-destructive"
-                              title="Delete subscriber"
-                              onClick={() => void removeSubscriber(sub.id)}
-                              disabled={saving}
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
+                                {sub.status}
+                              </span>
+                            </TableCell>
+                            <TableCell className="capitalize text-slate-500">{sub.source}</TableCell>
+                            <TableCell className="whitespace-nowrap text-xs text-slate-500">
+                              {new Date(sub.subscribed_at).toLocaleString('en-US', {
+                                month: 'short',
+                                day: 'numeric',
+                                year: 'numeric',
+                              })}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="inline-flex gap-1">
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-8 rounded-lg text-slate-600 hover:bg-slate-100"
+                                  title="Remove from group"
+                                  onClick={() => void removeFromGroup(sub.id)}
+                                  disabled={saving}
+                                >
+                                  <UserMinus className="h-3.5 w-3.5" />
+                                </Button>
+                                {sub.status === 'active' ? (
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-8 rounded-lg text-slate-600 hover:bg-slate-100"
+                                    title="Unsubscribe globally"
+                                    onClick={() => void updateStatus(sub.id, 'unsubscribed')}
+                                    disabled={saving}
+                                  >
+                                    Unsub
+                                  </Button>
+                                ) : (
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-8 rounded-lg text-slate-600 hover:bg-slate-100"
+                                    onClick={() => void updateStatus(sub.id, 'active')}
+                                    disabled={saving}
+                                  >
+                                    <UserPlus className="h-3.5 w-3.5" />
+                                  </Button>
+                                )}
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-8 rounded-lg text-rose-600 hover:bg-rose-50 hover:text-rose-700"
+                                  title="Delete subscriber"
+                                  onClick={() => void removeSubscriber(sub.id)}
+                                  disabled={saving}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       ) : null}
 
       {tab === 'compose' ? (
-        <div className="space-y-4 rounded-xl border border-border/70 p-4 sm:p-5">
-          <div className="flex items-center gap-2">
-            <Megaphone className="h-4 w-4 text-primary" />
-            <h2 className="text-sm font-semibold">Compose campaign</h2>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="campaign-subject">Subject</Label>
-            <Input
-              id="campaign-subject"
-              value={subject}
-              onChange={(e) => setSubject(e.target.value)}
-              placeholder="This weekend’s hottest events"
-              className="rounded-xl"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="campaign-preview">Preview text (optional)</Label>
-            <Input
-              id="campaign-preview"
-              value={previewText}
-              onChange={(e) => setPreviewText(e.target.value)}
-              placeholder="Shown in inbox previews"
-              className="rounded-xl"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="campaign-body">Body</Label>
-            <Textarea
-              id="campaign-body"
-              value={body}
-              onChange={(e) => setBody(e.target.value)}
-              placeholder="Write your message. Plain text is fine — line breaks become paragraphs. HTML is also supported."
-              className="min-h-[220px] rounded-xl"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label>Send to groups</Label>
-            <div className="grid gap-2 sm:grid-cols-2">
-              {groups.map((group) => {
-                const checked = composeGroupIds.includes(group.id);
-                return (
-                  <label
-                    key={group.id}
-                    className={`flex cursor-pointer items-start gap-3 rounded-xl border px-3 py-3 text-sm ${
-                      checked ? 'border-primary/40 bg-primary/5' : 'border-border/60'
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      className="mt-1"
-                      checked={checked}
-                      onChange={(e) => {
-                        setComposeGroupIds((prev) =>
-                          e.target.checked
-                            ? [...prev, group.id]
-                            : prev.filter((id) => id !== group.id)
-                        );
-                      }}
-                    />
-                    <span className="min-w-0">
-                      <span className="font-medium">{group.name}</span>
-                      <span className="mt-0.5 block text-xs text-muted-foreground">
-                        {group.active_member_count ?? 0} active
-                        {group.is_system ? ' · website signups' : ''}
-                      </span>
-                    </span>
-                  </label>
-                );
-              })}
+        <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-gradient-to-br from-slate-50 via-white to-sky-50/40 shadow-sm shadow-slate-200/40">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200/70 bg-white/70 px-4 py-3.5 backdrop-blur-sm sm:px-5">
+            <div className="flex items-center gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-sky-100/80 text-sky-700">
+                <Megaphone className="h-4 w-4" />
+              </div>
+              <div>
+                <h2 className="text-sm font-semibold tracking-tight text-slate-900">Compose campaign</h2>
+                <p className="text-xs text-slate-500">Write once, send to selected groups</p>
+              </div>
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="campaign-extra">Also include these emails (optional)</Label>
-            <Textarea
-              id="campaign-extra"
-              value={extraEmails}
-              onChange={(e) => setExtraEmails(e.target.value)}
-              placeholder="Paste additional addresses"
-              className="min-h-[90px] rounded-xl"
-            />
-            <p className="text-xs text-muted-foreground">{recipientHint}</p>
-          </div>
+          <div className="space-y-5 bg-gradient-to-b from-white via-white to-slate-50/50 p-4 sm:p-6">
+            <div className="grid gap-5 lg:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="campaign-subject" className="text-xs font-medium text-slate-600">
+                  Subject
+                </Label>
+                <Input
+                  id="campaign-subject"
+                  value={subject}
+                  onChange={(e) => setSubject(e.target.value)}
+                  placeholder="This weekend’s hottest events"
+                  className="rounded-xl border-slate-200 bg-white focus-visible:ring-sky-200"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="campaign-preview" className="text-xs font-medium text-slate-600">
+                  Preview text (optional)
+                </Label>
+                <Input
+                  id="campaign-preview"
+                  value={previewText}
+                  onChange={(e) => setPreviewText(e.target.value)}
+                  placeholder="Shown in inbox previews"
+                  className="rounded-xl border-slate-200 bg-white focus-visible:ring-sky-200"
+                />
+              </div>
+            </div>
 
-          <div className="flex flex-wrap gap-2 pt-1">
-            <Button
-              type="button"
-              variant="outline"
-              className="rounded-xl"
-              disabled={sending}
-              onClick={() => void createCampaign(false)}
-            >
-              Save draft
-            </Button>
-            <Button
-              type="button"
-              className="rounded-xl"
-              disabled={sending}
-              onClick={() => void createCampaign(true)}
-            >
-              {sending ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Send className="mr-2 h-4 w-4" />
-              )}
-              Send now
-            </Button>
+            <div className="space-y-2">
+              <Label htmlFor="campaign-body" className="text-xs font-medium text-slate-600">
+                Body
+              </Label>
+              <Textarea
+                id="campaign-body"
+                value={body}
+                onChange={(e) => setBody(e.target.value)}
+                placeholder="Write your message. Plain text is fine — line breaks become paragraphs. HTML is also supported."
+                className="min-h-[240px] rounded-2xl border-slate-200 bg-slate-50/40 text-sm leading-relaxed focus-visible:ring-sky-200"
+              />
+            </div>
+
+            <div className="space-y-3">
+              <Label className="text-xs font-medium text-slate-600">Send to groups</Label>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {groups.map((group) => {
+                  const checked = composeGroupIds.includes(group.id);
+                  return (
+                    <label
+                      key={group.id}
+                      className={`flex cursor-pointer items-start gap-3 rounded-2xl border px-3.5 py-3.5 text-sm transition-all ${
+                        checked
+                          ? 'border-sky-200 bg-sky-50/80 ring-1 ring-sky-100 shadow-sm shadow-sky-50'
+                          : 'border-slate-200/80 bg-white hover:bg-slate-50/80'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        className="mt-1 accent-sky-600"
+                        checked={checked}
+                        onChange={(e) => {
+                          setComposeGroupIds((prev) =>
+                            e.target.checked
+                              ? [...prev, group.id]
+                              : prev.filter((id) => id !== group.id)
+                          );
+                        }}
+                      />
+                      <span className="min-w-0">
+                        <span className="font-medium text-slate-800">{group.name}</span>
+                        <span className="mt-0.5 block text-xs text-slate-500">
+                          {group.active_member_count ?? 0} active
+                          {group.is_system ? ' · website signups' : ''}
+                        </span>
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="space-y-2 rounded-2xl border border-slate-200/70 bg-white p-4 shadow-sm shadow-slate-100/60">
+              <Label htmlFor="campaign-extra" className="text-xs font-medium text-slate-600">
+                Also include these emails (optional)
+              </Label>
+              <Textarea
+                id="campaign-extra"
+                value={extraEmails}
+                onChange={(e) => setExtraEmails(e.target.value)}
+                placeholder="Paste additional addresses"
+                className="min-h-[90px] rounded-2xl border-slate-200 bg-slate-50/40 focus-visible:ring-sky-200"
+              />
+              <p className="text-xs text-slate-500">{recipientHint}</p>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200/70 pt-4">
+              <p className="text-[11px] text-slate-400">
+                Drafts stay here until you send. Replies go to your reply inbox.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="rounded-xl border-slate-200 bg-white text-slate-700"
+                  disabled={sending}
+                  onClick={() => void createCampaign(false)}
+                >
+                  Save draft
+                </Button>
+                <Button
+                  type="button"
+                  className="rounded-xl bg-sky-600 hover:bg-sky-700"
+                  disabled={sending}
+                  onClick={() => void createCampaign(true)}
+                >
+                  {sending ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Send className="mr-2 h-4 w-4" />
+                  )}
+                  Send now
+                </Button>
+              </div>
+            </div>
           </div>
         </div>
       ) : null}
 
       {tab === 'campaigns' ? (
-        <div className="space-y-4">
-          {campaigns.length === 0 ? (
-            <p className="py-10 text-center text-sm text-muted-foreground">No campaigns yet</p>
-          ) : (
-            <div className="overflow-x-auto rounded-xl border border-border/70">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Subject</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Recipients</TableHead>
-                    <TableHead>Results</TableHead>
-                    <TableHead>When</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {campaigns.map((campaign) => (
-                    <TableRow key={campaign.id}>
-                      <TableCell className="max-w-[220px] font-medium">{campaign.subject}</TableCell>
-                      <TableCell>
-                        <Badge variant="secondary" className="rounded-full text-[10px] capitalize">
-                          {campaign.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="tabular-nums">{campaign.recipient_count}</TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
-                        {campaign.sent_count} sent · {campaign.failed_count} failed ·{' '}
-                        {campaign.skipped_count} skipped
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
-                        {new Date(campaign.sent_at || campaign.created_at).toLocaleString('en-US', {
-                          month: 'short',
-                          day: 'numeric',
-                          year: 'numeric',
-                          hour: 'numeric',
-                          minute: '2-digit',
-                        })}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {campaign.status === 'draft' || campaign.status === 'failed' ? (
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            className="rounded-lg"
-                            disabled={sending || !emailConfigured}
-                            onClick={() => void resendCampaign(campaign.id)}
-                          >
-                            <Send className="mr-1.5 h-3.5 w-3.5" />
-                            Send
-                          </Button>
-                        ) : null}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+        <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-gradient-to-br from-slate-50 via-white to-sky-50/40 shadow-sm shadow-slate-200/40">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200/70 bg-white/70 px-4 py-3.5 backdrop-blur-sm sm:px-5">
+            <div className="flex items-center gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-sky-100/80 text-sky-700">
+                <Send className="h-4 w-4" />
+              </div>
+              <div>
+                <h2 className="text-sm font-semibold tracking-tight text-slate-900">Campaigns</h2>
+                <p className="text-xs text-slate-500">
+                  {campaigns.length === 0
+                    ? 'No campaigns yet'
+                    : `${campaigns.length} campaign${campaigns.length === 1 ? '' : 's'}`}
+                </p>
+              </div>
             </div>
-          )}
+            <Button
+              type="button"
+              size="sm"
+              className="rounded-xl bg-sky-600 hover:bg-sky-700"
+              onClick={() => setTab('compose')}
+            >
+              <Plus className="mr-1.5 h-3.5 w-3.5" />
+              New campaign
+            </Button>
+          </div>
+
+          <div className="bg-gradient-to-b from-white via-white to-slate-50/50 p-4 sm:p-5">
+            {campaigns.length === 0 ? (
+              <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-slate-200 bg-slate-50/50 px-6 py-16 text-center">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-sky-50 text-sky-600/70 ring-1 ring-sky-100">
+                  <Megaphone className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-slate-800">No campaigns yet</p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Compose your first message and send it to a subscriber group.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  className="mt-1 rounded-xl bg-sky-600 hover:bg-sky-700"
+                  onClick={() => setTab('compose')}
+                >
+                  Compose campaign
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-2.5">
+                {campaigns.map((campaign) => {
+                  const when = campaign.sent_at || campaign.created_at;
+                  const statusTone =
+                    campaign.status === 'sent'
+                      ? 'bg-emerald-50 text-emerald-700'
+                      : campaign.status === 'failed'
+                        ? 'bg-rose-50 text-rose-700'
+                        : campaign.status === 'sending'
+                          ? 'bg-sky-50 text-sky-700'
+                          : 'bg-slate-100 text-slate-600';
+                  return (
+                    <div
+                      key={campaign.id}
+                      className="flex flex-col gap-3 rounded-2xl border border-slate-200/70 bg-white px-4 py-4 shadow-sm shadow-slate-100/60 sm:flex-row sm:items-center sm:justify-between sm:px-5"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span
+                            className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold capitalize ${statusTone}`}
+                          >
+                            {campaign.status}
+                          </span>
+                          <span className="text-[11px] text-slate-400">
+                            {formatReplyFullWhen(when)}
+                          </span>
+                        </div>
+                        <h3 className="mt-1.5 truncate text-sm font-semibold text-slate-900 sm:text-base">
+                          {campaign.subject}
+                        </h3>
+                        <p className="mt-1 text-xs text-slate-500">
+                          <span className="font-medium tabular-nums text-slate-700">
+                            {campaign.recipient_count}
+                          </span>{' '}
+                          recipients · {campaign.sent_count} sent · {campaign.failed_count} failed ·{' '}
+                          {campaign.skipped_count} skipped
+                        </p>
+                      </div>
+                      {(campaign.status === 'draft' || campaign.status === 'failed') && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          className="shrink-0 rounded-xl bg-sky-600 hover:bg-sky-700"
+                          disabled={sending || !emailConfigured}
+                          onClick={() => void resendCampaign(campaign.id)}
+                        >
+                          <Send className="mr-1.5 h-3.5 w-3.5" />
+                          Send
+                        </Button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
       ) : null}
     </div>
