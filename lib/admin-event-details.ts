@@ -1,5 +1,6 @@
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { getEventLifecycleStatus } from '@/lib/event-status';
+import { revalidatePublicEventPages } from '@/lib/revalidate-public-events';
 import type { Event, Order, Sponsor, TicketType } from '@/lib/supabase-client';
 
 export type AdminEventDetails = Event & {
@@ -117,5 +118,6 @@ export async function deleteAdminEvent(eventId: string): Promise<{ ok: true } | 
     return { ok: false, error: `Failed to delete event: ${eventError.message}` };
   }
 
+  revalidatePublicEventPages(eventId);
   return { ok: true };
 }

@@ -1,5 +1,6 @@
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { deleteAdminEvent } from '@/lib/admin-event-details';
+import { revalidatePublicEventPages } from '@/lib/revalidate-public-events';
 import type { Event } from '@/lib/supabase-client';
 
 export const CLEAR_REMOVAL_FIELDS = {
@@ -49,6 +50,7 @@ export async function softRemoveEvent(params: {
     .single();
 
   if (error) throw new Error(error.message);
+  revalidatePublicEventPages(params.eventId);
   return data as Event;
 }
 
@@ -74,6 +76,7 @@ export async function unverifyEvent(params: { eventId: string }): Promise<Event>
     .single();
 
   if (error) throw new Error(error.message);
+  revalidatePublicEventPages(params.eventId);
   return data as Event;
 }
 
@@ -123,5 +126,6 @@ export async function permanentlyDeleteRemovedEvent(params: {
     return { ok: false, error: 'Only events deleted by admin can be permanently removed' };
   }
 
-  return deleteAdminEvent(params.eventId);
+  const result = await deleteAdminEvent(params.eventId);
+  return result;
 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { updateEventStatus, getEventById } from '@/lib/supabase-db';
 import { requireAdmin } from '@/lib/session';
 import { notifyUsersOfNewEvent } from '@/lib/notifications';
+import { revalidatePublicEventPages } from '@/lib/revalidate-public-events';
 
 export async function PATCH(
   request: NextRequest,
@@ -56,6 +57,8 @@ export async function PATCH(
         console.error('Failed to fan-out new event notifications:', err);
       });
     }
+
+    revalidatePublicEventPages(id);
 
     return NextResponse.json(
       { success: true, status: updatedEvent.status },

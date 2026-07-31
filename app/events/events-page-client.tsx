@@ -20,6 +20,7 @@ import {
   type EventCategoryId,
 } from '@/lib/event-categories';
 import { useNearMeLocation } from '@/hooks/use-near-me-location';
+import { useRefreshOnFocus } from '@/hooks/use-refresh-on-focus';
 import type { Event } from '@/lib/supabase-client';
 
 interface EventsPageClientProps {
@@ -35,9 +36,14 @@ export function EventsPageClient({
 }: EventsPageClientProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { query, setQuery, clearQuery, seedCatalog, catalog } = useEventSearch();
-  const [events] = useState<Event[]>(initialEvents);
+  const { query, setQuery, clearQuery, seedCatalog } = useEventSearch();
+  const [events, setEvents] = useState<Event[]>(initialEvents);
   const hydrated = useRef(false);
+  useRefreshOnFocus();
+
+  useEffect(() => {
+    setEvents(initialEvents);
+  }, [initialEvents]);
 
   const categoryParam = searchParams.get('category') ?? initialCategory;
   const category: EventCategoryId | null = isEventCategoryId(categoryParam)
@@ -71,7 +77,8 @@ export function EventsPageClient({
     seedCatalog(events);
   }, [events, seedCatalog]);
 
-  const sourceEvents = catalog.length > events.length ? catalog : events;
+  // Listings use SSR props only — the search catalog must not reintroduce deleted events.
+  const sourceEvents = events;
 
   const filteredEvents = useMemo(() => {
     const searched = filterEvents(sourceEvents, query, category);

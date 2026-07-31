@@ -12,13 +12,21 @@ import React, {
 import type { Event } from '@/lib/supabase-client'
 import { filterEvents } from '@/lib/event-search'
 
+type SeedMode = 'merge' | 'replace'
+
 type EventSearchContextValue = {
   query: string
   setQuery: (query: string) => void
   clearQuery: () => void
   catalog: Event[]
-  /** Merge/replace the in-memory catalog used for instant matching. */
-  seedCatalog: (events: Event[]) => void
+  /**
+   * Update the in-memory catalog used for instant header search.
+   * - `merge` (default): upsert by id while the catalog is still warming.
+   *   After an authoritative `replace`, merge only refreshes known ids (won't
+   *   reintroduce soft-deleted events from a stale SSR payload).
+   * - `replace`: set catalog to exactly this list (approved feed).
+   */
+  seedCatalog: (events: Event[], mode?: SeedMode) => void
   results: Event[]
   filter: (events: Event[]) => Event[]
 }
@@ -34,7 +42,7 @@ export function EventSearchProvider({
 }) {
   const [query, setQueryState] = useState(initialQuery)
   const [catalog, setCatalog] = useState<Event[]>([])
-  const seededIds = useRef(new Set<string>())
+  const hasAuthoritativeCatalog = useRef(false)
 
   const setQuery = useCallback((next: string) => {
     setQueryState(next)
@@ -44,42 +52,63 @@ export function EventSearchProvider({
     setQueryState('')
   }, [])
 
-  const seedCatalog = useCallback((events: Event[]) => {
+  const seedCatalog = useCallback((events: Event[], mode: SeedMode = 'merge') => {
+    if (mode === 'replace') {
+      hasAuthoritativeCatalog.current = true
+      setCatalog(events)
+      return
+    }
+
     if (!events.length) return
 
     setCatalog((prev) => {
+      const byId = new Map(prev.map((event) => [event.id, event]))
       let changed = false
-      const next = [...prev]
+      const allowAdd = !hasAuthoritativeCatalog.current
 
       for (const event of events) {
-        if (seededIds.current.has(event.id)) continue
-        seededIds.current.add(event.id)
-        next.push(event)
-        changed = true
+        if (byId.has(event.id)) {
+          byId.set(event.id, event)
+          changed = true
+        } else if (allowAdd) {
+          byId.set(event.id, event)
+          changed = true
+        }
       }
 
-      return changed ? next : prev
+      return changed ? Array.from(byId.values()) : prev
     })
   }, [])
 
-  // Warm the catalog once so search is fast even before visiting home/events.
-  useEffect(() => {
-    let cancelled = false
-
-    fetch('/api/events?status=approved&limit=100')
+  const loadApprovedCatalog = useCallback(() => {
+    fetch('/api/events?status=approved&limit=100', { cache: 'no-store' })
       .then((response) => (response.ok ? response.json() : []))
       .then((data) => {
-        if (cancelled || !Array.isArray(data)) return
-        seedCatalog(data as Event[])
+        if (!Array.isArray(data)) return
+        seedCatalog(data as Event[], 'replace')
       })
       .catch(() => {
         // Silent — pages can still seed from SSR data.
       })
+  }, [seedCatalog])
+
+  // Warm + refresh so soft-deleted events drop out of header search.
+  useEffect(() => {
+    loadApprovedCatalog()
+
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') {
+        loadApprovedCatalog()
+      }
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener('focus', loadApprovedCatalog)
 
     return () => {
-      cancelled = true
+      document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('focus', loadApprovedCatalog)
     }
-  }, [seedCatalog])
+  }, [loadApprovedCatalog])
 
   const results = useMemo(() => filterEvents(catalog, query), [catalog, query])
 

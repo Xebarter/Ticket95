@@ -3,11 +3,13 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import Image from 'next/image'
-import { Calendar, MapPin, Search, X } from 'lucide-react'
+import { ArrowRight, Calendar, MapPin, Search, Ticket, X } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useEventSearch } from '@/lib/event-search-context'
+import { getEventCategoryLabel } from '@/lib/event-categories'
+import { formatDisplayPrice } from '@/lib/event-display'
 import type { Event } from '@/lib/supabase-client'
 import dynamic from 'next/dynamic'
 
@@ -29,6 +31,94 @@ function formatEventDate(dateString: string): string {
   const date = new Date(dateString)
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
   return `${months[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`
+}
+
+function startingPrice(event: Event) {
+  if (event.ticket_types && event.ticket_types.length > 0) {
+    return Math.min(...event.ticket_types.map((t) => t.price || 0))
+  }
+  return event.ticket_price || 0
+}
+
+function SearchSuggestionCard({
+  event,
+  onSelect,
+}: {
+  event: Event
+  onSelect: (event: Event) => void
+}) {
+  const available = Math.max(event.tickets_available || 0, 0)
+  const soldOut = available === 0 && (event.total_tickets || 0) > 0
+  const price = startingPrice(event)
+
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(event)}
+      className={cn(
+        'group flex w-full items-stretch gap-3 rounded-xl p-2 text-left transition-colors',
+        'hover:bg-slate-50 focus-visible:bg-slate-50 focus-visible:outline-none',
+        'focus-visible:ring-2 focus-visible:ring-[#9A7B2F]/25'
+      )}
+    >
+      <div className="relative h-[4.5rem] w-[5.5rem] shrink-0 overflow-hidden rounded-lg bg-slate-100 sm:h-20 sm:w-28">
+        {event.image_url ? (
+          <Image
+            src={event.image_url}
+            alt=""
+            fill
+            className="object-cover transition-transform duration-500 ease-out motion-safe:group-hover:scale-[1.04]"
+            sizes="112px"
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center">
+            <Ticket className="h-5 w-5 text-slate-300" />
+          </div>
+        )}
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/45 via-transparent to-transparent" />
+        {event.category ? (
+          <span className="absolute left-1.5 top-1.5 max-w-[calc(100%-0.75rem)] truncate rounded-md border border-white/25 bg-white/95 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-700 shadow-sm backdrop-blur-sm">
+            {getEventCategoryLabel(event.category)}
+          </span>
+        ) : null}
+        {soldOut ? (
+          <span className="absolute bottom-1.5 left-1.5 rounded-md bg-slate-900/90 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-white">
+            Sold out
+          </span>
+        ) : null}
+      </div>
+
+      <div className="flex min-w-0 flex-1 flex-col justify-center py-0.5">
+        <p className="line-clamp-2 text-sm font-semibold leading-snug tracking-tight text-slate-900 transition-colors group-hover:text-slate-700">
+          {event.name}
+        </p>
+        <div className="mt-1.5 space-y-1">
+          <p className="flex min-w-0 items-center gap-1.5 text-xs text-slate-500">
+            <Calendar className="h-3 w-3 shrink-0 text-slate-400" />
+            <span className="truncate">{formatEventDate(event.date)}</span>
+          </p>
+          <p className="flex min-w-0 items-center gap-1.5 text-xs text-slate-500">
+            <MapPin className="h-3 w-3 shrink-0 text-slate-400" />
+            <span className="truncate">{event.venue}</span>
+          </p>
+        </div>
+      </div>
+
+      <div className="flex shrink-0 flex-col items-end justify-between py-0.5 pl-1">
+        <div className="text-right">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400">
+            From
+          </p>
+          <p className="mt-0.5 text-sm font-bold tabular-nums tracking-tight text-slate-900">
+            {soldOut ? '—' : formatDisplayPrice(event.currency, price)}
+          </p>
+        </div>
+        <span className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 opacity-0 shadow-sm transition-all group-hover:opacity-100 group-focus-visible:opacity-100">
+          <ArrowRight className="h-3.5 w-3.5" />
+        </span>
+      </div>
+    </button>
+  )
 }
 
 export function HeaderSearch({ className, compact = false }: HeaderSearchProps) {
@@ -117,6 +207,8 @@ export function HeaderSearch({ className, compact = false }: HeaderSearchProps) 
     setSelectedEvent(event)
   }
 
+  const trimmedQuery = query.trim()
+
   return (
     <div ref={rootRef} className={cn('relative w-full', className)}>
       <form
@@ -172,59 +264,31 @@ export function HeaderSearch({ className, compact = false }: HeaderSearchProps) 
         </div>
       </form>
 
-      {suggestions.length > 0 && (
-        <div className="absolute left-0 right-0 top-full z-[60] mt-1.5 overflow-hidden rounded-xl border border-border bg-card shadow-2xl">
-          <ul className="max-h-[min(24rem,70vh)] overflow-y-auto" role="listbox">
+      {suggestions.length > 0 ? (
+        <div className="absolute left-0 right-0 top-full z-[60] mt-2 overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-[0_12px_40px_rgba(15,23,42,0.14)]">
+          <div className="flex items-center justify-between gap-2 border-b border-slate-100 px-3 py-2.5 sm:px-3.5">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#9A7B2F]">
+              Suggestions
+            </p>
+            <p className="text-[11px] tabular-nums text-slate-400">
+              {results.length} match{results.length === 1 ? '' : 'es'}
+            </p>
+          </div>
+          <ul className="max-h-[min(28rem,70vh)] space-y-0.5 overflow-y-auto p-1.5" role="listbox">
             {suggestions.map((event) => (
-              <li key={event.id}>
-                <button
-                  type="button"
-                  onClick={() => handleSelect(event)}
-                  className="flex w-full items-center gap-3 border-b border-border/60 p-3 text-left transition-colors last:border-b-0 hover:bg-muted/50"
-                >
-                  <div className="relative h-12 w-16 shrink-0 overflow-hidden rounded-md bg-muted">
-                    {event.image_url ? (
-                      <Image
-                        src={event.image_url}
-                        alt=""
-                        fill
-                        className="object-cover"
-                        sizes="64px"
-                      />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center">
-                        <Calendar className="h-4 w-4 text-muted-foreground/50" />
-                      </div>
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold text-foreground">
-                      {event.name}
-                    </p>
-                    <div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
-                      <span className="inline-flex min-w-0 items-center gap-1">
-                        <Calendar className="h-3 w-3 shrink-0" />
-                        <span className="truncate">{formatEventDate(event.date)}</span>
-                      </span>
-                      <span className="text-border">·</span>
-                      <span className="inline-flex min-w-0 items-center gap-1">
-                        <MapPin className="h-3 w-3 shrink-0" />
-                        <span className="truncate">{event.venue}</span>
-                      </span>
-                    </div>
-                  </div>
-                </button>
+              <li key={event.id} role="option">
+                <SearchSuggestionCard event={event} onSelect={handleSelect} />
               </li>
             ))}
           </ul>
-          {results.length > suggestions.length && (
+          {results.length > suggestions.length ? (
             <button
               type="button"
-              className="w-full border-t border-border/60 bg-muted/30 px-3 py-2.5 text-center text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
+              className="flex w-full items-center justify-center gap-1.5 border-t border-slate-100 bg-slate-50/80 px-3 py-3 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-100 hover:text-slate-900"
               onClick={() => {
                 setOpen(false)
                 if (pathname !== '/events') {
-                  router.push(`/events?search=${encodeURIComponent(query.trim())}`)
+                  router.push(`/events?search=${encodeURIComponent(trimmedQuery)}`)
                 } else {
                   document.getElementById('event-search-results')?.scrollIntoView({
                     behavior: 'smooth',
@@ -234,25 +298,34 @@ export function HeaderSearch({ className, compact = false }: HeaderSearchProps) 
               }}
             >
               See all {results.length} results
+              <ArrowRight className="h-3.5 w-3.5" />
             </button>
-          )}
+          ) : null}
         </div>
-      )}
+      ) : null}
 
-      {query.trim() && open && results.length === 0 && (
-        <div className="absolute left-0 right-0 top-full z-[60] mt-1.5 rounded-xl border border-border bg-card px-4 py-3 text-sm text-muted-foreground shadow-2xl">
-          No events match “{query.trim()}”
+      {trimmedQuery && open && results.length === 0 ? (
+        <div className="absolute left-0 right-0 top-full z-[60] mt-2 overflow-hidden rounded-2xl border border-slate-200/90 bg-white px-4 py-5 shadow-[0_12px_40px_rgba(15,23,42,0.14)]">
+          <div className="flex flex-col items-center text-center">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100">
+              <Search className="h-4 w-4 text-slate-400" />
+            </div>
+            <p className="mt-3 text-sm font-semibold text-slate-900">No matching events</p>
+            <p className="mt-1 max-w-[16rem] text-xs leading-relaxed text-slate-500">
+              Nothing matched “{trimmedQuery}”. Try another name, venue, or organizer.
+            </p>
+          </div>
         </div>
-      )}
+      ) : null}
 
-      {selectedEvent && (
+      {selectedEvent ? (
         <TicketPurchaseDialog
           key={selectedEvent.id}
           event={selectedEvent}
           onPurchaseComplete={() => setSelectedEvent(null)}
           trigger={null}
         />
-      )}
+      ) : null}
     </div>
   )
 }

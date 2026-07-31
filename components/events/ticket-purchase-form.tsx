@@ -17,6 +17,7 @@ import {
   Loader2,
   Smartphone,
   CreditCard,
+  Mail,
 } from 'lucide-react';
 import { getStoredAffiliateCode } from '@/components/affiliates/affiliate-ref-capture';
 import { stashFreeCheckoutPayload } from '@/lib/checkout-handoff';
@@ -985,30 +986,35 @@ function CheckoutDetailsFields({
   loading: boolean;
 }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4">
-      <div className="flex items-start gap-3">
-        <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-white">
-          <Smartphone className="h-4 w-4" />
+    <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-gradient-to-b from-slate-50 to-[#f7f5f1] shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
+      <div className="flex items-start gap-3 border-b border-slate-200/70 px-4 py-3.5">
+        <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[#9A7B2F]/20 bg-[#9A7B2F]/10 text-[#7a6224]">
+          {showEmail ? <Mail className="h-4 w-4" /> : <Smartphone className="h-4 w-4" />}
         </span>
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-slate-900">
+          <p className="text-sm font-semibold tracking-tight text-slate-900">
             {showEmail ? 'Checkout details' : 'Payment details'}
           </p>
-          <p className="mt-0.5 text-xs leading-relaxed text-slate-500">
-            {showPhone
-              ? 'Phone number that will be charged for mobile money (MTN or Airtel Uganda).'
-              : 'Use the same email when you create an account later to sync these tickets.'}
-          </p>
+          {!showPhone ? (
+            <p className="mt-0.5 text-xs leading-relaxed text-slate-500">
+              Use the same email when you create an account later to sync these tickets.
+            </p>
+          ) : (
+            <p className="mt-0.5 text-xs leading-relaxed text-slate-500">
+              We'll use these details to confirm your order.
+            </p>
+          )}
         </div>
       </div>
 
-      <div className="mt-4 space-y-3.5">
+      <div className="space-y-3 p-3.5 sm:p-4">
         {showEmail ? (
-          <div className="space-y-1.5">
+          <div className="rounded-xl border border-[#9A7B2F]/15 bg-[#faf6ef] p-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]">
             <label
               htmlFor={guestEmailId}
-              className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400"
+              className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#8a6f2e]"
             >
+              <Mail className="h-3 w-3 opacity-70" />
               Email *
             </label>
             <Input
@@ -1018,18 +1024,19 @@ function CheckoutDetailsFields({
               onChange={(e) => setGuestEmail(e.target.value)}
               placeholder="you@example.com"
               disabled={loading}
-              className="h-12 border-slate-200 bg-white text-base sm:h-11 sm:text-sm"
+              className="h-12 border-[#e8dfc8] bg-white/90 text-base shadow-none placeholder:text-slate-400 focus-visible:border-[#9A7B2F]/45 focus-visible:ring-[#9A7B2F]/20 sm:h-11 sm:text-sm"
               autoComplete="email"
             />
           </div>
         ) : null}
 
         {showPhone ? (
-          <div className="space-y-1.5">
+          <div className="rounded-xl border border-sky-200/70 bg-[#eef5f8] p-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]">
             <label
               htmlFor={guestPhoneId}
-              className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400"
+              className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-sky-800/70"
             >
+              <Smartphone className="h-3 w-3 opacity-70" />
               Phone to debit *
             </label>
             <Input
@@ -1041,9 +1048,9 @@ function CheckoutDetailsFields({
               onChange={(e) => setCustomerPhone(e.target.value)}
               placeholder="07XXXXXXXX or 2567XXXXXXXX"
               disabled={loading}
-              className="h-12 border-slate-200 bg-white text-base sm:h-11 sm:text-sm"
+              className="h-12 border-sky-200/80 bg-white/90 text-base shadow-none placeholder:text-slate-400 focus-visible:border-sky-400/60 focus-visible:ring-sky-300/30 sm:h-11 sm:text-sm"
             />
-            <p className="text-[11px] leading-relaxed text-slate-400">
+            <p className="mt-2 text-[11px] leading-relaxed text-sky-900/45">
               Required for Mobile Money. Optional for card payments.
             </p>
           </div>

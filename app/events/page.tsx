@@ -16,6 +16,8 @@ import {
   uniqueKeywords,
 } from '@/lib/seo-keywords';
 
+export const dynamic = 'force-dynamic';
+
 interface EventsPageProps {
   searchParams?: Promise<{
     search?: string;

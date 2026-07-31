@@ -6,6 +6,8 @@ import { getApprovedEventsForLanding, getFeaturedEvents } from '@/lib/supabase-d
 import { buildPageMetadata, DEFAULT_DESCRIPTION } from '@/lib/seo';
 import type { Event } from '@/lib/supabase-client';
 
+export const dynamic = 'force-dynamic';
+
 export const metadata: Metadata = buildPageMetadata({
   title: 'Online Ticketing Platform for Uganda Events',
   description: DEFAULT_DESCRIPTION,

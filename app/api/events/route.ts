@@ -75,7 +75,12 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    return NextResponse.json(data || [], { status: 200 });
+    return NextResponse.json(data || [], {
+      status: 200,
+      headers: {
+        'Cache-Control': 'no-store, max-age=0',
+      },
+    });
   } catch (error) {
     console.error('Get events error:', error);
     return NextResponse.json(

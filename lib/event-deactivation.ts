@@ -4,6 +4,7 @@ import {
   hasPendingDeactivationRequest,
   hasPendingReactivationRequest,
 } from '@/lib/event-status';
+import { revalidatePublicEventPages } from '@/lib/revalidate-public-events';
 
 export type EventDeactivationFields = Pick<
   Event,
@@ -177,6 +178,7 @@ export async function resolveEventDeactivationRequest(params: {
         .select('*')
         .single();
       if (error || !data) throw new Error(error?.message || 'Failed to deactivate event');
+      revalidatePublicEventPages(params.eventId);
       return data as Event;
     }
 
@@ -209,6 +211,7 @@ export async function resolveEventDeactivationRequest(params: {
         .select('*')
         .single();
       if (error || !data) throw new Error(error?.message || 'Failed to reactivate event');
+      revalidatePublicEventPages(params.eventId);
       return data as Event;
     }
 
@@ -240,6 +243,7 @@ export async function resolveEventDeactivationRequest(params: {
       .select('*')
       .single();
     if (error || !data) throw new Error(error?.message || 'Failed to reactivate event');
+    revalidatePublicEventPages(params.eventId);
     return data as Event;
   }
 

@@ -137,3 +137,168 @@ export function EventBundleCard({ events, onSelectEvent, title }: EventBundleCar
     </section>
   )
 }
+
+type ImageEventMosaicProps = {
+  events: Event[]
+  onSelectEvent?: (event: Event) => void
+  className?: string
+}
+
+function MosaicImageTile({
+  event,
+  onSelect,
+  className,
+  sizes = '(max-width: 640px) 50vw, 280px',
+}: {
+  event: Event
+  onSelect?: (event: Event) => void
+  className?: string
+  sizes?: string
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect?.(event)}
+      aria-label={event.name}
+      className={cn(
+        'group relative overflow-hidden rounded-xl bg-slate-200 focus-visible:outline-none',
+        'focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2',
+        className
+      )}
+    >
+      <Image
+        src={event.image_url!}
+        alt=""
+        fill
+        sizes={sizes}
+        className="object-cover transition-transform duration-700 ease-out motion-safe:group-hover:scale-[1.05]"
+        loading="lazy"
+      />
+      <span className="absolute inset-0 bg-slate-950/0 transition-colors duration-300 group-hover:bg-slate-950/15" />
+    </button>
+  )
+}
+
+/** Dark editorial panel opposite the featured carousel (copy left, media right). */
+function MosaicSpotlightRow({
+  event,
+  onSelect,
+}: {
+  event: Event
+  onSelect?: (event: Event) => void
+}) {
+  const price = startingPrice(event)
+  const categoryLabel = event.category ? getEventCategoryLabel(event.category) : null
+
+  return (
+    <div className="col-span-2 grid overflow-hidden rounded-xl sm:grid-cols-[0.9fr_1.2fr] sm:items-stretch">
+      <button
+        type="button"
+        onClick={() => onSelect?.(event)}
+        className={cn(
+          'relative flex h-full min-h-[200px] flex-col justify-between overflow-hidden bg-slate-900 px-5 py-5 text-left sm:min-h-[240px] sm:px-6 sm:py-6',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#9A7B2F] focus-visible:ring-offset-2',
+          'transition-colors hover:bg-slate-800'
+        )}
+      >
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 opacity-[0.07]"
+          style={{
+            backgroundImage:
+              'radial-gradient(circle at 12% 18%, #9A7B2F 0%, transparent 42%), radial-gradient(circle at 88% 82%, #ffffff 0%, transparent 36%)',
+          }}
+        />
+        <div className="relative">
+          <div className="flex items-center gap-2">
+            <span className="h-px w-5 bg-[#9A7B2F]" />
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#c4a45a]">
+              {categoryLabel || 'Spotlight'}
+            </p>
+          </div>
+          <h3 className="mt-3 text-xl font-semibold leading-snug tracking-tight text-white sm:text-[1.35rem]">
+            {event.name}
+          </h3>
+          <p className="mt-2.5 line-clamp-3 text-sm leading-relaxed text-slate-300">
+            {event.description ||
+              'An unforgettable experience worth securing your seat for.'}
+          </p>
+        </div>
+
+        <div className="relative mt-6 flex flex-wrap items-end justify-between gap-3 border-t border-white/10 pt-4">
+          <div className="min-w-0">
+            <p className="truncate text-xs text-slate-400">
+              {formatShortDate(event.date)}
+              {event.venue ? ` · ${event.venue}` : ''}
+            </p>
+            <p className="mt-1.5 text-lg font-bold tabular-nums text-white">
+              From {formatDisplayPrice(event.currency, price)}
+            </p>
+          </div>
+          <span className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.1em] text-[#c4a45a]">
+            <Ticket className="h-3.5 w-3.5" />
+            Details
+          </span>
+        </div>
+      </button>
+
+      <MosaicImageTile
+        event={event}
+        onSelect={onSelect}
+        className="aspect-[16/10] rounded-none sm:aspect-auto sm:min-h-[240px]"
+        sizes="(max-width: 640px) 100vw, 55vw"
+      />
+    </div>
+  )
+}
+
+/** Image mosaic: 2/4 pure covers; 3 tiles pair a left copy card with the wide top image. */
+export function ImageEventMosaic({ events, onSelectEvent, className }: ImageEventMosaicProps) {
+  const tiles = events.filter((event) => Boolean((event.image_url || '').trim())).slice(0, 4)
+  if (tiles.length < 2) return null
+
+  const isTriple = tiles.length === 3
+
+  return (
+    <div
+      className={cn(
+        'overflow-hidden rounded-2xl border border-slate-200 bg-slate-100',
+        'shadow-[0_1px_2px_rgba(15,23,42,0.04)]',
+        className
+      )}
+      role="group"
+      aria-label="Event collection"
+    >
+      <div className="grid grid-cols-2 gap-1 p-1 sm:gap-1.5 sm:p-1.5">
+        {isTriple ? (
+          <>
+            <MosaicSpotlightRow event={tiles[0]} onSelect={onSelectEvent} />
+            <MosaicImageTile
+              event={tiles[1]}
+              onSelect={onSelectEvent}
+              className="aspect-[4/3]"
+            />
+            <MosaicImageTile
+              event={tiles[2]}
+              onSelect={onSelectEvent}
+              className="aspect-[4/3]"
+            />
+          </>
+        ) : (
+          tiles.map((event) => (
+            <MosaicImageTile
+              key={event.id}
+              event={event}
+              onSelect={onSelectEvent}
+              className={cn(
+                tiles.length === 4 && 'aspect-[4/3]',
+                tiles.length === 2 && 'aspect-[16/11]'
+              )}
+            />
+          ))
+        )}
+      </div>
+    </div>
+  )
+}
+
