@@ -17,6 +17,17 @@ import {
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+import {
   Calendar,
   ChevronDown,
   Eye,
@@ -29,7 +40,9 @@ import {
   Power,
   PowerOff,
   QrCode,
+  RefreshCw,
   Search,
+  Trash2,
 } from 'lucide-react';
 import { formatDateTime } from '../helpers';
 import { ProfilePageHeader } from '@/components/profile/profile-ui';
@@ -44,6 +57,7 @@ type StatusFilter =
   | 'expired'
   | 'rejected'
   | 'deactivated'
+  | 'removed'
   | 'affiliates';
 
 type Props = {
@@ -52,6 +66,7 @@ type Props = {
   selectedEventId: string;
   onSelectEvent: (eventId: string) => void;
   onEventPatched: (eventId: string, patch: Partial<Event>) => void;
+  onEventDeleted?: (eventId: string) => void;
 };
 
 function statusLabel(status: string | null) {
@@ -60,6 +75,7 @@ function statusLabel(status: string | null) {
   if (status === 'expired') return 'Past';
   if (status === 'rejected') return 'Rejected';
   if (status === 'deactivated') return 'Deactivated';
+  if (status === 'removed') return 'Deleted by Admin';
   return status || 'Unknown';
 }
 
@@ -70,6 +86,7 @@ const FILTERS: Array<{ key: StatusFilter; label: string }> = [
   { key: 'expired', label: 'Past' },
   { key: 'rejected', label: 'Rejected' },
   { key: 'deactivated', label: 'Deactivated' },
+  { key: 'removed', label: 'Deleted' },
   { key: 'affiliates', label: 'Affiliates' },
 ];
 
@@ -79,6 +96,7 @@ export function EventManagementHeader({
   selectedEventId,
   onSelectEvent,
   onEventPatched,
+  onEventDeleted,
 }: Props) {
   const { toast } = useToast();
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -87,11 +105,13 @@ export function EventManagementHeader({
   const [requestBusy, setRequestBusy] = useState(false);
   const [requestDialog, setRequestDialog] = useState<'deactivate' | 'reactivate' | null>(null);
   const [requestReason, setRequestReason] = useState('');
+  const [removedBusy, setRemovedBusy] = useState<'resubmit' | 'delete' | null>(null);
 
   const previewEvents = useMemo(() => (event ? [event as Event] : []), [event]);
   const lifecycleStatus = event ? getEventLifecycleStatus(event) : null;
   const isPendingApproval = lifecycleStatus === 'pending';
   const isDeactivated = event?.status === 'deactivated';
+  const isRemoved = event?.status === 'removed';
   const deactivationPending = event ? hasPendingDeactivationRequest(event) : false;
   const reactivationPending = event ? hasPendingReactivationRequest(event) : false;
   const cover = event?.image_url || event?.image_urls?.[0];
@@ -121,6 +141,7 @@ export function EventManagementHeader({
       expired: 0,
       rejected: 0,
       deactivated: 0,
+      removed: 0,
       affiliates: 0,
     };
     for (const listed of events) {
@@ -188,6 +209,51 @@ export function EventManagementHeader({
       });
     } finally {
       setRequestBusy(false);
+    }
+  };
+
+  const handleResubmit = async () => {
+    if (!event || !isRemoved) return;
+    setRemovedBusy('resubmit');
+    try {
+      const res = await fetch(`/api/events/${event.id}/resubmit`, { method: 'POST' });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(payload.error || 'Resubmit failed');
+      onEventPatched(event.id, payload.event || { status: 'pending', removed_at: null, removed_by: null });
+      toast({
+        title: 'Submitted for verification',
+        description: 'An admin will review your event again.',
+      });
+    } catch (error) {
+      toast({
+        title: 'Couldn’t resubmit',
+        description: error instanceof Error ? error.message : 'Try again',
+        variant: 'destructive',
+      });
+    } finally {
+      setRemovedBusy(null);
+    }
+  };
+
+  const handlePermanentDelete = async () => {
+    if (!event || !isRemoved) return;
+    setRemovedBusy('delete');
+    try {
+      const res = await fetch(`/api/events/${event.id}`, { method: 'DELETE' });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(payload.error || 'Delete failed');
+      toast({
+        title: 'Event deleted permanently',
+        description: `${event.name} was removed.`,
+      });
+      onEventDeleted?.(event.id);
+    } catch (error) {
+      toast({
+        title: 'Couldn’t delete event',
+        description: error instanceof Error ? error.message : 'Try again',
+        variant: 'destructive',
+      });
+      setRemovedBusy(null);
     }
   };
 
@@ -286,6 +352,7 @@ export function EventManagementHeader({
                 const thumb = listedEvent.image_url || listedEvent.image_urls?.[0];
                 const status = getEventLifecycleStatus(listedEvent);
                 const pending = status === 'pending';
+                const removed = status === 'removed';
 
                 return (
                   <button
@@ -296,9 +363,11 @@ export function EventManagementHeader({
                       'group flex min-w-[240px] max-w-[280px] shrink-0 items-center gap-3 rounded-xl border p-2.5 text-left transition-colors',
                       active
                         ? 'border-slate-900 bg-slate-900 text-white dark:border-slate-100 dark:bg-slate-100 dark:text-slate-900'
-                        : pending
-                          ? 'border-amber-300/60 bg-amber-50/70 text-amber-950 hover:border-amber-400/70 hover:bg-amber-50 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100'
-                          : 'border-border/70 bg-background hover:border-slate-300 hover:bg-muted/40'
+                        : removed
+                          ? 'border-red-300/70 bg-red-50/80 text-red-950 hover:border-red-400/70 hover:bg-red-50 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-100'
+                          : pending
+                            ? 'border-amber-300/60 bg-amber-50/70 text-amber-950 hover:border-amber-400/70 hover:bg-amber-50 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100'
+                            : 'border-border/70 bg-background hover:border-slate-300 hover:bg-muted/40'
                     )}
                   >
                     <div
@@ -346,6 +415,10 @@ export function EventManagementHeader({
                         <span className="mt-1 inline-flex rounded-md border border-amber-400/40 bg-amber-100/80 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/20 dark:text-amber-100">
                           Awaiting approval
                         </span>
+                      ) : removed ? (
+                        <span className="mt-1 inline-flex rounded-md border border-red-400/40 bg-red-100/80 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-red-900 dark:border-red-500/40 dark:bg-red-500/20 dark:text-red-100">
+                          Deleted by Admin
+                        </span>
                       ) : hasPendingDeactivationRequest(listedEvent) ? (
                         <span className="mt-1 inline-flex rounded-md border border-orange-400/40 bg-orange-100/80 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-orange-900">
                           Deactivation pending
@@ -363,7 +436,7 @@ export function EventManagementHeader({
           )}
 
           {event ? (
-            <div className="overflow-hidden rounded-xl border border-border/70 bg-background">
+            <div className="relative overflow-hidden rounded-xl border border-border/70 bg-background">
               <div className="relative h-32 sm:h-44">
                 {cover ? (
                   <Image
@@ -391,7 +464,9 @@ export function EventManagementHeader({
                             ? 'border-amber-400/30 bg-amber-500/20 text-amber-100'
                             : lifecycleStatus === 'deactivated'
                               ? 'border-rose-400/30 bg-rose-500/20 text-rose-100'
-                              : 'border-white/20 bg-white/10 text-white/90'
+                              : lifecycleStatus === 'removed'
+                                ? 'border-red-400/40 bg-red-500/30 text-red-50'
+                                : 'border-white/20 bg-white/10 text-white/90'
                       )}
                     >
                       {event ? getEventLifecycleLabel(event) : statusLabel(lifecycleStatus)}
@@ -417,10 +492,29 @@ export function EventManagementHeader({
                     </span>
                   </div>
                 </div>
+
+                {isRemoved ? (
+                  <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-950/55 backdrop-blur-[2px]">
+                    <div className="mx-4 max-w-sm rounded-xl border border-red-400/40 bg-red-950/80 px-4 py-3 text-center shadow-lg">
+                      <p className="text-sm font-semibold tracking-tight text-red-50">
+                        Event deleted by Admin
+                      </p>
+                      <p className="mt-1 text-xs leading-relaxed text-red-100/80">
+                        This event is hidden from the public. Edit and resubmit for verification, or
+                        delete it permanently.
+                      </p>
+                    </div>
+                  </div>
+                ) : null}
               </div>
 
               <div className="space-y-3 border-t border-border/60 p-3 sm:p-4">
-                {isPendingApproval || isDeactivated ? (
+                {isRemoved ? (
+                  <div className="rounded-lg border border-red-300/60 bg-red-50/80 px-3 py-2 text-xs text-red-900 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-100">
+                    Deleted by admin — not visible on Ticket95 until you resubmit and it is approved
+                    again.
+                  </div>
+                ) : isPendingApproval || isDeactivated ? (
                   <div className="rounded-lg border border-amber-300/60 bg-amber-50/70 px-3 py-2 text-xs text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-100">
                     {isDeactivated
                       ? 'This event is deactivated. New ticket sales are paused until an admin reactivates it.'
@@ -434,109 +528,183 @@ export function EventManagementHeader({
                 )}
 
                 <div className="flex flex-wrap gap-2 border-t border-border/50 pt-3">
-                  {isPendingApproval || isDeactivated ? (
-                    <Button size="sm" className="h-9 rounded-lg" disabled>
-                      <QrCode className="mr-1.5 h-4 w-4" />
-                      Verify tickets
-                    </Button>
+                  {isRemoved ? (
+                    <>
+                      <Button asChild variant="outline" size="sm" className="h-9 rounded-lg">
+                        <Link href={`/organizer/dashboard/edit/${event.id}`}>
+                          <Pencil className="mr-1.5 h-4 w-4" />
+                          Edit event
+                        </Link>
+                      </Button>
+                      <Button
+                        size="sm"
+                        className="h-9 rounded-lg"
+                        disabled={!!removedBusy}
+                        onClick={() => void handleResubmit()}
+                      >
+                        {removedBusy === 'resubmit' ? (
+                          <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                        ) : (
+                          <RefreshCw className="mr-1.5 h-4 w-4" />
+                        )}
+                        Resubmit for verification
+                      </Button>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            className="h-9 rounded-lg"
+                            disabled={!!removedBusy}
+                          >
+                            {removedBusy === 'delete' ? (
+                              <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                            ) : (
+                              <Trash2 className="mr-1.5 h-4 w-4" />
+                            )}
+                            Delete event
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Delete permanently?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              This permanently removes <strong>{event.name}</strong> and related
+                              orders/tickets. This cannot be undone.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                              className="rounded-xl bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                void handlePermanentDelete();
+                              }}
+                            >
+                              Delete permanently
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </>
                   ) : (
-                    <Button asChild size="sm" className="h-9 rounded-lg">
-                      <Link href={`/profile/verify?event=${event.id}`}>
-                        <QrCode className="mr-1.5 h-4 w-4" />
-                        Verify tickets
-                      </Link>
-                    </Button>
-                  )}
-                  <Button asChild variant="outline" size="sm" className="h-9 rounded-lg">
-                    <Link href={`/organizer/dashboard/edit/${event.id}`}>
-                      <Pencil className="mr-1.5 h-4 w-4" />
-                      Edit event
-                    </Link>
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-9 rounded-lg"
-                    onClick={() => setPreviewOpen(true)}
-                  >
-                    <Eye className="mr-1.5 h-4 w-4" />
-                    Preview card
-                  </Button>
-                  {isPendingApproval || isDeactivated ? (
-                    <Button variant="ghost" size="sm" className="h-9 rounded-lg text-muted-foreground" disabled>
-                      <ExternalLink className="mr-1.5 h-4 w-4" />
-                      Public page
-                    </Button>
-                  ) : (
-                    <Button asChild variant="ghost" size="sm" className="h-9 rounded-lg text-muted-foreground">
-                      <Link href={`/events/${event.id}`}>
-                        <ExternalLink className="mr-1.5 h-4 w-4" />
-                        Public page
-                      </Link>
-                    </Button>
-                  )}
+                    <>
+                      {isPendingApproval || isDeactivated ? (
+                        <Button size="sm" className="h-9 rounded-lg" disabled>
+                          <QrCode className="mr-1.5 h-4 w-4" />
+                          Verify tickets
+                        </Button>
+                      ) : (
+                        <Button asChild size="sm" className="h-9 rounded-lg">
+                          <Link href={`/profile/verify?event=${event.id}`}>
+                            <QrCode className="mr-1.5 h-4 w-4" />
+                            Verify tickets
+                          </Link>
+                        </Button>
+                      )}
+                      <Button asChild variant="outline" size="sm" className="h-9 rounded-lg">
+                        <Link href={`/organizer/dashboard/edit/${event.id}`}>
+                          <Pencil className="mr-1.5 h-4 w-4" />
+                          Edit event
+                        </Link>
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-9 rounded-lg"
+                        onClick={() => setPreviewOpen(true)}
+                      >
+                        <Eye className="mr-1.5 h-4 w-4" />
+                        Preview card
+                      </Button>
+                      {isPendingApproval || isDeactivated ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-9 rounded-lg text-muted-foreground"
+                          disabled
+                        >
+                          <ExternalLink className="mr-1.5 h-4 w-4" />
+                          Public page
+                        </Button>
+                      ) : (
+                        <Button
+                          asChild
+                          variant="ghost"
+                          size="sm"
+                          className="h-9 rounded-lg text-muted-foreground"
+                        >
+                          <Link href={`/events/${event.id}`}>
+                            <ExternalLink className="mr-1.5 h-4 w-4" />
+                            Public page
+                          </Link>
+                        </Button>
+                      )}
 
-                  {lifecycleStatus === 'approved' && !deactivationPending ? (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-9 rounded-lg border-rose-200 text-rose-700 hover:bg-rose-50"
-                      disabled={requestBusy}
-                      onClick={() => {
-                        setRequestReason('');
-                        setRequestDialog('deactivate');
-                      }}
-                    >
-                      <PowerOff className="mr-1.5 h-4 w-4" />
-                      Request deactivation
-                    </Button>
-                  ) : null}
-
-                  {deactivationPending ? (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-9 rounded-lg"
-                      disabled={requestBusy}
-                      onClick={() => void cancelLifecycleRequest('deactivate')}
-                    >
-                      {requestBusy ? (
-                        <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                      {lifecycleStatus === 'approved' && !deactivationPending ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-9 rounded-lg border-rose-200 text-rose-700 hover:bg-rose-50"
+                          disabled={requestBusy}
+                          onClick={() => {
+                            setRequestReason('');
+                            setRequestDialog('deactivate');
+                          }}
+                        >
+                          <PowerOff className="mr-1.5 h-4 w-4" />
+                          Request deactivation
+                        </Button>
                       ) : null}
-                      Cancel deactivation request
-                    </Button>
-                  ) : null}
 
-                  {isDeactivated && !reactivationPending ? (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-9 rounded-lg border-sky-200 text-sky-800 hover:bg-sky-50"
-                      disabled={requestBusy}
-                      onClick={() => {
-                        setRequestReason('');
-                        setRequestDialog('reactivate');
-                      }}
-                    >
-                      <Power className="mr-1.5 h-4 w-4" />
-                      Request reactivation
-                    </Button>
-                  ) : null}
-
-                  {reactivationPending ? (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-9 rounded-lg"
-                      disabled={requestBusy}
-                      onClick={() => void cancelLifecycleRequest('reactivate')}
-                    >
-                      {requestBusy ? (
-                        <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                      {deactivationPending ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-9 rounded-lg"
+                          disabled={requestBusy}
+                          onClick={() => void cancelLifecycleRequest('deactivate')}
+                        >
+                          {requestBusy ? (
+                            <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                          ) : null}
+                          Cancel deactivation request
+                        </Button>
                       ) : null}
-                      Cancel reactivation request
-                    </Button>
-                  ) : null}
+
+                      {isDeactivated && !reactivationPending ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-9 rounded-lg border-sky-200 text-sky-800 hover:bg-sky-50"
+                          disabled={requestBusy}
+                          onClick={() => {
+                            setRequestReason('');
+                            setRequestDialog('reactivate');
+                          }}
+                        >
+                          <Power className="mr-1.5 h-4 w-4" />
+                          Request reactivation
+                        </Button>
+                      ) : null}
+
+                      {reactivationPending ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-9 rounded-lg"
+                          disabled={requestBusy}
+                          onClick={() => void cancelLifecycleRequest('reactivate')}
+                        >
+                          {requestBusy ? (
+                            <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                          ) : null}
+                          Cancel reactivation request
+                        </Button>
+                      ) : null}
+                    </>
+                  )}
                 </div>
               </div>
             </div>

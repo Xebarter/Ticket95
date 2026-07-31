@@ -62,7 +62,7 @@ export function EventDetailsView({
 
   return (
     <>
-      <div className="mx-auto max-w-6xl px-4 pb-24 pt-6 sm:px-6 sm:pt-8 lg:px-8 lg:pb-12">
+      <div className="mx-auto max-w-6xl px-4 pb-28 pt-6 sm:px-6 sm:pt-8 lg:px-8 lg:pb-12">
         <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-10">
           <div className="min-w-0 space-y-8">
             <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-slate-900 shadow-[0_12px_40px_rgba(15,23,42,0.08)]">

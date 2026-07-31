@@ -67,6 +67,7 @@ export function getEventLifecycleLabel(
   if (status === 'expired') return 'Past';
   if (status === 'rejected') return 'Rejected';
   if (status === 'deactivated') return 'Deactivated';
+  if (status === 'removed') return 'Deleted by Admin';
   return status;
 }
 

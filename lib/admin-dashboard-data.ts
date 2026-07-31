@@ -16,7 +16,7 @@ export type AdminEventRow = {
   ticket_price: number;
   organizer_name: string;
   organizer_phone: string | null;
-  status: 'pending' | 'approved' | 'rejected' | 'deactivated' | string;
+  status: 'pending' | 'approved' | 'rejected' | 'deactivated' | 'removed' | string;
   created_at: string;
   is_featured: boolean | null;
   deactivation_reason?: string | null;
@@ -31,6 +31,7 @@ export type AdminStats = {
   rejected: number;
   expired: number;
   deactivated: number;
+  removed: number;
   deactivationRequests: number;
   reactivationRequests: number;
 };
@@ -64,6 +65,7 @@ export async function getAdminStats(): Promise<AdminStats> {
       rejected: 0,
       expired: 0,
       deactivated: 0,
+      removed: 0,
       deactivationRequests: 0,
       reactivationRequests: 0,
     };
@@ -75,6 +77,7 @@ export async function getAdminStats(): Promise<AdminStats> {
   let rejected = 0;
   let expired = 0;
   let deactivated = 0;
+  let removed = 0;
   let deactivationRequests = 0;
   let reactivationRequests = 0;
 
@@ -85,6 +88,10 @@ export async function getAdminStats(): Promise<AdminStats> {
     }
     if (row.status === 'rejected') {
       rejected += 1;
+      continue;
+    }
+    if (row.status === 'removed') {
+      removed += 1;
       continue;
     }
     if (row.status === 'deactivated') {
@@ -109,6 +116,7 @@ export async function getAdminStats(): Promise<AdminStats> {
     rejected,
     expired,
     deactivated,
+    removed,
     deactivationRequests,
     reactivationRequests,
   };

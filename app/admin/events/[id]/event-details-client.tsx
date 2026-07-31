@@ -13,6 +13,7 @@ import {
   Loader2,
   MapPin,
   Phone,
+  ShieldOff,
   Trash2,
   User,
   X,
@@ -77,6 +78,7 @@ function statusClass(status: string) {
   if (status === 'approved') return 'border-emerald-500/35 bg-emerald-500/10 text-emerald-800';
   if (status === 'rejected') return 'border-red-500/35 bg-red-500/10 text-red-800';
   if (status === 'deactivated') return 'border-rose-500/35 bg-rose-500/10 text-rose-800';
+  if (status === 'removed') return 'border-red-600/40 bg-red-600/10 text-red-900';
   if (status === 'expired') return 'border-slate-500/35 bg-slate-500/10 text-slate-700';
   if (status === 'completed') return 'border-emerald-500/35 bg-emerald-500/10 text-emerald-800';
   if (status === 'failed') return 'border-red-500/35 bg-red-500/10 text-red-800';
@@ -95,7 +97,9 @@ export default function AdminEventDetailsClient({
   const router = useRouter();
   const { toast } = useToast();
   const [event, setEvent] = useState(initialEvent);
-  const [busy, setBusy] = useState<'approve' | 'reject' | 'delete' | 'deactivation' | null>(null);
+  const [busy, setBusy] = useState<
+    'approve' | 'reject' | 'delete' | 'deactivation' | 'unverify' | null
+  >(null);
   const [rejectOpen, setRejectOpen] = useState(false);
   const [note, setNote] = useState('');
 
@@ -134,6 +138,8 @@ export default function AdminEventDetailsClient({
         status: approved ? 'approved' : 'rejected',
         lifecycleStatus: approved ? 'approved' : 'rejected',
         rejection_reason: approved ? undefined : note.trim() || prev.rejection_reason,
+        removed_at: approved ? null : prev.removed_at,
+        removed_by: approved ? null : prev.removed_by,
       }));
       refresh();
     } catch (err) {
@@ -147,29 +153,81 @@ export default function AdminEventDetailsClient({
     }
   };
 
-  const handleDelete = async () => {
+  const handleSoftRemove = async () => {
     setBusy('delete');
     try {
-      const res = await fetch(`/api/admin/events/${event.id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/admin/events/${event.id}/remove`, { method: 'POST' });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || 'Delete failed');
+      if (!res.ok) throw new Error(data.error || 'Remove failed');
       toast({
         title: 'Event deleted',
-        description: `${event.name} and related records were removed.`,
+        description: `${event.name} was removed from the public site. The organizer can edit and resubmit.`,
       });
-      router.push('/admin/events');
-      router.refresh();
+      if (data.event) {
+        setEvent((prev) => ({
+          ...prev,
+          ...data.event,
+          lifecycleStatus: 'removed',
+        }));
+      } else {
+        setEvent((prev) => ({
+          ...prev,
+          status: 'removed',
+          lifecycleStatus: 'removed',
+          is_featured: false,
+        }));
+      }
+      refresh();
     } catch (err) {
       toast({
         title: 'Couldn’t delete event',
         description: err instanceof Error ? err.message : 'Try again',
         variant: 'destructive',
       });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const handleUnverify = async () => {
+    setBusy('unverify');
+    try {
+      const res = await fetch(`/api/admin/events/${event.id}/unverify`, { method: 'POST' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Unverify failed');
+      toast({
+        title: 'Event unverified',
+        description: `${event.name} is pending review again and hidden from the public.`,
+      });
+      if (data.event) {
+        setEvent((prev) => ({
+          ...prev,
+          ...data.event,
+          lifecycleStatus: 'pending',
+        }));
+      } else {
+        setEvent((prev) => ({
+          ...prev,
+          status: 'pending',
+          lifecycleStatus: 'pending',
+          is_featured: false,
+        }));
+      }
+      refresh();
+    } catch (err) {
+      toast({
+        title: 'Couldn’t unverify',
+        description: err instanceof Error ? err.message : 'Try again',
+        variant: 'destructive',
+      });
+    } finally {
       setBusy(null);
     }
   };
 
   const isPending = event.lifecycleStatus === 'pending' || event.status === 'pending';
+  const isApproved = event.status === 'approved';
+  const isRemoved = event.status === 'removed';
   const deactivationPending = hasPendingDeactivationRequest(event);
   const reactivationPending = hasPendingReactivationRequest(event);
   const isDeactivated = event.status === 'deactivated';
@@ -253,49 +311,96 @@ export default function AdminEventDetailsClient({
               Public page
             </Link>
           </Button>
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button
-                variant="destructive"
-                size="sm"
-                className="h-8 rounded-full px-3 text-xs"
-                disabled={busy === 'delete'}
-              >
-                {busy === 'delete' ? (
-                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <Trash2 className="mr-1.5 h-3.5 w-3.5" />
-                )}
-                Delete
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Delete this event?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This permanently removes <strong>{event.name}</strong>
-                  {stats.orderCount > 0 || stats.ticketCount > 0
-                    ? `, including ${stats.orderCount} order${stats.orderCount === 1 ? '' : 's'} and ${stats.ticketCount} ticket${stats.ticketCount === 1 ? '' : 's'}`
-                    : ''}
-                  . This cannot be undone.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel>
-                <AlertDialogAction
-                  className="rounded-xl bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    void handleDelete();
-                  }}
+          {isApproved && !deactivationPending ? (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 rounded-full px-3 text-xs"
+                  disabled={!!busy}
                 >
-                  Delete event
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+                  {busy === 'unverify' ? (
+                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <ShieldOff className="mr-1.5 h-3.5 w-3.5" />
+                  )}
+                  Unverify
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Unverify this event?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    <strong>{event.name}</strong> will leave the public site and return to pending
+                    review until you approve it again.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    className="rounded-xl"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      void handleUnverify();
+                    }}
+                  >
+                    Unverify
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          ) : null}
+          {!isRemoved ? (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  className="h-8 rounded-full px-3 text-xs"
+                  disabled={busy === 'delete'}
+                >
+                  {busy === 'delete' ? (
+                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                  )}
+                  Delete
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete this event?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This removes <strong>{event.name}</strong> from the public site. The organizer
+                    will see it marked as deleted by admin and can edit, resubmit for verification,
+                    or permanently delete it.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    className="rounded-xl bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      void handleSoftRemove();
+                    }}
+                  >
+                    Delete event
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          ) : null}
         </div>
       </div>
+
+      {isRemoved ? (
+        <div className="rounded-2xl border border-red-500/30 bg-red-500/[0.06] p-4 text-sm text-red-900">
+          This event was deleted by admin. It is hidden from the public. The organizer can edit and
+          resubmit it for verification.
+        </div>
+      ) : null}
 
       {isPending ? (
         <div className="space-y-3 rounded-2xl border border-amber-500/30 bg-amber-500/[0.06] p-4">
@@ -378,7 +483,7 @@ export default function AdminEventDetailsClient({
           ) : null}
           <p className="text-xs text-muted-foreground">
             Deactivation hides the event and stops new sales. Existing tickets remain valid. Delete
-            permanently removes the event and related orders/tickets.
+            removes the event from the public site so the organizer can edit and resubmit.
           </p>
           <div className="flex flex-wrap gap-2">
             {deactivationPending ? (

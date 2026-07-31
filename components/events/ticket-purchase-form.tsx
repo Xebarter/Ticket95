@@ -134,7 +134,6 @@ export function useTicketPurchase({
   const [ticketsError, setTicketsError] = useState('');
   const [hasFetchedSponsors, setHasFetchedSponsors] = useState(Boolean(sponsors?.length));
   const [guestEmail, setGuestEmail] = useState('');
-  const [guestName, setGuestName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
 
   const currency = event.currency || 'USD';
@@ -148,7 +147,6 @@ export function useTicketPurchase({
     setLoading(false);
     setLoadingMethod(null);
     setGuestEmail('');
-    setGuestName('');
     setCustomerPhone('');
   }, []);
 
@@ -305,7 +303,6 @@ export function useTicketPurchase({
           eventId: event.id,
           selectedQuantities,
           customerEmail: user?.email || guestEmail.trim(),
-          customerName: guestName.trim() || undefined,
           ...(normalizedPhone ? { customerPhone: normalizedPhone } : {}),
           affiliateCode: event.affiliates_enabled ? getStoredAffiliateCode() || undefined : undefined,
         }),
@@ -382,8 +379,6 @@ export function useTicketPurchase({
     ticketsError,
     guestEmail,
     setGuestEmail,
-    guestName,
-    setGuestName,
     customerPhone,
     setCustomerPhone,
     totalQuantity,
@@ -418,7 +413,6 @@ export function TicketPurchaseDesktopAside({
   id?: string;
 }) {
   const guestEmailId = useId();
-  const guestNameId = useId();
 
   if (purchase.isSoldOut) {
     return (
@@ -466,7 +460,6 @@ export function TicketPurchaseDesktopAside({
           purchase={purchase}
           showSponsors={false}
           guestEmailId={guestEmailId}
-          guestNameId={guestNameId}
           compactTickets
         />
         <TicketPurchaseCheckoutBar purchase={purchase} showCancel={false} />
@@ -486,7 +479,6 @@ export function TicketPurchaseMobileSection({
   id?: string;
 }) {
   const guestEmailId = useId();
-  const guestNameId = useId();
   const { isSoldOut, success, totalQuantity, totalPrice, canCheckout, handlePurchase, loading } =
     purchase;
 
@@ -506,37 +498,35 @@ export function TicketPurchaseMobileSection({
             purchase={purchase}
             showSponsors={false}
             guestEmailId={guestEmailId}
-            guestNameId={guestNameId}
           />
-          <TicketPurchaseCheckoutBar purchase={purchase} showCancel={false} />
         </div>
       </section>
 
       {!success && totalQuantity > 0 ? (
-        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 p-4 backdrop-blur-md lg:hidden">
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-md lg:hidden">
           <div className="mx-auto max-w-lg">
-            <div className="mb-2 flex items-center justify-between">
+            <div className="mb-2.5 flex items-center justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
                   Total · {totalQuantity} ticket{totalQuantity === 1 ? '' : 's'}
                 </p>
-                <p className="text-lg font-bold text-slate-900">
+                <p className="text-lg font-bold tabular-nums text-slate-900">
                   {formatDisplayPrice(event.currency, totalPrice)}
                 </p>
               </div>
             </div>
             {isFreePrice(totalPrice) ? (
               <Button
-                className="h-11 w-full rounded-lg bg-slate-900 font-semibold hover:bg-slate-800 disabled:bg-slate-300"
+                className="h-12 w-full rounded-xl bg-slate-900 text-[15px] font-semibold hover:bg-slate-800 disabled:bg-slate-300"
                 onClick={() => handlePurchase('mobile_money')}
                 disabled={!canCheckout}
               >
                 {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Get free'}
               </Button>
             ) : (
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-2.5">
                 <Button
-                  className="h-11 rounded-lg bg-slate-900 font-semibold text-white hover:bg-slate-800 disabled:bg-slate-300"
+                  className="h-12 rounded-xl bg-slate-900 font-semibold text-white hover:bg-slate-800 disabled:bg-slate-300"
                   onClick={() => handlePurchase('mobile_money')}
                   disabled={!canCheckout}
                 >
@@ -544,13 +534,13 @@ export function TicketPurchaseMobileSection({
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
                     <span className="inline-flex items-center gap-1.5 text-sm">
-                      <Smartphone className="h-3.5 w-3.5" />
-                      Mobile
+                      <Smartphone className="h-4 w-4 shrink-0" />
+                      Mobile Money
                     </span>
                   )}
                 </Button>
                 <Button
-                  className="h-11 rounded-lg border border-slate-200 bg-white font-semibold text-slate-900 hover:bg-slate-50 disabled:bg-slate-100"
+                  className="h-12 rounded-xl border border-slate-200 bg-white font-semibold text-slate-900 hover:bg-slate-50 disabled:bg-slate-100"
                   onClick={() => handlePurchase('card')}
                   disabled={!canCheckout}
                 >
@@ -558,7 +548,7 @@ export function TicketPurchaseMobileSection({
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
                     <span className="inline-flex items-center gap-1.5 text-sm">
-                      <CreditCard className="h-3.5 w-3.5" />
+                      <CreditCard className="h-4 w-4 shrink-0" />
                       Card
                     </span>
                   )}
@@ -621,14 +611,12 @@ export function TicketPurchaseFormBody({
   purchase,
   showSponsors = true,
   guestEmailId = 'guest-email',
-  guestNameId = 'guest-name',
   guestPhoneId = 'customer-phone',
   compactTickets = false,
 }: {
   purchase: ReturnType<typeof useTicketPurchase>;
   showSponsors?: boolean;
   guestEmailId?: string;
-  guestNameId?: string;
   guestPhoneId?: string;
   compactTickets?: boolean;
 }) {
@@ -645,8 +633,6 @@ export function TicketPurchaseFormBody({
     ticketsError,
     guestEmail,
     setGuestEmail,
-    guestName,
-    setGuestName,
     customerPhone,
     setCustomerPhone,
     totalQuantity,
@@ -658,10 +644,11 @@ export function TicketPurchaseFormBody({
     formatPrice,
   } = purchase;
 
-  const showMomoPhone = totalQuantity > 0 && !isFreePrice(totalPrice);
+  const showPhone = totalQuantity > 0 && !isFreePrice(totalPrice);
+  const showDetails = totalQuantity > 0 && (!user || showPhone);
 
   return (
-    <div className="space-y-5 px-5 py-5">
+    <div className="space-y-5 px-4 py-4 sm:px-5 sm:py-5">
       <div className="flex flex-wrap items-center gap-2">
         <span className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-medium text-slate-600">
           <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
@@ -737,23 +724,16 @@ export function TicketPurchaseFormBody({
             />
           ) : null}
 
-          {!user ? (
-            <GuestCheckoutFields
+          {showDetails ? (
+            <CheckoutDetailsFields
               guestEmailId={guestEmailId}
-              guestNameId={guestNameId}
+              guestPhoneId={guestPhoneId}
+              showEmail={!user}
+              showPhone={showPhone}
               guestEmail={guestEmail}
               setGuestEmail={setGuestEmail}
-              guestName={guestName}
-              setGuestName={setGuestName}
-              loading={loading}
-            />
-          ) : null}
-
-          {showMomoPhone ? (
-            <MobileMoneyPhoneField
-              id={guestPhoneId}
-              value={customerPhone}
-              onChange={setCustomerPhone}
+              customerPhone={customerPhone}
+              setCustomerPhone={setCustomerPhone}
               loading={loading}
             />
           ) : null}
@@ -983,112 +963,91 @@ function OrderSummary({
   );
 }
 
-function MobileMoneyPhoneField({
-  id,
-  value,
-  onChange,
+function CheckoutDetailsFields({
+  guestEmailId,
+  guestPhoneId,
+  showEmail,
+  showPhone,
+  guestEmail,
+  setGuestEmail,
+  customerPhone,
+  setCustomerPhone,
   loading,
 }: {
-  id: string;
-  value: string;
-  onChange: (value: string) => void;
+  guestEmailId: string;
+  guestPhoneId: string;
+  showEmail: boolean;
+  showPhone: boolean;
+  guestEmail: string;
+  setGuestEmail: (value: string) => void;
+  customerPhone: string;
+  setCustomerPhone: (value: string) => void;
   loading: boolean;
 }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4">
+    <div className="rounded-2xl border border-slate-200 bg-white p-4">
       <div className="flex items-start gap-3">
-        <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-900 text-white">
+        <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-white">
           <Smartphone className="h-4 w-4" />
         </span>
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-slate-900">Mobile money number</p>
-          <p className="mt-0.5 text-xs leading-relaxed text-slate-500">
-            Number that will be charged for this payment (MTN or Airtel Uganda).
+          <p className="text-sm font-semibold text-slate-900">
+            {showEmail ? 'Checkout details' : 'Payment details'}
           </p>
-          <div className="mt-3 space-y-1.5">
+          <p className="mt-0.5 text-xs leading-relaxed text-slate-500">
+            {showPhone
+              ? 'Phone number that will be charged for mobile money (MTN or Airtel Uganda).'
+              : 'Use the same email when you create an account later to sync these tickets.'}
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-4 space-y-3.5">
+        {showEmail ? (
+          <div className="space-y-1.5">
             <label
-              htmlFor={id}
+              htmlFor={guestEmailId}
+              className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400"
+            >
+              Email *
+            </label>
+            <Input
+              id={guestEmailId}
+              type="email"
+              value={guestEmail}
+              onChange={(e) => setGuestEmail(e.target.value)}
+              placeholder="you@example.com"
+              disabled={loading}
+              className="h-12 border-slate-200 bg-white text-base sm:h-11 sm:text-sm"
+              autoComplete="email"
+            />
+          </div>
+        ) : null}
+
+        {showPhone ? (
+          <div className="space-y-1.5">
+            <label
+              htmlFor={guestPhoneId}
               className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400"
             >
               Phone to debit *
             </label>
             <Input
-              id={id}
+              id={guestPhoneId}
               type="tel"
               inputMode="tel"
               autoComplete="tel"
-              value={value}
-              onChange={(e) => onChange(e.target.value)}
+              value={customerPhone}
+              onChange={(e) => setCustomerPhone(e.target.value)}
               placeholder="07XXXXXXXX or 2567XXXXXXXX"
               disabled={loading}
-              className="h-10 border-slate-200 bg-white"
+              className="h-12 border-slate-200 bg-white text-base sm:h-11 sm:text-sm"
             />
+            <p className="text-[11px] leading-relaxed text-slate-400">
+              Required for Mobile Money. Optional for card payments.
+            </p>
           </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function GuestCheckoutFields({
-  guestEmailId,
-  guestNameId,
-  guestEmail,
-  setGuestEmail,
-  guestName,
-  setGuestName,
-  loading,
-}: {
-  guestEmailId: string;
-  guestNameId: string;
-  guestEmail: string;
-  setGuestEmail: (value: string) => void;
-  guestName: string;
-  setGuestName: (value: string) => void;
-  loading: boolean;
-}) {
-  return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4">
-      <p className="text-sm font-semibold text-slate-900">Guest checkout</p>
-      <p className="mt-1 text-xs leading-relaxed text-slate-500">
-        Use the same email when you create an account later to sync these tickets to your profile.
-      </p>
-      <div className="mt-4 space-y-3">
-        <div className="space-y-1.5">
-          <label
-            htmlFor={guestEmailId}
-            className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400"
-          >
-            Email *
-          </label>
-          <Input
-            id={guestEmailId}
-            type="email"
-            value={guestEmail}
-            onChange={(e) => setGuestEmail(e.target.value)}
-            placeholder="you@example.com"
-            disabled={loading}
-            className="h-10 border-slate-200 bg-white"
-            autoComplete="email"
-          />
-        </div>
-        <div className="space-y-1.5">
-          <label
-            htmlFor={guestNameId}
-            className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400"
-          >
-            Full name (optional)
-          </label>
-          <Input
-            id={guestNameId}
-            value={guestName}
-            onChange={(e) => setGuestName(e.target.value)}
-            placeholder="Jane Doe"
-            disabled={loading}
-            className="h-10 border-slate-200 bg-white"
-            autoComplete="name"
-          />
-        </div>
+        ) : null}
       </div>
     </div>
   );
@@ -1098,10 +1057,12 @@ export function TicketPurchaseCheckoutBar({
   purchase,
   onCancel,
   showCancel = true,
+  className,
 }: {
   purchase: ReturnType<typeof useTicketPurchase>;
   onCancel?: () => void;
   showCancel?: boolean;
+  className?: string;
 }) {
   const { totalQuantity, totalPrice, loading, loadingMethod, success, canCheckout, handlePurchase, formatPrice, currencySymbol } =
     purchase;
@@ -1109,7 +1070,12 @@ export function TicketPurchaseCheckoutBar({
   const isFree = isFreePrice(totalPrice);
 
   return (
-    <div className="shrink-0 border-t border-slate-200 bg-white px-4 py-2.5 sm:px-5 sm:py-3">
+    <div
+      className={cn(
+        'shrink-0 border-t border-slate-200 bg-white px-4 py-2.5 sm:px-5 sm:py-3',
+        className
+      )}
+    >
       <div className="mb-2 flex items-center justify-between gap-3">
         <div className="flex items-baseline gap-4">
           <div>
@@ -1144,7 +1110,7 @@ export function TicketPurchaseCheckoutBar({
       {isFree ? (
         <Button
           type="button"
-          className="h-10 w-full bg-slate-900 font-semibold text-white shadow-none hover:bg-slate-800 disabled:bg-slate-300 sm:h-11"
+          className="h-11 w-full rounded-xl bg-slate-900 font-semibold text-white shadow-none hover:bg-slate-800 disabled:bg-slate-300"
           onClick={() => handlePurchase('mobile_money')}
           disabled={!canCheckout}
           aria-label="Get free tickets"
@@ -1165,7 +1131,7 @@ export function TicketPurchaseCheckoutBar({
           <div className="grid grid-cols-2 gap-2">
             <Button
               type="button"
-              className="h-10 w-full bg-slate-900 px-2 text-sm font-semibold text-white shadow-none hover:bg-slate-800 disabled:bg-slate-300 sm:h-11 sm:text-base"
+              className="h-11 w-full rounded-xl bg-slate-900 px-2 text-sm font-semibold text-white shadow-none hover:bg-slate-800 disabled:bg-slate-300 sm:text-base"
               onClick={() => handlePurchase('mobile_money')}
               disabled={!canCheckout}
               aria-label="Pay with Mobile Money"
@@ -1186,7 +1152,7 @@ export function TicketPurchaseCheckoutBar({
             </Button>
             <Button
               type="button"
-              className="h-10 w-full border border-slate-200 bg-white px-2 text-sm font-semibold text-slate-900 shadow-none hover:bg-slate-50 disabled:bg-slate-100 disabled:text-slate-400 sm:h-11 sm:text-base"
+              className="h-11 w-full rounded-xl border border-slate-200 bg-white px-2 text-sm font-semibold text-slate-900 shadow-none hover:bg-slate-50 disabled:bg-slate-100 disabled:text-slate-400 sm:text-base"
               onClick={() => handlePurchase('card')}
               disabled={!canCheckout}
               aria-label="Pay with Card"
@@ -1206,7 +1172,7 @@ export function TicketPurchaseCheckoutBar({
               )}
             </Button>
           </div>
-          <div className="mt-1 grid grid-cols-2 gap-2 text-center">
+          <div className="mt-1.5 grid grid-cols-2 gap-2 text-center">
             <p className="text-[10px] leading-none text-slate-400">MTN / Airtel</p>
             <p className="text-[10px] leading-none text-slate-400">Visa / Mastercard</p>
           </div>

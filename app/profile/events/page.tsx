@@ -19,7 +19,7 @@ import { cn } from '@/lib/utils';
 import { getEventLifecycleStatus } from '@/lib/event-status';
 
 export default function ProfileEventsPage() {
-  const { loading, myEvents, patchEvent } = useProfileData();
+  const { loading, myEvents, patchEvent, removeEvent } = useProfileData();
   const [selectedEventId, setSelectedEventId] = useState<string>('');
   const [tab, setTab] = useState('overview');
 
@@ -48,6 +48,8 @@ export default function ProfileEventsPage() {
   const showManagementSkeleton =
     Boolean(selectedEvent) && loadingManagement && (!data || data.event.id !== selectedEvent?.id);
   const isPendingApproval = data ? getEventLifecycleStatus(data.event) === 'pending' : false;
+  const isRemoved = selectedEvent?.status === 'removed';
+  const managementLocked = isPendingApproval || isRemoved;
 
   if (showBootstrapSkeleton) {
     return (
@@ -73,6 +75,7 @@ export default function ProfileEventsPage() {
         selectedEventId={selectedEvent?.id || ''}
         onSelectEvent={setSelectedEventId}
         onEventPatched={patchEvent}
+        onEventDeleted={removeEvent}
       />
 
       {myEvents.length === 0 ? (
@@ -119,7 +122,20 @@ export default function ProfileEventsPage() {
             </div>
           ) : data ? (
             <>
-              {isPendingApproval ? (
+              {isRemoved ? (
+                <div className="rounded-xl border border-red-300/70 bg-red-50/80 px-4 py-3 text-red-900 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-100">
+                  <div className="flex items-start gap-2.5">
+                    <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
+                    <div>
+                      <p className="text-sm font-semibold">Deleted by Admin</p>
+                      <p className="mt-0.5 text-sm text-red-800/90 dark:text-red-100/90">
+                        This event is hidden from the public. Edit and resubmit for verification, or
+                        delete it permanently from the header above.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ) : isPendingApproval ? (
                 <div className="rounded-xl border border-amber-300/70 bg-amber-50/80 px-4 py-3 text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-100">
                   <div className="flex items-start gap-2.5">
                     <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
@@ -134,18 +150,18 @@ export default function ProfileEventsPage() {
                 </div>
               ) : null}
 
-              <div className={cn(isPendingApproval ? 'pointer-events-none select-none opacity-60' : '')}>
+              <div className={cn(managementLocked ? 'pointer-events-none select-none opacity-60' : '')}>
                 <EventOverviewCards metrics={data.metrics} currency={data.event.currency || 'USD'} />
               </div>
 
-              <div className={cn(isPendingApproval ? 'pointer-events-none select-none opacity-60' : '')}>
+              <div className={cn(managementLocked ? 'pointer-events-none select-none opacity-60' : '')}>
                 <OrganizerEarningsPanel selectedEventId={data.event.id} />
               </div>
 
               <Tabs
                 value={tab}
                 onValueChange={setTab}
-                className={cn('gap-4', isPendingApproval ? 'pointer-events-none select-none opacity-60' : '')}
+                className={cn('gap-4', managementLocked ? 'pointer-events-none select-none opacity-60' : '')}
               >
                 <TabsList className="h-auto w-full justify-start gap-1 overflow-x-auto rounded-xl border border-border/70 bg-slate-50/90 p-1 dark:bg-slate-900/60">
                   {(

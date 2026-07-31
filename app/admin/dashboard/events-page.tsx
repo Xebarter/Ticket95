@@ -26,8 +26,21 @@ import {
   Inbox,
   Loader2,
   MapPin,
+  ShieldOff,
+  Trash2,
   X,
 } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 
 const AdminEventEdit = dynamic(() => import('./event-edit').then((mod) => mod.default), {
   ssr: false,
@@ -39,6 +52,7 @@ type FilterKey =
   | 'rejected'
   | 'expired'
   | 'deactivated'
+  | 'removed'
   | 'deactivation_requests'
   | 'reactivation_requests'
   | 'all';
@@ -82,6 +96,7 @@ export default function AdminEventsPage({
       rejected: 0,
       expired: 0,
       deactivated: 0,
+      removed: 0,
       deactivation_requests: 0,
       reactivation_requests: 0,
       all: eventsWithLifecycle.length,
@@ -146,6 +161,7 @@ export default function AdminEventsPage({
             { key: 'reactivation_requests', label: 'Reactivation' },
             { key: 'approved', label: 'Approved' },
             { key: 'deactivated', label: 'Deactivated' },
+            { key: 'removed', label: 'Deleted' },
             { key: 'rejected', label: 'Rejected' },
             { key: 'expired', label: 'Expired' },
             { key: 'all', label: 'All' },
@@ -240,12 +256,16 @@ function EventRow({
   emphasizePending: boolean;
 }) {
   const { toast } = useToast();
-  const [busy, setBusy] = useState<'approve' | 'reject' | 'deactivation' | null>(null);
+  const [busy, setBusy] = useState<'approve' | 'reject' | 'deactivation' | 'unverify' | 'remove' | null>(
+    null
+  );
   const [rejectOpen, setRejectOpen] = useState(false);
   const [note, setNote] = useState('');
   const [justApproved, setJustApproved] = useState(false);
 
   const isPending = event.lifecycleStatus === 'pending';
+  const isApproved = event.status === 'approved';
+  const isRemoved = event.status === 'removed';
   const deactivationPending = hasPendingDeactivationRequest(event);
   const reactivationPending = hasPendingReactivationRequest(event);
   const isDeactivated = event.status === 'deactivated';
@@ -281,6 +301,54 @@ function EventRow({
     } catch (err) {
       toast({
         title: 'Couldn’t update request',
+        description: err instanceof Error ? err.message : 'Try again',
+        variant: 'destructive',
+      });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const handleUnverify = async () => {
+    setBusy('unverify');
+    try {
+      const response = await fetch(`/api/admin/events/${event.id}/unverify`, {
+        method: 'POST',
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || 'Unverify failed');
+      toast({
+        title: 'Event unverified',
+        description: `${event.name} is pending review again.`,
+      });
+      await mutate();
+    } catch (err) {
+      toast({
+        title: 'Couldn’t unverify',
+        description: err instanceof Error ? err.message : 'Try again',
+        variant: 'destructive',
+      });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const handleSoftRemove = async () => {
+    setBusy('remove');
+    try {
+      const response = await fetch(`/api/admin/events/${event.id}/remove`, {
+        method: 'POST',
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || 'Remove failed');
+      toast({
+        title: 'Event deleted',
+        description: `${event.name} was removed from the public site.`,
+      });
+      await mutate();
+    } catch (err) {
+      toast({
+        title: 'Couldn’t delete event',
         description: err instanceof Error ? err.message : 'Try again',
         variant: 'destructive',
       });
@@ -504,6 +572,90 @@ function EventRow({
             </>
           ) : null}
 
+          {isApproved && !deactivationPending && !justApproved ? (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-9 rounded-xl px-4"
+                  disabled={!!busy}
+                >
+                  {busy === 'unverify' ? (
+                    <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                  ) : (
+                    <ShieldOff className="mr-1.5 h-4 w-4" />
+                  )}
+                  Unverify
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Unverify this event?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    <strong>{event.name}</strong> will return to pending review and leave the public
+                    site.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    className="rounded-xl"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      void handleUnverify();
+                    }}
+                  >
+                    Unverify
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          ) : null}
+
+          {!isPending && !isRemoved && !justApproved ? (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-9 rounded-xl px-3 text-rose-700 hover:bg-rose-50"
+                  disabled={!!busy}
+                >
+                  {busy === 'remove' ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-4 w-4" />
+                  )}
+                  <span className="sr-only">Delete</span>
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete this event?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Removes <strong>{event.name}</strong> from the public site. The organizer can
+                    edit, resubmit, or permanently delete it.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    className="rounded-xl bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      void handleSoftRemove();
+                    }}
+                  >
+                    Delete event
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          ) : null}
+
           {justApproved ? (
             <span className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-emerald-500/15 px-3 text-sm font-medium text-emerald-800">
               <CheckCircle2 className="h-4 w-4" />
@@ -579,11 +731,14 @@ function StatusBadge({ status }: { status: EventLifecycleStatus }) {
     rejected: 'border-red-500/35 bg-red-500/10 text-red-800',
     expired: 'border-slate-500/35 bg-slate-500/10 text-slate-700',
     deactivated: 'border-rose-500/35 bg-rose-500/10 text-rose-800',
+    removed: 'border-red-600/40 bg-red-600/10 text-red-900',
   };
+
+  const label = status === 'removed' ? 'Deleted' : status;
 
   return (
     <Badge variant="outline" className={cn('rounded-full text-[10px] capitalize', styles[status])}>
-      {status}
+      {label}
     </Badge>
   );
 }

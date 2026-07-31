@@ -84,7 +84,7 @@ type InitialEventData = {
   image_url?: string;
   image_urls?: string[];
   category?: EventCategoryId;
-  status?: 'pending' | 'approved' | 'rejected';
+  status?: 'pending' | 'approved' | 'rejected' | 'deactivated' | 'removed';
   rejection_reason?: string | null;
   affiliates_enabled?: boolean;
   affiliate_commission_percent?: number;
@@ -1009,10 +1009,13 @@ export function EventCreationWizard({
 
         const shouldResubmitForApproval =
           !isAdminContext &&
-          initialEvent?.status === 'approved' &&
-          initialEvent.date &&
-          isEventDatePast(initialEvent.date) &&
-          !isEventDatePast(formData.date);
+          Boolean(initialEvent) &&
+          ((initialEvent?.status === 'approved' &&
+            initialEvent.date &&
+            isEventDatePast(initialEvent.date) &&
+            !isEventDatePast(formData.date)) ||
+            initialEvent?.status === 'removed' ||
+            initialEvent?.status === 'rejected');
 
         const eventPayload = {
           name: formData.name,
@@ -1035,7 +1038,14 @@ export function EventCreationWizard({
           image_urls: allUrls,
           affiliates_enabled: affiliatesEnabled,
           affiliate_commission_percent: clampAffiliateCommissionPercent(affiliateCommissionPercent),
-          ...(shouldResubmitForApproval ? { status: 'pending' as const, rejection_reason: null } : {}),
+          ...(shouldResubmitForApproval
+            ? {
+                status: 'pending' as const,
+                rejection_reason: null,
+                removed_at: null,
+                removed_by: null,
+              }
+            : {}),
           ...(isAdminContext
             ? {
                 is_featured: isFeatured,

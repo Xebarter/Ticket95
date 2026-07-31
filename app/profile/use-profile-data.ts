@@ -62,5 +62,9 @@ export function useProfileData() {
     );
   };
 
-  return { user, loading, myEvents, myOrders, myTickets, totals, patchEvent };
+  const removeEvent = (eventId: string) => {
+    setMyEvents((prev) => prev.filter((event) => event.id !== eventId));
+  };
+
+  return { user, loading, myEvents, myOrders, myTickets, totals, patchEvent, removeEvent };
 }

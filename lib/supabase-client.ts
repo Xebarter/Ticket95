@@ -65,13 +65,16 @@ export interface Event {
   verify_slug?: string | null;
   verifier_code_hash?: string | null;
   verifier_code_rotated_at?: string | null;
-  status: 'pending' | 'approved' | 'rejected' | 'deactivated';
+  status: 'pending' | 'approved' | 'rejected' | 'deactivated' | 'removed';
   rejection_reason?: string;
   /** Set when organizer requests admin-approved deactivation (status stays approved). */
   deactivation_reason?: string | null;
   deactivation_requested_at?: string | null;
   /** Set when organizer requests reactivation of a deactivated event. */
   reactivation_requested_at?: string | null;
+  /** Soft-remove by admin — hidden from public until resubmitted. */
+  removed_at?: string | null;
+  removed_by?: string | null;
   is_featured?: boolean;
   sponsors?: Array<{
     id: string;

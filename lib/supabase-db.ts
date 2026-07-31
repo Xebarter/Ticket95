@@ -77,6 +77,8 @@ export async function updateEvent(
   eventData: Partial<
     Omit<Event, 'id' | 'organizer_id' | 'created_at' | 'updated_at'> & {
       rejection_reason?: string | null;
+      removed_at?: string | null;
+      removed_by?: string | null;
     }
   >
 ): Promise<Event> {
@@ -548,6 +550,12 @@ export async function updateEventStatus(
     updateData.deactivation_reason = null;
     updateData.deactivation_requested_at = null;
     updateData.reactivation_requested_at = null;
+    updateData.removed_at = null;
+    updateData.removed_by = null;
+  }
+  if (status === 'pending') {
+    updateData.removed_at = null;
+    updateData.removed_by = null;
   }
 
   const { data, error } = await supabase

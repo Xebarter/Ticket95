@@ -41,7 +41,14 @@ export async function PATCH(
       status: approved ? 'approved' : 'rejected',
     };
 
-    if (note) {
+    if (approved) {
+      updateData.rejection_reason = null;
+      updateData.removed_at = null;
+      updateData.removed_by = null;
+      updateData.deactivation_reason = null;
+      updateData.deactivation_requested_at = null;
+      updateData.reactivation_requested_at = null;
+    } else if (note) {
       updateData.rejection_reason = note;
     }
 

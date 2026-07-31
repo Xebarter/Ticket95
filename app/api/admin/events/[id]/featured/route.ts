@@ -21,6 +21,24 @@ export async function PATCH(
       );
     }
 
+    if (is_featured) {
+      const { data: existing, error: fetchError } = await supabaseAdmin
+        .from('events')
+        .select('id, status')
+        .eq('id', id)
+        .maybeSingle();
+
+      if (fetchError || !existing) {
+        return NextResponse.json({ error: 'Event not found' }, { status: 404 });
+      }
+      if (existing.status !== 'approved') {
+        return NextResponse.json(
+          { error: 'Only approved events can be featured' },
+          { status: 400 }
+        );
+      }
+    }
+
     // Update the event's featured status
     const { data, error } = await supabaseAdmin
       .from('events')
