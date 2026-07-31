@@ -3,6 +3,18 @@ import { getEventEndDay, calendarDayUtc } from '@/lib/multi-day-events';
 
 export type EventLifecycleStatus = Event['status'] | 'expired';
 
+export function hasPendingDeactivationRequest(
+  event: Pick<Event, 'status' | 'deactivation_requested_at'>
+): boolean {
+  return event.status === 'approved' && Boolean(event.deactivation_requested_at);
+}
+
+export function hasPendingReactivationRequest(
+  event: Pick<Event, 'status' | 'reactivation_requested_at'>
+): boolean {
+  return event.status === 'deactivated' && Boolean(event.reactivation_requested_at);
+}
+
 export function isEventDatePast(eventDate: string, now: Date = new Date()): boolean {
   const parsed = new Date(eventDate);
   if (Number.isNaN(parsed.getTime())) return false;
@@ -35,6 +47,32 @@ export function getEventLifecycleStatus(
     return 'expired';
   }
   return event.status;
+}
+
+export function getEventLifecycleLabel(
+  event: Pick<
+    Event,
+    | 'status'
+    | 'date'
+    | 'end_date'
+    | 'deactivation_requested_at'
+    | 'reactivation_requested_at'
+  >
+): string {
+  if (hasPendingDeactivationRequest(event)) return 'Deactivation pending';
+  if (hasPendingReactivationRequest(event)) return 'Reactivation pending';
+  const status = getEventLifecycleStatus(event);
+  if (status === 'approved') return 'Live';
+  if (status === 'pending') return 'Pending';
+  if (status === 'expired') return 'Past';
+  if (status === 'rejected') return 'Rejected';
+  if (status === 'deactivated') return 'Deactivated';
+  return status;
+}
+
+/** Public marketplace + checkout: only fully approved (request flags still sellable). */
+export function isEventOnSale(event: Pick<Event, 'status'>): boolean {
+  return event.status === 'approved';
 }
 
 export function getNowIso() {

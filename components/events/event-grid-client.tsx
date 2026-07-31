@@ -6,6 +6,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { Calendar, MapPin, Clock3, Ticket, ArrowRight } from 'lucide-react'
 import type { Event } from '@/lib/supabase-client'
+import { ShareEventButton } from '@/components/events/share-event-button'
 import { getEventCategoryLabel } from '@/lib/event-categories'
 import { formatDisplayPrice } from '@/lib/event-display'
 import { cn } from '@/lib/utils'
@@ -144,6 +145,17 @@ export function PublicEventCard({ event, idx = 0, onClick, detailsHref }: Public
             </span>
           </div>
         ) : null}
+
+        <div className="absolute bottom-3 right-3 z-10">
+          <ShareEventButton
+            eventId={event.id}
+            eventName={event.name}
+            variant="secondary"
+            size="icon-sm"
+            label={false}
+            className="rounded-lg border border-white/20 bg-white/95 text-slate-700 shadow-sm backdrop-blur-sm hover:bg-white"
+          />
+        </div>
       </div>
 
       <div className="flex flex-1 flex-col p-5">

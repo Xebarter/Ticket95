@@ -10,6 +10,10 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { getEventLifecycleStatus, type EventLifecycleStatus } from '@/lib/event-status';
+import {
+  hasPendingDeactivationRequest,
+  hasPendingReactivationRequest,
+} from '@/lib/event-status';
 import { FeaturedToggle } from '@/components/admin/featured-toggle';
 import type { AdminEventRow } from '@/lib/admin-dashboard-data';
 import type { Event } from '@/lib/supabase-client';
@@ -29,11 +33,19 @@ const AdminEventEdit = dynamic(() => import('./event-edit').then((mod) => mod.de
   ssr: false,
 });
 
-type FilterKey = 'pending' | 'approved' | 'rejected' | 'expired' | 'all';
+type FilterKey =
+  | 'pending'
+  | 'approved'
+  | 'rejected'
+  | 'expired'
+  | 'deactivated'
+  | 'deactivation_requests'
+  | 'reactivation_requests'
+  | 'all';
 
 async function fetchEvents() {
   const res = await fetch(
-    '/api/admin/events?fields=id,name,description,date,venue,image_url,total_tickets,ticket_price,organizer_name,organizer_phone,status,created_at,is_featured'
+    '/api/admin/events?fields=id,name,description,date,end_date,venue,image_url,total_tickets,ticket_price,organizer_name,organizer_phone,status,created_at,is_featured,deactivation_reason,deactivation_requested_at,reactivation_requested_at'
   );
   if (!res.ok) throw new Error('Failed to fetch events');
   return res.json();
@@ -64,21 +76,42 @@ export default function AdminEventsPage({
   );
 
   const counts = useMemo(() => {
-    const next = { pending: 0, approved: 0, rejected: 0, expired: 0, all: eventsWithLifecycle.length };
+    const next = {
+      pending: 0,
+      approved: 0,
+      rejected: 0,
+      expired: 0,
+      deactivated: 0,
+      deactivation_requests: 0,
+      reactivation_requests: 0,
+      all: eventsWithLifecycle.length,
+    };
     for (const event of eventsWithLifecycle) {
       if (event.lifecycleStatus in next) {
         next[event.lifecycleStatus as keyof typeof next] += 1;
       }
+      if (hasPendingDeactivationRequest(event)) next.deactivation_requests += 1;
+      if (hasPendingReactivationRequest(event)) next.reactivation_requests += 1;
     }
     return next;
   }, [eventsWithLifecycle]);
 
   const [filter, setFilter] = useState<FilterKey>(() =>
-    counts.pending > 0 ? 'pending' : 'all'
+    counts.pending > 0
+      ? 'pending'
+      : counts.deactivation_requests > 0
+        ? 'deactivation_requests'
+        : 'all'
   );
 
   const visible = useMemo(() => {
     if (filter === 'all') return eventsWithLifecycle;
+    if (filter === 'deactivation_requests') {
+      return eventsWithLifecycle.filter((event: any) => hasPendingDeactivationRequest(event));
+    }
+    if (filter === 'reactivation_requests') {
+      return eventsWithLifecycle.filter((event: any) => hasPendingReactivationRequest(event));
+    }
     return eventsWithLifecycle.filter((event: any) => event.lifecycleStatus === filter);
   }, [eventsWithLifecycle, filter]);
 
@@ -109,7 +142,10 @@ export default function AdminEventsPage({
         {(
           [
             { key: 'pending', label: 'Pending' },
+            { key: 'deactivation_requests', label: 'Deactivation' },
+            { key: 'reactivation_requests', label: 'Reactivation' },
             { key: 'approved', label: 'Approved' },
+            { key: 'deactivated', label: 'Deactivated' },
             { key: 'rejected', label: 'Rejected' },
             { key: 'expired', label: 'Expired' },
             { key: 'all', label: 'All' },
@@ -129,6 +165,11 @@ export default function AdminEventsPage({
                   : 'bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground',
                 item.key === 'pending' && count > 0 && !active
                   ? 'bg-amber-500/15 text-amber-900 hover:bg-amber-500/25'
+                  : null,
+                (item.key === 'deactivation_requests' || item.key === 'reactivation_requests') &&
+                  count > 0 &&
+                  !active
+                  ? 'bg-orange-500/15 text-orange-900 hover:bg-orange-500/25'
                   : null
               )}
             >
@@ -199,12 +240,15 @@ function EventRow({
   emphasizePending: boolean;
 }) {
   const { toast } = useToast();
-  const [busy, setBusy] = useState<'approve' | 'reject' | null>(null);
+  const [busy, setBusy] = useState<'approve' | 'reject' | 'deactivation' | null>(null);
   const [rejectOpen, setRejectOpen] = useState(false);
   const [note, setNote] = useState('');
   const [justApproved, setJustApproved] = useState(false);
 
   const isPending = event.lifecycleStatus === 'pending';
+  const deactivationPending = hasPendingDeactivationRequest(event);
+  const reactivationPending = hasPendingReactivationRequest(event);
+  const isDeactivated = event.status === 'deactivated';
   const dateLabel = new Date(event.date).toLocaleString('en-US', {
     weekday: 'short',
     month: 'short',
@@ -214,6 +258,36 @@ function EventRow({
   });
 
   const refresh = () => mutate();
+
+  const resolveDeactivation = async (action: 'approve' | 'deny') => {
+    setBusy('deactivation');
+    try {
+      const response = await fetch(`/api/admin/events/${event.id}/deactivation`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || 'Update failed');
+      toast({
+        title:
+          action === 'approve'
+            ? deactivationPending
+              ? 'Event deactivated'
+              : 'Event reactivated'
+            : 'Request denied',
+      });
+      await mutate();
+    } catch (err) {
+      toast({
+        title: 'Couldn’t update request',
+        description: err instanceof Error ? err.message : 'Try again',
+        variant: 'destructive',
+      });
+    } finally {
+      setBusy(null);
+    }
+  };
 
   const setStatusOptimistic = async (approved: boolean, rejectionNote?: string) => {
     setBusy(approved ? 'approve' : 'reject');
@@ -301,6 +375,16 @@ function EventRow({
             <div className="flex flex-wrap items-center gap-2">
               <p className="truncate font-medium leading-tight">{event.name}</p>
               <StatusBadge status={justApproved ? 'approved' : event.lifecycleStatus} />
+              {deactivationPending ? (
+                <Badge variant="outline" className="rounded-full border-orange-500/35 bg-orange-500/10 text-[10px] text-orange-900">
+                  Deactivation request
+                </Badge>
+              ) : null}
+              {reactivationPending ? (
+                <Badge variant="outline" className="rounded-full border-sky-500/35 bg-sky-500/10 text-[10px] text-sky-900">
+                  Reactivation request
+                </Badge>
+              ) : null}
               {event.is_featured ? (
                 <Badge variant="outline" className="rounded-full text-[10px]">
                   Featured
@@ -311,6 +395,9 @@ function EventRow({
               {event.organizer_name}
               {event.organizer_phone ? ` · ${event.organizer_phone}` : ''}
             </p>
+            {event.deactivation_reason && (deactivationPending || reactivationPending || isDeactivated) ? (
+              <p className="text-xs text-muted-foreground">Reason: {event.deactivation_reason}</p>
+            ) : null}
             <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
               <span className="inline-flex items-center gap-1">
                 <Calendar className="h-3 w-3" />
@@ -352,6 +439,68 @@ function EventRow({
                 <X className="mr-1.5 h-4 w-4" />
                 Reject
               </Button>
+            </>
+          ) : null}
+
+          {deactivationPending ? (
+            <>
+              <Button
+                type="button"
+                size="sm"
+                className="h-9 rounded-xl px-4"
+                disabled={!!busy}
+                onClick={() => void resolveDeactivation('approve')}
+              >
+                {busy === 'deactivation' ? (
+                  <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                ) : (
+                  <Check className="mr-1.5 h-4 w-4" />
+                )}
+                Approve deactivation
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-9 rounded-xl px-4"
+                disabled={!!busy}
+                onClick={() => void resolveDeactivation('deny')}
+              >
+                <X className="mr-1.5 h-4 w-4" />
+                Deny
+              </Button>
+            </>
+          ) : null}
+
+          {reactivationPending || (isDeactivated && !reactivationPending) ? (
+            <>
+              <Button
+                type="button"
+                size="sm"
+                className="h-9 rounded-xl px-4"
+                disabled={!!busy}
+                onClick={() => void resolveDeactivation('approve')}
+              >
+                {busy === 'deactivation' ? (
+                  <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                ) : (
+                  <Check className="mr-1.5 h-4 w-4" />
+                )}
+                {reactivationPending ? 'Approve reactivation' : 'Reactivate'}
+              </Button>
+              {reactivationPending ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-9 rounded-xl px-4"
+                  disabled={!!busy}
+                  onClick={() => void resolveDeactivation('deny')}
+                >
+                  <X className="mr-1.5 h-4 w-4" />
+                  Deny
+                </Button>
+              ) : null}
             </>
           ) : null}
 
@@ -429,6 +578,7 @@ function StatusBadge({ status }: { status: EventLifecycleStatus }) {
     approved: 'border-emerald-500/35 bg-emerald-500/10 text-emerald-800',
     rejected: 'border-red-500/35 bg-red-500/10 text-red-800',
     expired: 'border-slate-500/35 bg-slate-500/10 text-slate-700',
+    deactivated: 'border-rose-500/35 bg-rose-500/10 text-rose-800',
   };
 
   return (

@@ -8,7 +8,6 @@ import { EventDetailsView } from '@/components/events/event-details-view';
 import { HeaderClient } from '@/components/layout/header-client';
 import { Footer } from '@/components/layout/footer';
 import { JsonLd } from '@/components/seo/json-ld';
-import { BRAND_ICON_PATHS, brandAssetUrl } from '@/lib/brand-assets';
 import {
   absoluteUrl,
   buildBreadcrumbJsonLd,
@@ -18,6 +17,7 @@ import {
   truncateMetaDescription,
 } from '@/lib/seo';
 import { getEventShareImage, toAbsoluteUrl } from '@/lib/site-url';
+import { OG_IMAGE_SIZE } from '@/components/seo/brand-og-markup';
 
 interface EventPageProps {
   params: Promise<{ id: string }> | { id: string };
@@ -50,17 +50,19 @@ export async function generateMetadata({ params }: EventPageProps): Promise<Meta
   const description = buildEventMetaDescription(event);
   const title = buildEventTitle(event);
   const shareImage = getEventShareImage(event);
-  const fallbackImage = absoluteUrl(brandAssetUrl(BRAND_ICON_PATHS.manifest512));
-  const ogImages = shareImage
-    ? [
-        {
-          url: shareImage.url,
-          secureUrl: shareImage.url.startsWith('https') ? shareImage.url : undefined,
-          alt: shareImage.alt,
-          type: guessImageMime(shareImage.url),
-        },
-      ]
-    : [{ url: fallbackImage, alt: 'Ticket95' }];
+  // Prefer the event cover directly so social previews show the photo.
+  // Same-origin opengraph-image / twitter-image routes also render this cover.
+  const coverUrl = shareImage?.url || absoluteUrl(`/events/${resolved.id}/opengraph-image`);
+  const ogImages = [
+    {
+      url: coverUrl,
+      secureUrl: coverUrl.startsWith('https') ? coverUrl : undefined,
+      alt: shareImage?.alt || event.name,
+      type: shareImage ? guessImageMime(shareImage.url) : 'image/png',
+      width: OG_IMAGE_SIZE.width,
+      height: OG_IMAGE_SIZE.height,
+    },
+  ];
 
   return {
     title,
@@ -81,7 +83,7 @@ export async function generateMetadata({ params }: EventPageProps): Promise<Meta
       card: 'summary_large_image',
       title: event.name,
       description: truncateMetaDescription(description),
-      images: shareImage ? [shareImage.url] : [fallbackImage],
+      images: [coverUrl],
     },
     robots: {
       index: true,

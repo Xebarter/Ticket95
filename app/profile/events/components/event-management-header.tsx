@@ -8,25 +8,43 @@ import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { PublicEventCard } from '@/components/events/event-grid-client';
 import type { Event } from '@/lib/supabase-client';
-import { getEventLifecycleStatus } from '@/lib/event-status';
+import {
+  getEventLifecycleLabel,
+  getEventLifecycleStatus,
+  hasPendingDeactivationRequest,
+  hasPendingReactivationRequest,
+} from '@/lib/event-status';
 import { cn } from '@/lib/utils';
+import { useToast } from '@/hooks/use-toast';
 import {
   Calendar,
   ChevronDown,
   Eye,
   ExternalLink,
   Handshake,
+  Loader2,
   MapPin,
   Pencil,
   Plus,
+  Power,
+  PowerOff,
   QrCode,
   Search,
 } from 'lucide-react';
 import { formatDateTime } from '../helpers';
 import { ProfilePageHeader } from '@/components/profile/profile-ui';
 import { EventAffiliateChip, EventAffiliateControl } from './event-affiliate-control';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 
-type StatusFilter = 'all' | 'approved' | 'pending' | 'expired' | 'rejected' | 'affiliates';
+type StatusFilter =
+  | 'all'
+  | 'approved'
+  | 'pending'
+  | 'expired'
+  | 'rejected'
+  | 'deactivated'
+  | 'affiliates';
 
 type Props = {
   events: Event[];
@@ -41,6 +59,7 @@ function statusLabel(status: string | null) {
   if (status === 'pending') return 'Pending';
   if (status === 'expired') return 'Past';
   if (status === 'rejected') return 'Rejected';
+  if (status === 'deactivated') return 'Deactivated';
   return status || 'Unknown';
 }
 
@@ -50,6 +69,7 @@ const FILTERS: Array<{ key: StatusFilter; label: string }> = [
   { key: 'pending', label: 'Pending' },
   { key: 'expired', label: 'Past' },
   { key: 'rejected', label: 'Rejected' },
+  { key: 'deactivated', label: 'Deactivated' },
   { key: 'affiliates', label: 'Affiliates' },
 ];
 
@@ -60,13 +80,20 @@ export function EventManagementHeader({
   onSelectEvent,
   onEventPatched,
 }: Props) {
+  const { toast } = useToast();
   const [previewOpen, setPreviewOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [requestBusy, setRequestBusy] = useState(false);
+  const [requestDialog, setRequestDialog] = useState<'deactivate' | 'reactivate' | null>(null);
+  const [requestReason, setRequestReason] = useState('');
 
   const previewEvents = useMemo(() => (event ? [event as Event] : []), [event]);
   const lifecycleStatus = event ? getEventLifecycleStatus(event) : null;
   const isPendingApproval = lifecycleStatus === 'pending';
+  const isDeactivated = event?.status === 'deactivated';
+  const deactivationPending = event ? hasPendingDeactivationRequest(event) : false;
+  const reactivationPending = event ? hasPendingReactivationRequest(event) : false;
   const cover = event?.image_url || event?.image_urls?.[0];
 
   const filteredEvents = useMemo(() => {
@@ -93,6 +120,7 @@ export function EventManagementHeader({
       pending: 0,
       expired: 0,
       rejected: 0,
+      deactivated: 0,
       affiliates: 0,
     };
     for (const listed of events) {
@@ -102,6 +130,66 @@ export function EventManagementHeader({
     }
     return counts;
   }, [events]);
+
+  const submitLifecycleRequest = async () => {
+    if (!event || !requestDialog) return;
+    setRequestBusy(true);
+    try {
+      const path =
+        requestDialog === 'deactivate'
+          ? `/api/events/${event.id}/deactivate-request`
+          : `/api/events/${event.id}/reactivate-request`;
+      const res = await fetch(path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: requestReason }),
+      });
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload.error || 'Request failed');
+      onEventPatched(event.id, payload.event);
+      toast({
+        title:
+          requestDialog === 'deactivate'
+            ? 'Deactivation requested'
+            : 'Reactivation requested',
+        description: 'An admin will review your request.',
+      });
+      setRequestDialog(null);
+      setRequestReason('');
+    } catch (error) {
+      toast({
+        title: 'Request failed',
+        description: error instanceof Error ? error.message : 'Try again',
+        variant: 'destructive',
+      });
+    } finally {
+      setRequestBusy(false);
+    }
+  };
+
+  const cancelLifecycleRequest = async (kind: 'deactivate' | 'reactivate') => {
+    if (!event) return;
+    setRequestBusy(true);
+    try {
+      const path =
+        kind === 'deactivate'
+          ? `/api/events/${event.id}/deactivate-request`
+          : `/api/events/${event.id}/reactivate-request`;
+      const res = await fetch(path, { method: 'DELETE' });
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload.error || 'Cancel failed');
+      onEventPatched(event.id, payload.event);
+      toast({ title: 'Request cancelled' });
+    } catch (error) {
+      toast({
+        title: 'Cancel failed',
+        description: error instanceof Error ? error.message : 'Try again',
+        variant: 'destructive',
+      });
+    } finally {
+      setRequestBusy(false);
+    }
+  };
 
   return (
     <div className="space-y-5">
@@ -258,6 +346,14 @@ export function EventManagementHeader({
                         <span className="mt-1 inline-flex rounded-md border border-amber-400/40 bg-amber-100/80 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/20 dark:text-amber-100">
                           Awaiting approval
                         </span>
+                      ) : hasPendingDeactivationRequest(listedEvent) ? (
+                        <span className="mt-1 inline-flex rounded-md border border-orange-400/40 bg-orange-100/80 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-orange-900">
+                          Deactivation pending
+                        </span>
+                      ) : hasPendingReactivationRequest(listedEvent) ? (
+                        <span className="mt-1 inline-flex rounded-md border border-sky-400/40 bg-sky-100/80 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-sky-900">
+                          Reactivation pending
+                        </span>
                       ) : null}
                     </div>
                   </button>
@@ -293,10 +389,12 @@ export function EventManagementHeader({
                           ? 'border-emerald-400/30 bg-emerald-500/20 text-emerald-100'
                           : lifecycleStatus === 'pending'
                             ? 'border-amber-400/30 bg-amber-500/20 text-amber-100'
-                            : 'border-white/20 bg-white/10 text-white/90'
+                            : lifecycleStatus === 'deactivated'
+                              ? 'border-rose-400/30 bg-rose-500/20 text-rose-100'
+                              : 'border-white/20 bg-white/10 text-white/90'
                       )}
                     >
-                      {statusLabel(lifecycleStatus)}
+                      {event ? getEventLifecycleLabel(event) : statusLabel(lifecycleStatus)}
                     </span>
                     {event.affiliates_enabled ? (
                       <span className="inline-flex items-center gap-1 rounded-md border border-white/20 bg-white/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-white/90 backdrop-blur-sm">
@@ -322,9 +420,11 @@ export function EventManagementHeader({
               </div>
 
               <div className="space-y-3 border-t border-border/60 p-3 sm:p-4">
-                {isPendingApproval ? (
+                {isPendingApproval || isDeactivated ? (
                   <div className="rounded-lg border border-amber-300/60 bg-amber-50/70 px-3 py-2 text-xs text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-100">
-                    Affiliate and verification controls will activate after approval.
+                    {isDeactivated
+                      ? 'This event is deactivated. New ticket sales are paused until an admin reactivates it.'
+                      : 'Affiliate and verification controls will activate after approval.'}
                   </div>
                 ) : (
                   <EventAffiliateControl
@@ -334,7 +434,7 @@ export function EventManagementHeader({
                 )}
 
                 <div className="flex flex-wrap gap-2 border-t border-border/50 pt-3">
-                  {isPendingApproval ? (
+                  {isPendingApproval || isDeactivated ? (
                     <Button size="sm" className="h-9 rounded-lg" disabled>
                       <QrCode className="mr-1.5 h-4 w-4" />
                       Verify tickets
@@ -362,7 +462,7 @@ export function EventManagementHeader({
                     <Eye className="mr-1.5 h-4 w-4" />
                     Preview card
                   </Button>
-                  {isPendingApproval ? (
+                  {isPendingApproval || isDeactivated ? (
                     <Button variant="ghost" size="sm" className="h-9 rounded-lg text-muted-foreground" disabled>
                       <ExternalLink className="mr-1.5 h-4 w-4" />
                       Public page
@@ -375,6 +475,68 @@ export function EventManagementHeader({
                       </Link>
                     </Button>
                   )}
+
+                  {lifecycleStatus === 'approved' && !deactivationPending ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-9 rounded-lg border-rose-200 text-rose-700 hover:bg-rose-50"
+                      disabled={requestBusy}
+                      onClick={() => {
+                        setRequestReason('');
+                        setRequestDialog('deactivate');
+                      }}
+                    >
+                      <PowerOff className="mr-1.5 h-4 w-4" />
+                      Request deactivation
+                    </Button>
+                  ) : null}
+
+                  {deactivationPending ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-9 rounded-lg"
+                      disabled={requestBusy}
+                      onClick={() => void cancelLifecycleRequest('deactivate')}
+                    >
+                      {requestBusy ? (
+                        <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                      ) : null}
+                      Cancel deactivation request
+                    </Button>
+                  ) : null}
+
+                  {isDeactivated && !reactivationPending ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-9 rounded-lg border-sky-200 text-sky-800 hover:bg-sky-50"
+                      disabled={requestBusy}
+                      onClick={() => {
+                        setRequestReason('');
+                        setRequestDialog('reactivate');
+                      }}
+                    >
+                      <Power className="mr-1.5 h-4 w-4" />
+                      Request reactivation
+                    </Button>
+                  ) : null}
+
+                  {reactivationPending ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-9 rounded-lg"
+                      disabled={requestBusy}
+                      onClick={() => void cancelLifecycleRequest('reactivate')}
+                    >
+                      {requestBusy ? (
+                        <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                      ) : null}
+                      Cancel reactivation request
+                    </Button>
+                  ) : null}
                 </div>
               </div>
             </div>
@@ -392,6 +554,57 @@ export function EventManagementHeader({
               </div>
             </div>
           ) : null}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={requestDialog !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setRequestDialog(null);
+            setRequestReason('');
+          }
+        }}
+      >
+        <DialogContent className="max-w-md rounded-2xl">
+          <DialogTitle>
+            {requestDialog === 'deactivate' ? 'Request deactivation' : 'Request reactivation'}
+          </DialogTitle>
+          <p className="text-sm text-muted-foreground">
+            {requestDialog === 'deactivate'
+              ? 'An admin must approve before this event is hidden and ticket sales stop. Existing tickets stay valid.'
+              : 'An admin must approve before this event goes live again.'}
+          </p>
+          <div className="space-y-2">
+            <Label htmlFor="lifecycle-reason">Reason (optional)</Label>
+            <Textarea
+              id="lifecycle-reason"
+              value={requestReason}
+              onChange={(e) => setRequestReason(e.target.value)}
+              placeholder="Tell the admin why…"
+              className="min-h-[90px] rounded-xl"
+            />
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="rounded-xl"
+              disabled={requestBusy}
+              onClick={() => setRequestDialog(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              className="rounded-xl"
+              disabled={requestBusy}
+              onClick={() => void submitLifecycleRequest()}
+            >
+              {requestBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Submit request
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

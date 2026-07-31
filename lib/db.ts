@@ -34,7 +34,7 @@ export interface Event {
     name: string;
     logo?: string;
   }>;
-  status: 'pending' | 'approved' | 'rejected';
+  status: 'pending' | 'approved' | 'rejected' | 'deactivated';
   rejectionReason?: string;
   createdAt: number;
   updatedAt: number;
@@ -199,7 +199,7 @@ export function getAllEvents(): Event[] {
   return db.events;
 }
 
-export function updateEventStatus(eventId: string, status: 'pending' | 'approved' | 'rejected', rejectionReason?: string): Event | undefined {
+export function updateEventStatus(eventId: string, status: 'pending' | 'approved' | 'rejected' | 'deactivated', rejectionReason?: string): Event | undefined {
   const db = getDB();
   const event = db.events.find((e) => e.id === eventId);
   if (event) {

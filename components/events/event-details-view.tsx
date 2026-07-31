@@ -18,6 +18,7 @@ import {
   TicketPurchaseMobileSection,
   useTicketPurchase,
 } from '@/components/events/ticket-purchase-form';
+import { ShareEventButton } from '@/components/events/share-event-button';
 import { getEventCategoryLabel } from '@/lib/event-categories';
 import {
   formatDisplayPrice,
@@ -40,6 +41,7 @@ export function EventDetailsView({
 }) {
   const searchParams = useSearchParams();
   const shouldScrollToTickets = searchParams.get('tickets') === '1';
+  const referralCode = searchParams.get('ref');
 
   const purchase = useTicketPurchase({ event, ticketTypes, sponsors });
   const images = useMemo(() => getEventImages(event), [event]);
@@ -84,17 +86,27 @@ export function EventDetailsView({
             </div>
 
             <header className="space-y-4">
-              <div className="flex flex-wrap items-center gap-2">
-                {event.category ? (
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#9A7B2F]">
-                    {getEventCategoryLabel(event.category)}
-                  </p>
-                ) : null}
-                {lowStock && !soldOut ? (
-                  <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-amber-800">
-                    Limited availability
-                  </span>
-                ) : null}
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  {event.category ? (
+                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#9A7B2F]">
+                      {getEventCategoryLabel(event.category)}
+                    </p>
+                  ) : null}
+                  {lowStock && !soldOut ? (
+                    <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-amber-800">
+                      Limited availability
+                    </span>
+                  ) : null}
+                </div>
+                <ShareEventButton
+                  eventId={event.id}
+                  eventName={event.name}
+                  referralCode={referralCode}
+                  variant="outline"
+                  size="sm"
+                  className="rounded-lg border-slate-200 bg-white text-slate-700 shadow-none hover:bg-slate-50"
+                />
               </div>
 
               <h1 className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">

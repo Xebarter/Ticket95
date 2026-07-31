@@ -537,12 +537,17 @@ export async function createEvent(eventData: Omit<Event, 'id' | 'created_at' | '
 
 export async function updateEventStatus(
   eventId: string,
-  status: 'pending' | 'approved' | 'rejected',
+  status: Event['status'],
   rejectionReason?: string
 ): Promise<Event> {
-  const updateData: any = { status };
+  const updateData: Record<string, unknown> = { status };
   if (rejectionReason) {
     updateData.rejection_reason = rejectionReason;
+  }
+  if (status === 'approved') {
+    updateData.deactivation_reason = null;
+    updateData.deactivation_requested_at = null;
+    updateData.reactivation_requested_at = null;
   }
 
   const { data, error } = await supabase

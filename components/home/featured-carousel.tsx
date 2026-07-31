@@ -13,6 +13,7 @@ import {
   Ticket,
 } from 'lucide-react'
 import type { Event } from '@/lib/supabase-client'
+import { ShareEventButton } from '@/components/events/share-event-button'
 import { getEventCategoryLabel } from '@/lib/event-categories'
 import { formatDisplayPrice } from '@/lib/event-display'
 import { cn } from '@/lib/utils'
@@ -292,16 +293,26 @@ export function FeaturedCarousel({ events }: FeaturedCarouselProps) {
                   </p>
                 ) : null}
 
-                <Button
-                  asChild
-                  className="mt-5 h-11 w-full rounded-lg bg-slate-900 text-sm font-semibold text-white shadow-none hover:bg-slate-800"
-                  size="lg"
-                >
-                  <Link href={`/events/${event.id}?tickets=1`}>
-                    <Ticket className="mr-2 h-4 w-4" />
-                    View tickets
-                  </Link>
-                </Button>
+                <div className="mt-5 flex gap-2">
+                  <Button
+                    asChild
+                    className="h-11 flex-1 rounded-lg bg-slate-900 text-sm font-semibold text-white shadow-none hover:bg-slate-800"
+                    size="lg"
+                  >
+                    <Link href={`/events/${event.id}?tickets=1`}>
+                      <Ticket className="mr-2 h-4 w-4" />
+                      View tickets
+                    </Link>
+                  </Button>
+                  <ShareEventButton
+                    eventId={event.id}
+                    eventName={event.name}
+                    variant="outline"
+                    size="lg"
+                    label={false}
+                    className="h-11 w-11 shrink-0 rounded-lg border-slate-200 bg-white text-slate-700 shadow-none hover:bg-slate-50"
+                  />
+                </div>
               </div>
             </div>
           </div>

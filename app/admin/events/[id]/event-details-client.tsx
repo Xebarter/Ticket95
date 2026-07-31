@@ -35,6 +35,10 @@ import { FeaturedToggle } from '@/components/admin/featured-toggle';
 import { useToast } from '@/hooks/use-toast';
 import { getEventCategoryLabel } from '@/lib/event-categories';
 import { formatEventDateRange } from '@/lib/event-display';
+import {
+  hasPendingDeactivationRequest,
+  hasPendingReactivationRequest,
+} from '@/lib/event-status';
 import { cn } from '@/lib/utils';
 import type { AdminEventDetails, AdminEventStats } from '@/lib/admin-event-details';
 import type { Order } from '@/lib/supabase-client';
@@ -72,6 +76,7 @@ function statusClass(status: string) {
   if (status === 'pending') return 'border-amber-500/35 bg-amber-500/10 text-amber-900';
   if (status === 'approved') return 'border-emerald-500/35 bg-emerald-500/10 text-emerald-800';
   if (status === 'rejected') return 'border-red-500/35 bg-red-500/10 text-red-800';
+  if (status === 'deactivated') return 'border-rose-500/35 bg-rose-500/10 text-rose-800';
   if (status === 'expired') return 'border-slate-500/35 bg-slate-500/10 text-slate-700';
   if (status === 'completed') return 'border-emerald-500/35 bg-emerald-500/10 text-emerald-800';
   if (status === 'failed') return 'border-red-500/35 bg-red-500/10 text-red-800';
@@ -90,7 +95,7 @@ export default function AdminEventDetailsClient({
   const router = useRouter();
   const { toast } = useToast();
   const [event, setEvent] = useState(initialEvent);
-  const [busy, setBusy] = useState<'approve' | 'reject' | 'delete' | null>(null);
+  const [busy, setBusy] = useState<'approve' | 'reject' | 'delete' | 'deactivation' | null>(null);
   const [rejectOpen, setRejectOpen] = useState(false);
   const [note, setNote] = useState('');
 
@@ -165,6 +170,46 @@ export default function AdminEventDetailsClient({
   };
 
   const isPending = event.lifecycleStatus === 'pending' || event.status === 'pending';
+  const deactivationPending = hasPendingDeactivationRequest(event);
+  const reactivationPending = hasPendingReactivationRequest(event);
+  const isDeactivated = event.status === 'deactivated';
+
+  const resolveDeactivation = async (action: 'approve' | 'deny') => {
+    setBusy('deactivation');
+    try {
+      const res = await fetch(`/api/admin/events/${event.id}/deactivation`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Update failed');
+      toast({
+        title:
+          action === 'approve'
+            ? deactivationPending
+              ? 'Event deactivated'
+              : 'Event reactivated'
+            : 'Request denied',
+      });
+      if (data.event) {
+        setEvent((prev) => ({
+          ...prev,
+          ...data.event,
+          lifecycleStatus: data.event.status,
+        }));
+      }
+      refresh();
+    } catch (err) {
+      toast({
+        title: 'Couldn’t update request',
+        description: err instanceof Error ? err.message : 'Try again',
+        variant: 'destructive',
+      });
+    } finally {
+      setBusy(null);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -316,6 +361,83 @@ export default function AdminEventDetailsClient({
               </div>
             </div>
           ) : null}
+        </div>
+      ) : null}
+
+      {deactivationPending || reactivationPending || isDeactivated ? (
+        <div className="space-y-3 rounded-2xl border border-orange-500/30 bg-orange-500/[0.06] p-4">
+          <p className="text-sm font-medium">
+            {deactivationPending
+              ? 'Organizer requested deactivation'
+              : reactivationPending
+                ? 'Organizer requested reactivation'
+                : 'Event is deactivated'}
+          </p>
+          {event.deactivation_reason ? (
+            <p className="text-sm text-muted-foreground">Reason: {event.deactivation_reason}</p>
+          ) : null}
+          <p className="text-xs text-muted-foreground">
+            Deactivation hides the event and stops new sales. Existing tickets remain valid. Delete
+            permanently removes the event and related orders/tickets.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {deactivationPending ? (
+              <>
+                <Button
+                  size="sm"
+                  className="rounded-xl"
+                  disabled={!!busy}
+                  onClick={() => void resolveDeactivation('approve')}
+                >
+                  {busy === 'deactivation' ? (
+                    <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Check className="mr-1.5 h-4 w-4" />
+                  )}
+                  Approve deactivation
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="rounded-xl"
+                  disabled={!!busy}
+                  onClick={() => void resolveDeactivation('deny')}
+                >
+                  <X className="mr-1.5 h-4 w-4" />
+                  Deny
+                </Button>
+              </>
+            ) : null}
+            {reactivationPending || isDeactivated ? (
+              <>
+                <Button
+                  size="sm"
+                  className="rounded-xl"
+                  disabled={!!busy}
+                  onClick={() => void resolveDeactivation('approve')}
+                >
+                  {busy === 'deactivation' ? (
+                    <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Check className="mr-1.5 h-4 w-4" />
+                  )}
+                  {reactivationPending ? 'Approve reactivation' : 'Reactivate'}
+                </Button>
+                {reactivationPending ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="rounded-xl"
+                    disabled={!!busy}
+                    onClick={() => void resolveDeactivation('deny')}
+                  >
+                    <X className="mr-1.5 h-4 w-4" />
+                    Deny
+                  </Button>
+                ) : null}
+              </>
+            ) : null}
+          </div>
         </div>
       ) : null}
 
