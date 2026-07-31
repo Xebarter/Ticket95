@@ -5,7 +5,7 @@ import { AuthProvider } from '@/lib/supabase-auth-context'
 import { EventSearchProvider } from '@/lib/event-search-context'
 import { VerifierSwCleanup } from '@/components/verify/verifier-sw-cleanup'
 import { JsonLd } from '@/components/seo/json-ld'
-import { BRAND_ICON_PATHS, brandAssetUrl } from '@/lib/brand-assets'
+import { BRAND_ICON_PATHS, crawlerIconUrl } from '@/lib/brand-assets'
 import {
   DEFAULT_DESCRIPTION,
   DEFAULT_TITLE,
@@ -42,19 +42,37 @@ export const metadata: Metadata = {
     telephone: false,
   },
   icons: {
+    // Stable URLs only (no ?v=). Google rejects frequently changing favicon URLs
+    // and shows a generic globe instead. Prefer square PNGs ≥48px for SERPs.
     icon: [
-      { url: brandAssetUrl(BRAND_ICON_PATHS.ico), sizes: 'any' },
-      { url: brandAssetUrl(BRAND_ICON_PATHS.svg), type: 'image/svg+xml' },
-      { url: brandAssetUrl(BRAND_ICON_PATHS.png96), sizes: '96x96', type: 'image/png' },
+      {
+        url: crawlerIconUrl(BRAND_ICON_PATHS.png48),
+        sizes: '48x48',
+        type: 'image/png',
+      },
+      {
+        url: crawlerIconUrl(BRAND_ICON_PATHS.png96),
+        sizes: '96x96',
+        type: 'image/png',
+      },
+      {
+        url: crawlerIconUrl(BRAND_ICON_PATHS.png32),
+        sizes: '32x32',
+        type: 'image/png',
+      },
+      {
+        url: crawlerIconUrl(BRAND_ICON_PATHS.ico),
+        sizes: 'any',
+      },
     ],
     apple: [
       {
-        url: brandAssetUrl(BRAND_ICON_PATHS.apple),
+        url: crawlerIconUrl(BRAND_ICON_PATHS.apple),
         sizes: '180x180',
         type: 'image/png',
       },
     ],
-    shortcut: [brandAssetUrl(BRAND_ICON_PATHS.ico)],
+    shortcut: crawlerIconUrl(BRAND_ICON_PATHS.ico),
   },
   appleWebApp: {
     title: SITE_NAME,

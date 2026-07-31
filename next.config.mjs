@@ -5,6 +5,8 @@ import { join } from 'node:path'
 const BRAND_PUBLIC_FILES = [
   'favicon.ico',
   'favicon.svg',
+  'favicon-32x32.png',
+  'favicon-48x48.png',
   'favicon-96x96.png',
   'apple-touch-icon.png',
   'web-app-manifest-192x192.png',
@@ -47,7 +49,7 @@ const nextConfig = {
     return [
       {
         source:
-          '/:asset(favicon.ico|favicon.svg|favicon-96x96.png|apple-touch-icon.png|web-app-manifest-192x192.png|web-app-manifest-512x512.png)',
+          '/:asset(favicon.ico|favicon.svg|favicon-32x32.png|favicon-48x48.png|favicon-96x96.png|apple-touch-icon.png|web-app-manifest-192x192.png|web-app-manifest-512x512.png)',
         headers: [
           {
             key: 'Cache-Control',
