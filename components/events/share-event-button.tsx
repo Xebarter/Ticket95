@@ -1,10 +1,20 @@
 'use client'
 
-import { useState } from 'react'
-import { Check, Share2 } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Check, Copy, Share2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { useToast } from '@/hooks/use-toast'
-import { shareEvent } from '@/lib/share-event'
+import {
+  canUseNativeShare,
+  copyEventLink,
+  shareEventNative,
+} from '@/lib/share-event'
 import { cn } from '@/lib/utils'
 
 type ShareEventButtonProps = {
@@ -31,32 +41,35 @@ export function ShareEventButton({
   const { toast } = useToast()
   const [copied, setCopied] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [nativeShare, setNativeShare] = useState(false)
 
   const isIconOnly = size === 'icon' || size === 'icon-sm' || !label
 
-  const handleShare = async (e: React.MouseEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    if (busy) return
+  useEffect(() => {
+    setNativeShare(canUseNativeShare())
+  }, [])
 
+  const shareInput = {
+    eventId,
+    eventName,
+    ref: referralCode,
+  }
+
+  const handleCopyLink = async () => {
+    if (busy) return
     setBusy(true)
     try {
-      const result = await shareEvent({
-        eventId,
-        eventName,
-        ref: referralCode,
-      })
-
-      if (result === 'copied') {
+      const ok = await copyEventLink(shareInput)
+      if (ok) {
         setCopied(true)
         window.setTimeout(() => setCopied(false), 2000)
         toast({
           title: 'Link copied',
           description: 'Event link copied to clipboard — paste it anywhere to share.',
         })
-      } else if (result === 'failed') {
+      } else {
         toast({
-          title: 'Could not share',
+          title: 'Could not copy link',
           description: 'Copy the event URL from the address bar instead.',
           variant: 'destructive',
         })
@@ -66,19 +79,68 @@ export function ShareEventButton({
     }
   }
 
+  const handleNativeShare = async () => {
+    if (busy) return
+    setBusy(true)
+    try {
+      const result = await shareEventNative(shareInput)
+      if (result === 'failed') {
+        toast({
+          title: 'Could not share',
+          description: 'Try Copy link instead.',
+          variant: 'destructive',
+        })
+      }
+    } finally {
+      setBusy(false)
+    }
+  }
+
   return (
-    <Button
-      type="button"
-      variant={variant}
-      size={size}
-      className={cn(className)}
-      onClick={(e) => void handleShare(e)}
-      disabled={busy}
-      aria-label={copied ? 'Link copied' : `Share ${eventName}`}
-      title={copied ? 'Link copied' : 'Share event'}
-    >
-      {copied ? <Check className="h-4 w-4" /> : <Share2 className="h-4 w-4" />}
-      {!isIconOnly ? <span>{copied ? 'Copied' : 'Share'}</span> : null}
-    </Button>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          type="button"
+          variant={variant}
+          size={size}
+          className={cn(className)}
+          disabled={busy}
+          aria-label={copied ? 'Link copied' : `Share ${eventName}`}
+          title={copied ? 'Link copied' : 'Share event'}
+          onClick={(e) => {
+            e.stopPropagation()
+          }}
+        >
+          {copied ? <Check className="h-4 w-4" /> : <Share2 className="h-4 w-4" />}
+          {!isIconOnly ? <span>{copied ? 'Copied' : 'Share'}</span> : null}
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align="end"
+        className="w-44"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <DropdownMenuItem
+          disabled={busy}
+          onSelect={() => {
+            void handleCopyLink()
+          }}
+        >
+          {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+          <span>{copied ? 'Copied' : 'Copy link'}</span>
+        </DropdownMenuItem>
+        {nativeShare ? (
+          <DropdownMenuItem
+            disabled={busy}
+            onSelect={() => {
+              void handleNativeShare()
+            }}
+          >
+            <Share2 className="h-4 w-4" />
+            <span>Share via…</span>
+          </DropdownMenuItem>
+        ) : null}
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
