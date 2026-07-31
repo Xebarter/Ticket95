@@ -198,10 +198,10 @@ export function HomeClient({ events, featuredEvents }: HomeClientProps) {
               Event tickets
             </p>
             <h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl lg:text-[2.75rem] lg:leading-[1.05]">
-              Ticket<span className="text-[#9A7B2F]">95</span>
+              Ticket<span className="text-[#9A7B2F]">95</span>.com
             </h1>
             <p className="mt-2 max-w-lg text-sm leading-relaxed text-slate-600 sm:text-base">
-              Discover concerts, sports, and live experiences — then book in a few taps.
+              Discover concerts, sports, and live experiences, then book in a few taps.
             </p>
 
             <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
