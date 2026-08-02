@@ -87,7 +87,7 @@ function ProfileLayoutShellInner({ children }: { children: React.ReactNode }) {
               className={cn(
                 'min-w-0',
                 // Drop outer card chrome on mobile so pages reclaim horizontal space
-                'md:rounded-3xl md:border md:border-border/70 md:bg-card/95 md:p-6 md:shadow-sm md:backdrop-blur md:supports-[backdrop-filter]:bg-card/90 lg:p-7'
+                'md:rounded-3xl md:border md:border-slate-200/70 md:bg-white/95 md:p-6 md:shadow-[0_1px_3px_rgba(15,23,42,0.04)] md:backdrop-blur md:supports-[backdrop-filter]:bg-white/90 lg:p-7 dark:md:border-slate-700/60 dark:md:bg-slate-950/90'
               )}
             >
               {children}

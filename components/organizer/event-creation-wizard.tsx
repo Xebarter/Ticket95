@@ -1144,10 +1144,16 @@ export function EventCreationWizard({
   }
 
   return (
-    <div className="space-y-6">
-      <WizardPageHeader mode={mode} isAdminContext={isAdminContext} onCancel={onCancel} />
+    <div className="relative space-y-6">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -inset-x-2 -top-2 h-40 rounded-3xl bg-gradient-to-b from-sky-50/80 via-indigo-50/30 to-transparent dark:from-sky-950/25 dark:via-indigo-950/10 dark:to-transparent sm:-inset-x-4"
+      />
+      <div className="relative">
+        <WizardPageHeader mode={mode} isAdminContext={isAdminContext} onCancel={onCancel} />
+      </div>
 
-      <div className="lg:grid lg:grid-cols-[minmax(0,13rem)_1fr] lg:gap-8 xl:grid-cols-[minmax(0,15rem)_1fr]">
+      <div className="relative lg:grid lg:grid-cols-[minmax(0,13rem)_1fr] lg:gap-8 xl:grid-cols-[minmax(0,15rem)_1fr]">
         <aside className="hidden lg:block">
           <div className="sticky top-4">
             <WizardStepSidebar
@@ -1225,10 +1231,10 @@ export function EventCreationWizard({
                             }}
                             className={`rounded-xl border px-3 py-2.5 text-sm font-medium transition-all ${
                               selected
-                                ? 'border-primary bg-primary text-primary-foreground shadow-sm'
+                                ? 'border-primary bg-primary text-primary-foreground shadow-[0_1px_3px_rgba(37,99,235,0.25)]'
                                 : fieldErrors.category
                                   ? 'border-destructive bg-background hover:bg-muted/40'
-                                  : 'border-border bg-background hover:border-primary/40 hover:bg-muted/40'
+                                  : 'border-slate-200/80 bg-white/90 hover:border-primary/35 hover:bg-sky-50/50 dark:border-slate-700 dark:bg-slate-950 dark:hover:bg-sky-950/20'
                             }`}
                           >
                             {category.label}
@@ -1400,8 +1406,8 @@ export function EventCreationWizard({
 
                 <WizardSection icon={ImageIcon} title="Photos" description="At least one · star = cover">
                   <div
-                    className={`rounded-xl border border-dashed bg-background p-3 sm:p-4 ${
-                      fieldErrors.images ? 'border-destructive' : 'border-border/70'
+                    className={`rounded-xl border border-dashed bg-sky-50/20 p-3 sm:p-4 dark:bg-sky-950/10 ${
+                      fieldErrors.images ? 'border-destructive' : 'border-sky-200/70 dark:border-sky-500/25'
                     }`}
                   >
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -1429,7 +1435,7 @@ export function EventCreationWizard({
                         {galleryImages.map(({ src, index }) => (
                           <div
                             key={`${src}-${index}`}
-                            className="relative overflow-hidden rounded-xl border bg-background"
+                            className="relative overflow-hidden rounded-xl border border-slate-200/70 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.03)] dark:border-slate-700/60 dark:bg-slate-950"
                           >
                             <img src={src} alt="" className="h-24 w-full object-cover" />
                             <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 bg-gradient-to-t from-black/60 via-black/20 to-transparent p-2">
@@ -1467,34 +1473,34 @@ export function EventCreationWizard({
 
             {step === 'pricing' && (
               <div className="space-y-4">
-                <div className="rounded-2xl border border-border/70 bg-muted/20 p-3.5">
+                <div className="rounded-2xl border border-sky-200/60 bg-gradient-to-br from-sky-50/70 via-white to-indigo-50/40 p-3.5 shadow-[0_1px_2px_rgba(15,23,42,0.03)] dark:border-sky-500/20 dark:from-sky-950/30 dark:via-slate-950 dark:to-indigo-950/20">
                   <div className="flex items-center gap-3">
                     <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
                       <Ticket className="h-4 w-4" />
                     </div>
                     <div className="min-w-0">
-                      <p className="text-sm font-medium">Ticket types</p>
-                      <p className="text-[11px] text-muted-foreground">Price 0 = free</p>
+                      <p className="text-sm font-medium text-slate-900 dark:text-slate-50">Ticket types</p>
+                      <p className="text-[11px] text-slate-500">Price 0 = free</p>
                     </div>
                   </div>
 
                   {normalizedTicketTypes.length > 0 ? (
-                    <div className="mt-3 grid grid-cols-3 gap-2 border-t border-border/60 pt-3 text-center">
+                    <div className="mt-3 grid grid-cols-3 gap-2 border-t border-sky-200/50 pt-3 text-center dark:border-slate-800">
                       <div>
-                        <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Types</p>
-                        <p className="mt-0.5 text-base font-semibold tabular-nums sm:text-lg">
+                        <p className="text-[10px] uppercase tracking-wide text-slate-500">Types</p>
+                        <p className="mt-0.5 text-base font-semibold tabular-nums text-slate-900 sm:text-lg dark:text-slate-50">
                           {normalizedTicketTypes.length}
                         </p>
                       </div>
                       <div>
-                        <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Seats</p>
-                        <p className="mt-0.5 text-base font-semibold tabular-nums sm:text-lg">
+                        <p className="text-[10px] uppercase tracking-wide text-slate-500">Seats</p>
+                        <p className="mt-0.5 text-base font-semibold tabular-nums text-slate-900 sm:text-lg dark:text-slate-50">
                           {totalTicketsFromTypes}
                         </p>
                       </div>
                       <div>
-                        <p className="text-[10px] uppercase tracking-wide text-muted-foreground">From</p>
-                        <p className="mt-0.5 truncate text-base font-semibold tabular-nums sm:text-lg">
+                        <p className="text-[10px] uppercase tracking-wide text-slate-500">From</p>
+                        <p className="mt-0.5 truncate text-base font-semibold tabular-nums text-slate-900 sm:text-lg dark:text-slate-50">
                           {formatTicketPriceLabel(minTicketPrice)}
                         </p>
                       </div>
@@ -1575,15 +1581,15 @@ export function EventCreationWizard({
                     return (
                       <div
                         key={ticketType.id}
-                        className={`space-y-4 rounded-2xl border p-4 ${
+                        className={`space-y-4 rounded-2xl border p-4 shadow-[0_1px_2px_rgba(15,23,42,0.03)] ${
                           fieldErrors.tickets && !isValid
                             ? 'border-destructive/50 bg-destructive/5'
-                            : 'border-border/70 bg-card'
+                            : 'border-slate-200/70 bg-white/90 dark:border-slate-700/60 dark:bg-slate-950/60'
                         }`}
                       >
                         <div className="flex items-center justify-between gap-3">
                           <div className="flex items-center gap-2">
-                            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-muted text-[11px] font-semibold tabular-nums">
+                            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-[11px] font-semibold tabular-nums text-primary">
                               {index + 1}
                             </span>
                             <p className="text-sm font-medium">
@@ -1751,7 +1757,7 @@ export function EventCreationWizard({
                   </WizardField>
 
                   <WizardField label="Logo" htmlFor="organizer-logo" hint="Optional">
-                    <div className="rounded-xl border border-dashed border-slate-200/80 bg-white p-3 dark:border-slate-700 dark:bg-slate-950">
+                    <div className="rounded-xl border border-dashed border-sky-200/70 bg-sky-50/20 p-3 dark:border-sky-500/25 dark:bg-sky-950/10">
                       <Input
                         id="organizer-logo"
                         type="file"
@@ -1760,7 +1766,7 @@ export function EventCreationWizard({
                         className="cursor-pointer"
                       />
                       {(organizerLogoPreview || organizer.logo) && (
-                        <div className="mt-3 rounded-lg border border-slate-200/60 bg-slate-50/60 p-3 dark:border-slate-700 dark:bg-slate-900/40">
+                        <div className="mt-3 rounded-lg border border-slate-200/60 bg-white p-3 dark:border-slate-700 dark:bg-slate-900/40">
                           <img
                             src={organizerLogoPreview || organizer.logo}
                             alt=""
@@ -1778,7 +1784,7 @@ export function EventCreationWizard({
             {step === 'sponsors' && (
               <div className="space-y-4">
                 <WizardSection icon={Award} title="Sponsors">
-                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200/70 bg-white px-3 py-2.5 dark:border-slate-700 dark:bg-slate-950">
+                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-sky-200/60 bg-sky-50/40 px-3 py-2.5 dark:border-sky-500/20 dark:bg-sky-950/20">
                     <p className="text-sm text-slate-500">
                       {sponsors.length >= MAX_EVENT_SPONSORS
                         ? `Max ${MAX_EVENT_SPONSORS}`
@@ -1846,22 +1852,22 @@ export function EventCreationWizard({
                       {sponsors.map((sponsor) => (
                         <div
                           key={sponsor.id}
-                          className="flex items-center justify-between gap-3 rounded-xl border border-border/60 bg-background p-3"
+                          className="flex items-center justify-between gap-3 rounded-xl border border-slate-200/70 bg-white/90 p-3 shadow-[0_1px_2px_rgba(15,23,42,0.03)] dark:border-slate-700/60 dark:bg-slate-950/60"
                         >
                           <div className="flex min-w-0 items-center gap-3">
                             {sponsor.logo ? (
                               <img
                                 src={sponsor.logo}
                                 alt=""
-                                className="h-10 w-10 shrink-0 rounded-lg border border-border/60 bg-muted/20 object-contain p-1"
+                                className="h-10 w-10 shrink-0 rounded-lg border border-sky-200/50 bg-sky-50/40 object-contain p-1 dark:border-sky-500/20 dark:bg-sky-950/20"
                                 onError={() => {}}
                               />
                             ) : (
-                              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted text-xs font-semibold">
+                              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-xs font-semibold text-primary">
                                 {sponsor.name.slice(0, 2).toUpperCase()}
                               </div>
                             )}
-                            <p className="truncate font-medium">{sponsor.name}</p>
+                            <p className="truncate font-medium text-slate-900 dark:text-slate-50">{sponsor.name}</p>
                           </div>
                           <Button
                             type="button"
@@ -1883,16 +1889,16 @@ export function EventCreationWizard({
             {step === 'review' && (
               <div className="space-y-5">
                 {galleryImages.length > 0 ? (
-                  <div className="overflow-hidden rounded-2xl border border-border/70 bg-muted/20">
+                  <div className="overflow-hidden rounded-2xl border border-slate-200/70 shadow-[0_1px_3px_rgba(15,23,42,0.05)] dark:border-slate-700/60">
                     <div className="relative h-36 sm:h-44">
                       <img
                         src={galleryImages[coverImageIndex]?.src || galleryImages[0]?.src}
                         alt=""
                         className="h-full w-full object-cover"
                       />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+                      <div className="absolute inset-0 bg-gradient-to-t from-slate-950/75 via-slate-900/25 to-transparent" />
                       <div className="absolute inset-x-0 bottom-0 p-4 text-white">
-                        <p className="text-xs font-medium uppercase tracking-wide text-white/80">Preview</p>
+                        <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-sky-100/90">Preview</p>
                         <p className="mt-0.5 text-lg font-semibold leading-tight">
                           {formData.name || 'Untitled event'}
                         </p>
@@ -1944,7 +1950,7 @@ export function EventCreationWizard({
                 </div>
 
                 {organizer.phone ? (
-                  <p className="text-xs text-muted-foreground">Contact: {organizer.phone}</p>
+                  <p className="text-xs text-slate-500">Contact: {organizer.phone}</p>
                 ) : null}
 
                 {galleryImages.length > 1 ? (
@@ -2004,7 +2010,7 @@ export function EventCreationWizard({
                 )}
 
                 <WizardSection title="Options">
-                  <div className="space-y-3 rounded-xl border border-slate-200/70 bg-white px-3 py-3 dark:border-slate-700 dark:bg-slate-950">
+                  <div className="space-y-3 rounded-xl border border-slate-200/70 bg-white/90 px-3 py-3 shadow-[0_1px_2px_rgba(15,23,42,0.03)] dark:border-slate-700 dark:bg-slate-950">
                     <div className="flex items-center justify-between gap-3">
                       <div className="min-w-0">
                         <Label htmlFor="affiliates-enabled" className="text-sm font-medium">
@@ -2047,8 +2053,8 @@ export function EventCreationWizard({
                   </div>
 
                   {isAdminContext ? (
-                    <div className="space-y-4 rounded-xl border border-slate-200/70 bg-white p-3.5 dark:border-slate-700 dark:bg-slate-950">
-                      <p className="text-sm font-semibold">Admin</p>
+                    <div className="space-y-4 rounded-xl border border-sky-200/60 bg-gradient-to-br from-sky-50/50 via-white to-indigo-50/30 p-3.5 dark:border-sky-500/20 dark:from-sky-950/20 dark:via-slate-950 dark:to-indigo-950/15">
+                      <p className="text-sm font-semibold text-slate-900 dark:text-slate-50">Admin</p>
                       <div className="flex items-center justify-between gap-3">
                         <Label htmlFor="featured-event" className="text-sm font-medium">
                           Featured
@@ -2098,7 +2104,7 @@ export function EventCreationWizard({
                   ) : null}
 
                   {!isAdminContext ? (
-                    <p className="rounded-xl border border-border/60 bg-muted/20 px-3 py-2.5 text-[11px] text-muted-foreground">
+                    <p className="rounded-xl border border-sky-200/70 bg-sky-50/60 px-3 py-2.5 text-[11px] text-sky-900 dark:border-sky-500/25 dark:bg-sky-500/10 dark:text-sky-100">
                       Submitted events need admin approval before going live.
                     </p>
                   ) : null}
