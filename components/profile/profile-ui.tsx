@@ -17,7 +17,9 @@ export function ProfilePageHeader({
       <div className="min-w-0">
         <h1 className="text-2xl font-semibold tracking-tight sm:text-[1.7rem]">{title}</h1>
         {description ? (
-          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{description}</p>
+          <p className="mt-1 max-w-2xl text-[13px] leading-snug text-muted-foreground sm:text-sm sm:leading-relaxed">
+            {description}
+          </p>
         ) : null}
       </div>
       {actions ? <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div> : null}
@@ -40,25 +42,31 @@ export function ProfileMetric({
 }) {
   const iconClass =
     accent === 'emerald'
-      ? 'bg-emerald-500/10 text-emerald-700'
+      ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
       : accent === 'amber'
-        ? 'bg-amber-500/10 text-amber-700'
-        : 'bg-primary/10 text-primary';
+        ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300'
+        : 'bg-[#9A7B2F]/12 text-[#8a6d28]';
 
   return (
-    <div className="rounded-2xl border border-border/70 bg-background/70 p-4">
-      <div className="flex items-start justify-between gap-3">
-        <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+    <div className="min-w-0 rounded-2xl border border-slate-200/70 bg-gradient-to-br from-white to-slate-50/60 p-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)] sm:p-4 dark:border-slate-700/60 dark:from-slate-950 dark:to-slate-900/50">
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-slate-500 sm:text-[11px] dark:text-slate-400">
           {label}
         </p>
         {Icon ? (
-          <span className={cn('flex h-8 w-8 items-center justify-center rounded-xl', iconClass)}>
-            <Icon className="h-4 w-4" />
+          <span className={cn('flex h-7 w-7 shrink-0 items-center justify-center rounded-lg sm:h-8 sm:w-8 sm:rounded-xl', iconClass)}>
+            <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
           </span>
         ) : null}
       </div>
-      <p className="mt-2 truncate text-2xl font-semibold tracking-tight tabular-nums">{value}</p>
-      {hint ? <p className="mt-1 text-xs text-muted-foreground">{hint}</p> : null}
+      <p className="mt-1.5 truncate text-lg font-semibold tracking-tight text-slate-900 tabular-nums sm:mt-2 sm:text-2xl dark:text-slate-50">
+        {value}
+      </p>
+      {hint ? (
+        <p className="mt-1 line-clamp-2 text-[11px] text-slate-500 sm:text-xs dark:text-slate-400">
+          {hint}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -77,19 +85,25 @@ export function ProfileSection({
   className?: string;
 }) {
   return (
-    <section className={cn('rounded-2xl border border-border/70 bg-background/50', className)}>
+    <section className={cn('rounded-2xl border border-slate-200/70 bg-gradient-to-b from-white to-slate-50/40 shadow-[0_1px_2px_rgba(15,23,42,0.03)] dark:border-slate-700/60 dark:from-slate-950 dark:to-slate-900/40', className)}>
       {title || description || actions ? (
-        <div className="flex flex-col gap-2 border-b border-border/60 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+        <div className="flex flex-col gap-2 border-b border-slate-200/60 px-3 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5 sm:py-3.5 dark:border-slate-800">
           <div className="min-w-0">
-            {title ? <h2 className="text-sm font-semibold tracking-tight">{title}</h2> : null}
+            {title ? (
+              <h2 className="text-sm font-semibold tracking-tight text-slate-900 dark:text-slate-50">
+                {title}
+              </h2>
+            ) : null}
             {description ? (
-              <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
+              <p className="mt-0.5 text-xs leading-snug text-slate-500 sm:leading-normal dark:text-slate-400">
+                {description}
+              </p>
             ) : null}
           </div>
           {actions ? <div className="flex shrink-0 flex-wrap gap-2">{actions}</div> : null}
         </div>
       ) : null}
-      <div className="p-4 sm:p-5">{children}</div>
+      <div className="p-3 sm:p-5">{children}</div>
     </section>
   );
 }
@@ -127,7 +141,7 @@ export function ProfileFilterChips<T extends string>({
   onChange: (key: T) => void;
 }) {
   return (
-    <div className="flex flex-wrap gap-1.5">
+    <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-0.5 sm:flex-wrap sm:overflow-visible">
       {items.map((item) => {
         const active = value === item.key;
         return (
@@ -136,10 +150,10 @@ export function ProfileFilterChips<T extends string>({
             type="button"
             onClick={() => onChange(item.key)}
             className={cn(
-              'inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-medium transition-colors',
+              'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-xs font-medium transition-colors',
               active
-                ? 'bg-foreground text-background'
-                : 'bg-muted/70 text-muted-foreground hover:bg-muted hover:text-foreground'
+                ? 'bg-[#9A7B2F]/15 text-[#7a6224] ring-1 ring-[#9A7B2F]/25 dark:bg-[#9A7B2F]/20 dark:text-[#e6d3a0]'
+                : 'bg-white/80 text-slate-500 ring-1 ring-slate-200/70 hover:bg-white hover:text-slate-800 dark:bg-slate-900/60 dark:text-slate-400 dark:ring-slate-700/70'
             )}
           >
             {item.label}

@@ -49,8 +49,7 @@ export function EventPurchasesTable({ purchases, currency }: Props) {
 
   return (
     <ProfileSection
-      title="Purchase history"
-      description="Find orders by buyer name, email, or status."
+      title="Purchases"
       actions={
         purchases.length > 0 ? (
           <span className="text-xs tabular-nums text-muted-foreground">
@@ -60,7 +59,7 @@ export function EventPurchasesTable({ purchases, currency }: Props) {
       }
     >
       {purchases.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No purchases recorded for this event yet.</p>
+        <p className="text-sm text-muted-foreground">No purchases yet.</p>
       ) : (
         <div className="space-y-3">
           <div className="relative">
@@ -68,7 +67,7 @@ export function EventPurchasesTable({ purchases, currency }: Props) {
             <Input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search purchases…"
+              placeholder="Search…"
               className="h-10 rounded-xl pl-9"
             />
           </div>
@@ -81,7 +80,7 @@ export function EventPurchasesTable({ purchases, currency }: Props) {
                 {filtered.map((row) => (
                   <div
                     key={row.order.id}
-                    className="rounded-xl border border-border/70 bg-background/70 p-3"
+                    className="rounded-xl border border-slate-200/70 bg-white/80 p-3 dark:border-slate-700/60 dark:bg-slate-950/50"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">

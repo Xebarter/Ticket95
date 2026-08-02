@@ -128,18 +128,15 @@ export function EventAffiliateControl({ event, onUpdated }: Props) {
                       {rate}%
                     </span>
                   </div>
-                  <p className="mt-0.5 text-xs leading-relaxed text-slate-400">
-                    Partners can share this event and earn on completed sales.
-                  </p>
+                  <p className="mt-0.5 text-xs text-slate-400">Partners earn on referred sales.</p>
                 </>
               ) : (
                 <>
                   <p className="text-sm font-semibold tracking-tight text-slate-900 dark:text-slate-100">
-                    Grow with affiliates
+                    Affiliates
                   </p>
-                  <p className="mt-0.5 text-xs leading-relaxed text-slate-500 dark:text-slate-400">
-                    Let promoters share your link. You choose their commission — minimum{' '}
-                    {MIN_AFFILIATE_COMMISSION_PERCENT}%.
+                  <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                    Let promoters share your link. Min {MIN_AFFILIATE_COMMISSION_PERCENT}%.
                   </p>
                 </>
               )}
@@ -152,7 +149,7 @@ export function EventAffiliateControl({ event, onUpdated }: Props) {
             variant={enabled ? 'outline' : 'default'}
             onClick={openDialog}
             className={cn(
-              'h-9 shrink-0 rounded-lg sm:min-w-[8.5rem]',
+              'h-10 w-full shrink-0 rounded-lg sm:h-9 sm:w-auto sm:min-w-[8.5rem]',
               enabled
                 ? 'border-slate-600 bg-transparent text-slate-200 hover:border-[#9A7B2F]/50 hover:bg-[#9A7B2F]/10 hover:text-[#d4b46a]'
                 : 'bg-slate-900 font-medium text-white hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white'

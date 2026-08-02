@@ -86,9 +86,8 @@ function ProfileLayoutShellInner({ children }: { children: React.ReactNode }) {
             <section
               className={cn(
                 'min-w-0',
-                isVerifyList
-                  ? 'md:rounded-3xl md:border md:border-border/70 md:bg-card/95 md:p-6 md:shadow-sm md:backdrop-blur md:supports-[backdrop-filter]:bg-card/90 lg:p-7'
-                  : 'rounded-3xl border border-border/70 bg-card/95 p-4 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-card/90 sm:p-6 lg:p-7'
+                // Drop outer card chrome on mobile so pages reclaim horizontal space
+                'md:rounded-3xl md:border md:border-border/70 md:bg-card/95 md:p-6 md:shadow-sm md:backdrop-blur md:supports-[backdrop-filter]:bg-card/90 lg:p-7'
               )}
             >
               {children}

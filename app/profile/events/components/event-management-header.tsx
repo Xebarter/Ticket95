@@ -261,9 +261,13 @@ export function EventManagementHeader({
     <div className="space-y-5">
       <ProfilePageHeader
         title="Events"
-        description="Manage sales, buyers, affiliates, and ticket verification."
+        description="Sales, buyers, and check-in."
         actions={
-          <Button asChild size="sm" className="h-9 rounded-lg">
+          <Button
+            asChild
+            size="sm"
+            className="h-9 rounded-xl bg-[#9A7B2F] text-white shadow-[0_1px_2px_rgba(154,123,47,0.2)] hover:bg-[#866a28]"
+          >
             <Link href="/organizer/dashboard/create">
               <Plus className="mr-1.5 h-4 w-4" />
               New event
@@ -274,15 +278,15 @@ export function EventManagementHeader({
 
       {events.length > 0 ? (
         <div className="space-y-4">
-          <div className="rounded-xl border border-border/70 bg-background/80 p-2.5 sm:p-3">
+          <div className="rounded-2xl border border-slate-200/70 bg-gradient-to-br from-slate-50/90 via-white to-[#f7f2e8]/40 p-2.5 shadow-[0_1px_2px_rgba(15,23,42,0.04)] sm:p-3 dark:border-slate-700/60 dark:from-slate-900/80 dark:via-slate-950 dark:to-slate-900/60">
             <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center">
               <div className="relative min-w-0 flex-1">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                 <Input
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Search by name or venue"
-                  className="h-9 rounded-lg border-border/60 bg-transparent pl-9 shadow-none"
+                  placeholder="Search events"
+                  className="h-10 rounded-xl border-slate-200/80 bg-white/80 pl-9 shadow-none sm:h-9 dark:border-slate-700 dark:bg-slate-950/60"
                 />
               </div>
               <div className="relative sm:hidden">
@@ -294,7 +298,7 @@ export function EventManagementHeader({
                   }
                   onChange={(e) => onSelectEvent(e.target.value)}
                   disabled={filteredEvents.length === 0}
-                  className="h-9 w-full appearance-none rounded-lg border border-border/60 bg-transparent py-1.5 pl-3 pr-9 text-sm font-medium disabled:opacity-60"
+                  className="h-10 w-full appearance-none rounded-xl border border-slate-200/80 bg-white/80 py-1.5 pl-3 pr-9 text-sm font-medium disabled:opacity-60 dark:border-slate-700 dark:bg-slate-950/60"
                   aria-label="Jump to event"
                 >
                   {filteredEvents.length === 0 ? (
@@ -308,11 +312,11 @@ export function EventManagementHeader({
                     ))
                   )}
                 </select>
-                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               </div>
             </div>
 
-            <div className="mt-2.5 flex gap-1 overflow-x-auto pb-0.5">
+            <div className="mt-2.5 flex gap-1.5 overflow-x-auto pb-0.5">
               {FILTERS.filter(
                 (filter) =>
                   filter.key === 'all' ||
@@ -326,10 +330,10 @@ export function EventManagementHeader({
                     type="button"
                     onClick={() => setStatusFilter(filter.key)}
                     className={cn(
-                      'inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-colors',
+                      'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-xs font-medium transition-colors',
                       active
-                        ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
-                        : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                        ? 'bg-[#9A7B2F]/15 text-[#7a6224] ring-1 ring-[#9A7B2F]/25 dark:bg-[#9A7B2F]/20 dark:text-[#e6d3a0]'
+                        : 'bg-white/70 text-slate-500 ring-1 ring-slate-200/70 hover:bg-white hover:text-slate-800 dark:bg-slate-900/60 dark:text-slate-400 dark:ring-slate-700/70 dark:hover:text-slate-200'
                     )}
                   >
                     {filter.key === 'affiliates' ? <Handshake className="h-3 w-3" /> : null}
@@ -360,30 +364,30 @@ export function EventManagementHeader({
                     type="button"
                     onClick={() => onSelectEvent(listedEvent.id)}
                     className={cn(
-                      'group flex min-w-[240px] max-w-[280px] shrink-0 items-center gap-3 rounded-xl border p-2.5 text-left transition-colors',
+                      'group flex min-w-[240px] max-w-[280px] shrink-0 items-center gap-3 rounded-2xl border p-2.5 text-left transition-all',
                       active
-                        ? 'border-slate-900 bg-slate-900 text-white dark:border-slate-100 dark:bg-slate-100 dark:text-slate-900'
+                        ? 'border-[#9A7B2F]/35 bg-gradient-to-br from-[#f7f2e8] to-white shadow-[0_2px_10px_rgba(154,123,47,0.12)] ring-1 ring-[#9A7B2F]/20 dark:from-[#9A7B2F]/15 dark:to-slate-950 dark:ring-[#9A7B2F]/30'
                         : removed
-                          ? 'border-red-300/70 bg-red-50/80 text-red-950 hover:border-red-400/70 hover:bg-red-50 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-100'
+                          ? 'border-rose-200/80 bg-rose-50/70 text-rose-950 hover:border-rose-300 dark:border-rose-500/25 dark:bg-rose-500/10 dark:text-rose-100'
                           : pending
-                            ? 'border-amber-300/60 bg-amber-50/70 text-amber-950 hover:border-amber-400/70 hover:bg-amber-50 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100'
-                            : 'border-border/70 bg-background hover:border-slate-300 hover:bg-muted/40'
+                            ? 'border-amber-200/80 bg-amber-50/70 text-amber-950 hover:border-amber-300 dark:border-amber-500/25 dark:bg-amber-500/10 dark:text-amber-100'
+                            : 'border-slate-200/70 bg-white/90 hover:border-slate-300 hover:bg-slate-50/80 dark:border-slate-700/60 dark:bg-slate-950/50 dark:hover:bg-slate-900/70'
                     )}
                   >
                     <div
                       className={cn(
-                        'relative h-11 w-11 shrink-0 overflow-hidden rounded-lg',
-                        active ? 'bg-white/10' : 'bg-muted'
+                        'relative h-11 w-11 shrink-0 overflow-hidden rounded-xl',
+                        active ? 'ring-1 ring-[#9A7B2F]/25' : 'bg-slate-100 dark:bg-slate-800'
                       )}
                     >
                       {thumb ? (
                         <Image src={thumb} alt="" fill className="object-cover" sizes="44px" />
                       ) : (
-                        <div className="flex h-full w-full items-center justify-center">
+                        <div className="flex h-full w-full items-center justify-center bg-slate-100 dark:bg-slate-800">
                           <Calendar
                             className={cn(
                               'h-4 w-4',
-                              active ? 'text-white/50' : 'text-muted-foreground'
+                              active ? 'text-[#9A7B2F]' : 'text-slate-400'
                             )}
                           />
                         </div>
@@ -391,40 +395,45 @@ export function EventManagementHeader({
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5">
-                        <p className="truncate text-sm font-semibold leading-snug">
+                        <p
+                          className={cn(
+                            'truncate text-sm font-semibold leading-snug',
+                            active ? 'text-slate-900 dark:text-slate-50' : undefined
+                          )}
+                        >
                           {listedEvent.name}
                         </p>
                         <EventAffiliateChip
                           enabled={listedEvent.affiliates_enabled}
-                          onDark={active}
+                          onDark={false}
                         />
                       </div>
                       <p
                         className={cn(
                           'mt-0.5 truncate text-[11px]',
                           active
-                            ? 'text-white/65 dark:text-slate-600'
+                            ? 'text-slate-500 dark:text-slate-400'
                             : pending
-                              ? 'text-amber-900/80 dark:text-amber-100/85'
+                              ? 'text-amber-800/80 dark:text-amber-100/85'
                               : 'text-muted-foreground'
                         )}
                       >
                         {statusLabel(status)} · {formatDateTime(listedEvent.date)}
                       </p>
                       {pending ? (
-                        <span className="mt-1 inline-flex rounded-md border border-amber-400/40 bg-amber-100/80 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/20 dark:text-amber-100">
+                        <span className="mt-1 inline-flex rounded-md border border-amber-300/50 bg-amber-100/70 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-100">
                           Awaiting approval
                         </span>
                       ) : removed ? (
-                        <span className="mt-1 inline-flex rounded-md border border-red-400/40 bg-red-100/80 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-red-900 dark:border-red-500/40 dark:bg-red-500/20 dark:text-red-100">
+                        <span className="mt-1 inline-flex rounded-md border border-rose-300/50 bg-rose-100/70 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-rose-800 dark:border-rose-500/30 dark:bg-rose-500/15 dark:text-rose-100">
                           Deleted by Admin
                         </span>
                       ) : hasPendingDeactivationRequest(listedEvent) ? (
-                        <span className="mt-1 inline-flex rounded-md border border-orange-400/40 bg-orange-100/80 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-orange-900">
+                        <span className="mt-1 inline-flex rounded-md border border-orange-300/50 bg-orange-100/70 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-orange-800">
                           Deactivation pending
                         </span>
                       ) : hasPendingReactivationRequest(listedEvent) ? (
-                        <span className="mt-1 inline-flex rounded-md border border-sky-400/40 bg-sky-100/80 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-sky-900">
+                        <span className="mt-1 inline-flex rounded-md border border-sky-300/50 bg-sky-100/70 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-sky-800">
                           Reactivation pending
                         </span>
                       ) : null}
@@ -436,8 +445,8 @@ export function EventManagementHeader({
           )}
 
           {event ? (
-            <div className="relative overflow-hidden rounded-xl border border-border/70 bg-background">
-              <div className="relative h-32 sm:h-44">
+            <div className="relative overflow-hidden rounded-2xl border border-slate-200/70 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.05)] dark:border-slate-700/60 dark:bg-slate-950">
+              <div className="relative h-28 sm:h-44">
                 {cover ? (
                   <Image
                     src={cover}
@@ -448,77 +457,73 @@ export function EventManagementHeader({
                     priority
                   />
                 ) : (
-                  <div className="flex h-full w-full items-center justify-center bg-slate-900">
-                    <Calendar className="h-9 w-9 text-white/25" />
+                  <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-800 to-slate-950">
+                    <Calendar className="h-9 w-9 text-white/20" />
                   </div>
                 )}
-                <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/55 to-slate-950/20" />
-                <div className="absolute inset-x-0 bottom-0 p-4 sm:p-5">
-                  <div className="mb-2 flex flex-wrap items-center gap-1.5">
+                <div className="absolute inset-0 bg-gradient-to-t from-slate-950/95 via-slate-950/50 to-slate-950/10" />
+                <div className="absolute inset-x-0 bottom-0 p-3 sm:p-5">
+                  <div className="mb-1.5 flex flex-wrap items-center gap-1.5 sm:mb-2">
                     <span
                       className={cn(
-                        'inline-flex items-center rounded-md border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.1em] backdrop-blur-sm',
+                        'inline-flex items-center rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.1em] backdrop-blur-sm',
                         lifecycleStatus === 'approved'
-                          ? 'border-emerald-400/30 bg-emerald-500/20 text-emerald-100'
+                          ? 'border-emerald-400/25 bg-emerald-500/15 text-emerald-100'
                           : lifecycleStatus === 'pending'
-                            ? 'border-amber-400/30 bg-amber-500/20 text-amber-100'
+                            ? 'border-amber-400/25 bg-amber-500/15 text-amber-100'
                             : lifecycleStatus === 'deactivated'
-                              ? 'border-rose-400/30 bg-rose-500/20 text-rose-100'
+                              ? 'border-rose-400/25 bg-rose-500/15 text-rose-100'
                               : lifecycleStatus === 'removed'
-                                ? 'border-red-400/40 bg-red-500/30 text-red-50'
-                                : 'border-white/20 bg-white/10 text-white/90'
+                                ? 'border-rose-400/30 bg-rose-500/25 text-rose-50'
+                                : 'border-white/15 bg-white/10 text-white/90'
                       )}
                     >
                       {event ? getEventLifecycleLabel(event) : statusLabel(lifecycleStatus)}
                     </span>
                     {event.affiliates_enabled ? (
-                      <span className="inline-flex items-center gap-1 rounded-md border border-white/20 bg-white/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-white/90 backdrop-blur-sm">
+                      <span className="inline-flex items-center gap-1 rounded-full border border-[#d4b46a]/30 bg-[#9A7B2F]/20 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-[#e6d3a0] backdrop-blur-sm">
                         <Handshake className="h-3 w-3" />
                         Affiliates
                       </span>
                     ) : null}
                   </div>
-                  <h2 className="line-clamp-2 text-xl font-semibold tracking-tight text-white sm:text-2xl">
+                  <h2 className="line-clamp-2 text-lg font-semibold tracking-tight text-white sm:text-2xl">
                     {event.name}
                   </h2>
-                  <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-white/75 sm:text-sm">
+                  <div className="mt-1 flex flex-col gap-0.5 text-[11px] text-white/70 sm:mt-1.5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-3 sm:gap-y-1 sm:text-sm">
                     <span className="inline-flex items-center gap-1.5">
-                      <Calendar className="h-3.5 w-3.5 shrink-0" />
+                      <Calendar className="h-3.5 w-3.5 shrink-0 text-[#d4b46a]/80" />
                       {formatDateTime(event.date)}
                     </span>
                     <span className="inline-flex min-w-0 items-center gap-1.5">
-                      <MapPin className="h-3.5 w-3.5 shrink-0" />
+                      <MapPin className="h-3.5 w-3.5 shrink-0 text-[#d4b46a]/80" />
                       <span className="truncate">{event.venue}</span>
                     </span>
                   </div>
                 </div>
 
                 {isRemoved ? (
-                  <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-950/55 backdrop-blur-[2px]">
-                    <div className="mx-4 max-w-sm rounded-xl border border-red-400/40 bg-red-950/80 px-4 py-3 text-center shadow-lg">
-                      <p className="text-sm font-semibold tracking-tight text-red-50">
-                        Event deleted by Admin
+                  <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-950/50 backdrop-blur-[2px]">
+                    <div className="mx-4 max-w-sm rounded-2xl border border-rose-400/30 bg-rose-950/75 px-4 py-3 text-center shadow-lg">
+                      <p className="text-sm font-semibold tracking-tight text-rose-50">
+                        Deleted by Admin
                       </p>
-                      <p className="mt-1 text-xs leading-relaxed text-red-100/80">
-                        This event is hidden from the public. Edit and resubmit for verification, or
-                        delete it permanently.
-                      </p>
+                      <p className="mt-1 text-xs text-rose-100/75">Hidden from the public.</p>
                     </div>
                   </div>
                 ) : null}
               </div>
 
-              <div className="space-y-3 border-t border-border/60 p-3 sm:p-4">
+              <div className="space-y-3 border-t border-slate-200/70 bg-gradient-to-b from-slate-50/50 to-white p-3 sm:p-4 dark:border-slate-800 dark:from-slate-900/40 dark:to-slate-950">
                 {isRemoved ? (
-                  <div className="rounded-lg border border-red-300/60 bg-red-50/80 px-3 py-2 text-xs text-red-900 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-100">
-                    Deleted by admin — not visible on Ticket95 until you resubmit and it is approved
-                    again.
+                  <div className="rounded-xl border border-rose-200/70 bg-rose-50/80 px-3 py-2 text-xs text-rose-900 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-100">
+                    Edit and resubmit, or delete permanently.
                   </div>
                 ) : isPendingApproval || isDeactivated ? (
-                  <div className="rounded-lg border border-amber-300/60 bg-amber-50/70 px-3 py-2 text-xs text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-100">
+                  <div className="rounded-xl border border-amber-200/70 bg-amber-50/80 px-3 py-2 text-xs text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
                     {isDeactivated
-                      ? 'This event is deactivated. New ticket sales are paused until an admin reactivates it.'
-                      : 'Affiliate and verification controls will activate after approval.'}
+                      ? 'Sales paused until reactivation.'
+                      : 'Controls unlock after approval.'}
                   </div>
                 ) : (
                   <EventAffiliateControl
@@ -527,18 +532,23 @@ export function EventManagementHeader({
                   />
                 )}
 
-                <div className="flex flex-wrap gap-2 border-t border-border/50 pt-3">
+                <div className="space-y-2 border-t border-slate-200/60 pt-3 dark:border-slate-800">
                   {isRemoved ? (
-                    <>
-                      <Button asChild variant="outline" size="sm" className="h-9 rounded-lg">
+                    <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+                      <Button
+                        asChild
+                        variant="outline"
+                        size="sm"
+                        className="h-11 rounded-xl border-slate-200/80 bg-white sm:h-9 dark:border-slate-700"
+                      >
                         <Link href={`/organizer/dashboard/edit/${event.id}`}>
                           <Pencil className="mr-1.5 h-4 w-4" />
-                          Edit event
+                          Edit
                         </Link>
                       </Button>
                       <Button
                         size="sm"
-                        className="h-9 rounded-lg"
+                        className="h-11 rounded-xl bg-[#9A7B2F] text-white hover:bg-[#866a28] sm:h-9"
                         disabled={!!removedBusy}
                         onClick={() => void handleResubmit()}
                       >
@@ -547,14 +557,14 @@ export function EventManagementHeader({
                         ) : (
                           <RefreshCw className="mr-1.5 h-4 w-4" />
                         )}
-                        Resubmit for verification
+                        Resubmit
                       </Button>
                       <AlertDialog>
                         <AlertDialogTrigger asChild>
                           <Button
-                            variant="destructive"
+                            variant="outline"
                             size="sm"
-                            className="h-9 rounded-lg"
+                            className="col-span-2 h-11 rounded-xl border-rose-200/80 text-rose-700 hover:bg-rose-50 sm:col-span-1 sm:h-9 dark:border-rose-500/30 dark:text-rose-200 dark:hover:bg-rose-500/10"
                             disabled={!!removedBusy}
                           >
                             {removedBusy === 'delete' ? (
@@ -562,7 +572,7 @@ export function EventManagementHeader({
                             ) : (
                               <Trash2 className="mr-1.5 h-4 w-4" />
                             )}
-                            Delete event
+                            Delete
                           </Button>
                         </AlertDialogTrigger>
                         <AlertDialogContent>
@@ -587,122 +597,140 @@ export function EventManagementHeader({
                           </AlertDialogFooter>
                         </AlertDialogContent>
                       </AlertDialog>
-                    </>
+                    </div>
                   ) : (
                     <>
-                      {isPendingApproval || isDeactivated ? (
-                        <Button size="sm" className="h-9 rounded-lg" disabled>
-                          <QrCode className="mr-1.5 h-4 w-4" />
-                          Verify tickets
-                        </Button>
-                      ) : (
-                        <Button asChild size="sm" className="h-9 rounded-lg">
-                          <Link href={`/profile/verify?event=${event.id}`}>
+                      <div className="grid grid-cols-2 gap-2">
+                        {isPendingApproval || isDeactivated ? (
+                          <Button
+                            size="sm"
+                            className="h-11 rounded-xl bg-[#9A7B2F]/50 text-white sm:h-10"
+                            disabled
+                          >
                             <QrCode className="mr-1.5 h-4 w-4" />
-                            Verify tickets
-                          </Link>
-                        </Button>
-                      )}
-                      <Button asChild variant="outline" size="sm" className="h-9 rounded-lg">
-                        <Link href={`/organizer/dashboard/edit/${event.id}`}>
-                          <Pencil className="mr-1.5 h-4 w-4" />
-                          Edit event
-                        </Link>
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-9 rounded-lg"
-                        onClick={() => setPreviewOpen(true)}
-                      >
-                        <Eye className="mr-1.5 h-4 w-4" />
-                        Preview card
-                      </Button>
-                      {isPendingApproval || isDeactivated ? (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-9 rounded-lg text-muted-foreground"
-                          disabled
-                        >
-                          <ExternalLink className="mr-1.5 h-4 w-4" />
-                          Public page
-                        </Button>
-                      ) : (
+                            Verify
+                          </Button>
+                        ) : (
+                          <Button
+                            asChild
+                            size="sm"
+                            className="h-11 rounded-xl bg-[#9A7B2F] text-white shadow-[0_1px_2px_rgba(154,123,47,0.25)] hover:bg-[#866a28] sm:h-10"
+                          >
+                            <Link href={`/profile/verify?event=${event.id}`}>
+                              <QrCode className="mr-1.5 h-4 w-4" />
+                              Verify
+                            </Link>
+                          </Button>
+                        )}
                         <Button
                           asChild
-                          variant="ghost"
+                          variant="outline"
                           size="sm"
-                          className="h-9 rounded-lg text-muted-foreground"
+                          className="h-11 rounded-xl border-slate-200/80 bg-white sm:h-10 dark:border-slate-700 dark:bg-slate-950"
                         >
-                          <Link href={`/events/${event.id}`}>
-                            <ExternalLink className="mr-1.5 h-4 w-4" />
-                            Public page
+                          <Link href={`/organizer/dashboard/edit/${event.id}`}>
+                            <Pencil className="mr-1.5 h-4 w-4" />
+                            Edit
                           </Link>
                         </Button>
-                      )}
+                      </div>
 
-                      {lifecycleStatus === 'approved' && !deactivationPending ? (
+                      <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
                         <Button
                           variant="outline"
                           size="sm"
-                          className="h-9 rounded-lg border-rose-200 text-rose-700 hover:bg-rose-50"
-                          disabled={requestBusy}
-                          onClick={() => {
-                            setRequestReason('');
-                            setRequestDialog('deactivate');
-                          }}
+                          className="h-10 rounded-xl border-slate-200/70 bg-white/80 text-slate-600 hover:bg-slate-50 sm:h-9 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300"
+                          onClick={() => setPreviewOpen(true)}
                         >
-                          <PowerOff className="mr-1.5 h-4 w-4" />
-                          Request deactivation
+                          <Eye className="mr-1.5 h-4 w-4" />
+                          Preview
                         </Button>
-                      ) : null}
+                        {isPendingApproval || isDeactivated ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-10 rounded-xl text-slate-500 sm:h-9"
+                            disabled
+                          >
+                            <ExternalLink className="mr-1.5 h-4 w-4" />
+                            Public
+                          </Button>
+                        ) : (
+                          <Button
+                            asChild
+                            variant="ghost"
+                            size="sm"
+                            className="h-10 rounded-xl text-slate-500 hover:text-slate-800 sm:h-9"
+                          >
+                            <Link href={`/events/${event.id}`}>
+                              <ExternalLink className="mr-1.5 h-4 w-4" />
+                              Public
+                            </Link>
+                          </Button>
+                        )}
 
-                      {deactivationPending ? (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-9 rounded-lg"
-                          disabled={requestBusy}
-                          onClick={() => void cancelLifecycleRequest('deactivate')}
-                        >
-                          {requestBusy ? (
-                            <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-                          ) : null}
-                          Cancel deactivation request
-                        </Button>
-                      ) : null}
+                        {lifecycleStatus === 'approved' && !deactivationPending ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="col-span-2 h-10 rounded-xl border-rose-200/70 text-rose-700 hover:bg-rose-50/80 sm:col-span-1 sm:h-9 dark:border-rose-500/30 dark:text-rose-200 dark:hover:bg-rose-500/10"
+                            disabled={requestBusy}
+                            onClick={() => {
+                              setRequestReason('');
+                              setRequestDialog('deactivate');
+                            }}
+                          >
+                            <PowerOff className="mr-1.5 h-4 w-4" />
+                            Deactivate
+                          </Button>
+                        ) : null}
 
-                      {isDeactivated && !reactivationPending ? (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-9 rounded-lg border-sky-200 text-sky-800 hover:bg-sky-50"
-                          disabled={requestBusy}
-                          onClick={() => {
-                            setRequestReason('');
-                            setRequestDialog('reactivate');
-                          }}
-                        >
-                          <Power className="mr-1.5 h-4 w-4" />
-                          Request reactivation
-                        </Button>
-                      ) : null}
+                        {deactivationPending ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="col-span-2 h-10 rounded-xl border-slate-200/70 sm:col-span-1 sm:h-9"
+                            disabled={requestBusy}
+                            onClick={() => void cancelLifecycleRequest('deactivate')}
+                          >
+                            {requestBusy ? (
+                              <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                            ) : null}
+                            Cancel request
+                          </Button>
+                        ) : null}
 
-                      {reactivationPending ? (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-9 rounded-lg"
-                          disabled={requestBusy}
-                          onClick={() => void cancelLifecycleRequest('reactivate')}
-                        >
-                          {requestBusy ? (
-                            <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-                          ) : null}
-                          Cancel reactivation request
-                        </Button>
-                      ) : null}
+                        {isDeactivated && !reactivationPending ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="col-span-2 h-10 rounded-xl border-sky-200/70 text-sky-800 hover:bg-sky-50/80 sm:col-span-1 sm:h-9 dark:border-sky-500/30 dark:text-sky-200 dark:hover:bg-sky-500/10"
+                            disabled={requestBusy}
+                            onClick={() => {
+                              setRequestReason('');
+                              setRequestDialog('reactivate');
+                            }}
+                          >
+                            <Power className="mr-1.5 h-4 w-4" />
+                            Reactivate
+                          </Button>
+                        ) : null}
+
+                        {reactivationPending ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="col-span-2 h-10 rounded-xl border-slate-200/70 sm:col-span-1 sm:h-9"
+                            disabled={requestBusy}
+                            onClick={() => void cancelLifecycleRequest('reactivate')}
+                          >
+                            {requestBusy ? (
+                              <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                            ) : null}
+                            Cancel request
+                          </Button>
+                        ) : null}
+                      </div>
                     </>
                   )}
                 </div>

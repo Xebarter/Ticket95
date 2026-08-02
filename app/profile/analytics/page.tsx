@@ -45,22 +45,23 @@ export default function ProfileAnalyticsPage() {
   } = useOrganizerAnalytics();
 
   if (loading && !data) {
-    return <ProfileLoadingState label="Loading analytics…" />;
+    return <ProfileLoadingState label="Loading…" />;
   }
 
   if (error && !data) {
     return (
       <div className="space-y-5">
-        <ProfilePageHeader
-          title="Analytics"
-          description="Sales, attendance, and performance across your events."
-        />
+        <ProfilePageHeader title="Analytics" description="Sales and attendance." />
         <ProfileEmptyState
           icon={BarChart3}
           title="Couldn’t load analytics"
           description={error}
           action={
-            <Button type="button" onClick={refresh}>
+            <Button
+              type="button"
+              className="rounded-xl bg-[#9A7B2F] text-white hover:bg-[#866a28]"
+              onClick={refresh}
+            >
               Try again
             </Button>
           }
@@ -72,16 +73,13 @@ export default function ProfileAnalyticsPage() {
   if (!data || data.events.length === 0) {
     return (
       <div className="space-y-5">
-        <ProfilePageHeader
-          title="Analytics"
-          description="Sales, attendance, and performance across your events."
-        />
+        <ProfilePageHeader title="Analytics" description="Sales and attendance." />
         <ProfileEmptyState
           icon={BarChart3}
           title="No events yet"
-          description="Create an event to unlock organizer analytics for sales, revenue, and check-ins."
+          description="Create an event to unlock sales and check-in analytics."
           action={
-            <Button asChild>
+            <Button asChild className="rounded-xl bg-[#9A7B2F] text-white hover:bg-[#866a28]">
               <Link href="/organizer/dashboard/create">
                 <Plus className="mr-1.5 h-4 w-4" />
                 Create event
@@ -102,9 +100,9 @@ export default function ProfileAnalyticsPage() {
     <div className="space-y-5">
       <ProfilePageHeader
         title="Analytics"
-        description="Organizer sales, attendance, buyers, affiliates, and door performance."
+        description="Sales, attendance, and door performance."
         actions={
-          <span className="rounded-full border border-border/70 bg-muted/40 px-3 py-1 text-xs tabular-nums text-muted-foreground">
+          <span className="rounded-full border border-[#9A7B2F]/20 bg-[#9A7B2F]/10 px-3 py-1 text-xs font-medium tabular-nums text-[#7a6224]">
             {data.events.length} event{data.events.length === 1 ? '' : 's'}
           </span>
         }
@@ -129,7 +127,7 @@ export default function ProfileAnalyticsPage() {
       {data.selectedEvent ? <AnalyticsEventHeader event={data.selectedEvent} /> : null}
 
       {error ? (
-        <p className="rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-sm text-amber-800 dark:text-amber-200">
+        <p className="rounded-2xl border border-amber-200/70 bg-amber-50/70 px-3 py-2.5 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
           {error}
         </p>
       ) : null}

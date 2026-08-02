@@ -37,8 +37,7 @@ export function EventBuyersTable({ buyers }: Props) {
 
   return (
     <ProfileSection
-      title="Ticket purchasers"
-      description="Search buyers by name or email."
+      title="Buyers"
       actions={
         buyers.length > 0 ? (
           <span className="text-xs tabular-nums text-muted-foreground">
@@ -48,7 +47,7 @@ export function EventBuyersTable({ buyers }: Props) {
       }
     >
       {buyers.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No purchaser data yet for this event.</p>
+        <p className="text-sm text-muted-foreground">No buyers yet.</p>
       ) : (
         <div className="space-y-3">
           <div className="relative">
@@ -56,7 +55,7 @@ export function EventBuyersTable({ buyers }: Props) {
             <Input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search buyers…"
+              placeholder="Search…"
               className="h-10 rounded-xl pl-9"
             />
           </div>
@@ -69,7 +68,7 @@ export function EventBuyersTable({ buyers }: Props) {
                 {filtered.map((buyer) => (
                   <div
                     key={buyer.key}
-                    className="rounded-xl border border-border/70 bg-background/70 p-3"
+                    className="rounded-xl border border-slate-200/70 bg-white/80 p-3 dark:border-slate-700/60 dark:bg-slate-950/50"
                   >
                     <p className="truncate text-sm font-medium">{buyer.name || buyer.email}</p>
                     <p className="mt-0.5 truncate text-xs text-muted-foreground">{buyer.email}</p>

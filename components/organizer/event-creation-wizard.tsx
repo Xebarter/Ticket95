@@ -175,34 +175,34 @@ const CURRENCY_OPTIONS = [
 
 const MINUTE_OPTIONS = Array.from({ length: 12 }, (_, i) => String(i * 5).padStart(2, '0'));
 
-const STEP_COPY: Record<WizardStep, { title: string; description: string }> = {
+const STEP_COPY: Record<WizardStep, { title: string; description?: string }> = {
   basic: {
-    title: 'Event details',
-    description: 'Name your event, set when and where it happens, and add photos.',
+    title: 'Basics',
+    description: 'Name, when, where, photos.',
   },
   pricing: {
     title: 'Tickets',
-    description: 'Choose a currency and add at least one ticket type people can buy.',
+    description: 'Currency and ticket types.',
   },
   organizer: {
-    title: 'Organizer contact',
-    description: 'Buyers and admins use this to reach you about the event.',
+    title: 'Organizer',
+    description: 'How buyers reach you.',
   },
   sponsors: {
     title: 'Sponsors',
-    description: 'Optional. Add up to 5 partners now, or skip and do it later.',
+    description: 'Optional — up to 5.',
   },
   review: {
-    title: 'Review & submit',
-    description: 'Double-check every detail before saving.',
+    title: 'Review',
+    description: 'Confirm, then submit.',
   },
 };
 
 const NEXT_LABELS: Partial<Record<WizardStep, string>> = {
-  basic: 'Continue to tickets',
-  pricing: 'Continue to organizer',
-  organizer: 'Continue to sponsors',
-  sponsors: 'Review event',
+  basic: 'Tickets',
+  pricing: 'Organizer',
+  organizer: 'Sponsors',
+  sponsors: 'Review',
 };
 
 type FieldErrors = Partial<Record<string, string>>;
@@ -1194,8 +1194,8 @@ export function EventCreationWizard({
 
             {step === 'basic' && (
               <div className="space-y-5">
-                <WizardSection title="About the event" description="Give attendees a clear idea of what to expect.">
-                  <WizardField label="Event name" htmlFor="event-name" required error={fieldErrors.name}>
+                <WizardSection title="Event">
+                  <WizardField label="Name" htmlFor="event-name" required error={fieldErrors.name}>
                     <Input
                       id="event-name"
                       type="text"
@@ -1238,29 +1238,21 @@ export function EventCreationWizard({
                     </div>
                   </WizardField>
 
-                  <WizardField
-                    label="Description"
-                    htmlFor="event-description"
-                    hint="Optional — helps buyers decide before they purchase."
-                  >
+                  <WizardField label="Description" htmlFor="event-description" hint="Optional">
                     <Textarea
                       id="event-description"
                       name="description"
-                      placeholder="What is this event about?"
+                      placeholder="What’s this event about?"
                       value={formData.description}
                       onChange={handleChange}
                       className="resize-none"
-                      rows={4}
+                      rows={3}
                     />
                   </WizardField>
                 </WizardSection>
 
-                <WizardSection
-                  icon={MapPin}
-                  title="Date, time & venue"
-                  description="When and where people should show up."
-                >
-                  <WizardField label="Date & time" required error={fieldErrors.date}>
+                <WizardSection icon={MapPin} title="When & where">
+                  <WizardField label="Starts" required error={fieldErrors.date}>
                     <div className="space-y-2">
                       <div className="grid gap-2 sm:grid-cols-[1fr_90px_90px_80px]">
                         <Input
@@ -1360,9 +1352,9 @@ export function EventCreationWizard({
                   </WizardField>
 
                   <WizardField
-                    label="End date"
+                    label="Ends"
                     htmlFor="event-end-date"
-                    hint="Optional — leave blank for a single-day event. Tickets stay valid through this day (one entry per day)."
+                    hint="Optional · multi-day"
                     error={fieldErrors.end_date}
                   >
                     <Input
@@ -1406,13 +1398,9 @@ export function EventCreationWizard({
                   </WizardField>
                 </WizardSection>
 
-                <WizardSection
-                  icon={ImageIcon}
-                  title="Event photos"
-                  description="Add at least one image. Tap the star on a photo to set the cover."
-                >
+                <WizardSection icon={ImageIcon} title="Photos" description="At least one · star = cover">
                   <div
-                    className={`rounded-xl border border-dashed bg-background p-4 ${
+                    className={`rounded-xl border border-dashed bg-background p-3 sm:p-4 ${
                       fieldErrors.images ? 'border-destructive' : 'border-border/70'
                     }`}
                   >
@@ -1453,7 +1441,7 @@ export function EventCreationWizard({
                                 onClick={() => setCoverImageIndex(index)}
                               >
                                 <Star className="mr-1 h-3.5 w-3.5" />
-                                {index === coverImageIndex ? 'Cover' : 'Set cover'}
+                                {index === coverImageIndex ? 'Cover' : 'Set'}
                               </Button>
                               <Button
                                 type="button"
@@ -1478,36 +1466,35 @@ export function EventCreationWizard({
             )}
 
             {step === 'pricing' && (
-              <div className="space-y-5">
-                <div className="rounded-2xl border border-border/70 bg-muted/20 p-4">
-                  <div className="flex items-start gap-3">
+              <div className="space-y-4">
+                <div className="rounded-2xl border border-border/70 bg-muted/20 p-3.5">
+                  <div className="flex items-center gap-3">
                     <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
                       <Ticket className="h-4 w-4" />
                     </div>
-                    <div className="min-w-0 space-y-1">
+                    <div className="min-w-0">
                       <p className="text-sm font-medium">Ticket types</p>
-                      <p className="text-xs text-muted-foreground">
-                        Add one or more ticket options. Use price <span className="font-medium">0</span> for
-                        free events — attendees can claim tickets without payment.
-                      </p>
+                      <p className="text-[11px] text-muted-foreground">Price 0 = free</p>
                     </div>
                   </div>
 
                   {normalizedTicketTypes.length > 0 ? (
-                    <div className="mt-4 grid grid-cols-3 gap-3 border-t border-border/60 pt-4 text-center">
+                    <div className="mt-3 grid grid-cols-3 gap-2 border-t border-border/60 pt-3 text-center">
                       <div>
-                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Types</p>
-                        <p className="mt-0.5 text-lg font-semibold tabular-nums">
+                        <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Types</p>
+                        <p className="mt-0.5 text-base font-semibold tabular-nums sm:text-lg">
                           {normalizedTicketTypes.length}
                         </p>
                       </div>
                       <div>
-                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Total seats</p>
-                        <p className="mt-0.5 text-lg font-semibold tabular-nums">{totalTicketsFromTypes}</p>
+                        <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Seats</p>
+                        <p className="mt-0.5 text-base font-semibold tabular-nums sm:text-lg">
+                          {totalTicketsFromTypes}
+                        </p>
                       </div>
                       <div>
-                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Starting at</p>
-                        <p className="mt-0.5 text-lg font-semibold tabular-nums">
+                        <p className="text-[10px] uppercase tracking-wide text-muted-foreground">From</p>
+                        <p className="mt-0.5 truncate text-base font-semibold tabular-nums sm:text-lg">
                           {formatTicketPriceLabel(minTicketPrice)}
                         </p>
                       </div>
@@ -1524,7 +1511,7 @@ export function EventCreationWizard({
                       setFormData((prev) => ({ ...prev, currency: e.target.value }));
                       clearFieldError('currency');
                     }}
-                    className={`h-10 w-full rounded-md border bg-background px-3 text-sm ${
+                    className={`h-10 w-full rounded-xl border bg-background px-3 text-sm ${
                       fieldErrors.currency ? 'border-destructive' : 'border-input'
                     }`}
                   >
@@ -1536,56 +1523,49 @@ export function EventCreationWizard({
                   </select>
                 </WizardField>
 
-                <div className="space-y-2">
-                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    Quick start
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-8 rounded-full"
-                      onClick={() => applyTicketPreset('General Admission', '0')}
-                    >
-                      General · Free
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-8 rounded-full"
-                      onClick={() => applyTicketPreset('General Admission', '25000')}
-                    >
-                      General · Paid
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-8 rounded-full"
-                      onClick={() => applyTicketPreset('VIP', '75000')}
-                    >
-                      VIP
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-8 rounded-full"
-                      onClick={() => applyTicketPreset('Early Bird', '15000', '50')}
-                    >
-                      Early Bird
-                    </Button>
-                  </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8 rounded-full"
+                    onClick={() => applyTicketPreset('General Admission', '0')}
+                  >
+                    Free
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8 rounded-full"
+                    onClick={() => applyTicketPreset('General Admission', '25000')}
+                  >
+                    General
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8 rounded-full"
+                    onClick={() => applyTicketPreset('VIP', '75000')}
+                  >
+                    VIP
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8 rounded-full"
+                    onClick={() => applyTicketPreset('Early Bird', '15000', '50')}
+                  >
+                    Early Bird
+                  </Button>
                 </div>
 
                 <div className="space-y-3">
                   <div className="flex items-center justify-between gap-2">
-                    <p className="text-sm font-medium">Your ticket types</p>
-                    <span className="text-xs text-muted-foreground">
-                      {ticketTypes.length} {ticketTypes.length === 1 ? 'type' : 'types'}
-                    </span>
+                    <p className="text-sm font-medium">Types</p>
+                    <span className="text-xs tabular-nums text-slate-500">{ticketTypes.length}</span>
                   </div>
 
                   {ticketTypes.map((ticketType, index) => {
@@ -1713,7 +1693,7 @@ export function EventCreationWizard({
                   onClick={addEmptyTicketType}
                 >
                   <Plus className="mr-2 h-4 w-4" />
-                  Add another ticket type
+                  Add ticket type
                 </Button>
 
                 {fieldErrors.tickets ? (
@@ -1725,14 +1705,10 @@ export function EventCreationWizard({
             )}
 
             {step === 'organizer' && (
-              <div className="space-y-5">
-                <WizardSection
-                  icon={WIZARD_STEP_ICONS.organizer}
-                  title="Organizer contact"
-                  description="Shown on the event page and used if buyers need help."
-                >
+              <div className="space-y-4">
+                <WizardSection icon={WIZARD_STEP_ICONS.organizer} title="Contact">
                   <WizardField
-                    label="Organizer name"
+                    label="Name"
                     htmlFor="organizer-name"
                     required
                     error={fieldErrors.organizerName}
@@ -1741,7 +1717,7 @@ export function EventCreationWizard({
                       id="organizer-name"
                       type="text"
                       name="name"
-                      placeholder="Your name or organization"
+                      placeholder="You or your organization"
                       value={organizer.name}
                       onChange={(e) => {
                         handleOrganizerChange(e);
@@ -1753,11 +1729,11 @@ export function EventCreationWizard({
                   </WizardField>
 
                   <WizardField
-                    label="Contact phone"
+                    label="Phone"
                     htmlFor="organizer-phone"
                     required
                     error={fieldErrors.organizerPhone}
-                    hint="Include country code so buyers can reach you."
+                    hint="Include country code"
                   >
                     <Input
                       id="organizer-phone"
@@ -1774,12 +1750,8 @@ export function EventCreationWizard({
                     />
                   </WizardField>
 
-                  <WizardField
-                    label="Logo"
-                    htmlFor="organizer-logo"
-                    hint="Optional — appears on tickets and your event page."
-                  >
-                    <div className="rounded-xl border border-dashed border-border/70 bg-background p-4">
+                  <WizardField label="Logo" htmlFor="organizer-logo" hint="Optional">
+                    <div className="rounded-xl border border-dashed border-slate-200/80 bg-white p-3 dark:border-slate-700 dark:bg-slate-950">
                       <Input
                         id="organizer-logo"
                         type="file"
@@ -1788,7 +1760,7 @@ export function EventCreationWizard({
                         className="cursor-pointer"
                       />
                       {(organizerLogoPreview || organizer.logo) && (
-                        <div className="mt-3 rounded-lg border border-border/60 bg-muted/30 p-3">
+                        <div className="mt-3 rounded-lg border border-slate-200/60 bg-slate-50/60 p-3 dark:border-slate-700 dark:bg-slate-900/40">
                           <img
                             src={organizerLogoPreview || organizer.logo}
                             alt=""
@@ -1804,20 +1776,16 @@ export function EventCreationWizard({
             )}
 
             {step === 'sponsors' && (
-              <div className="space-y-5">
-                <WizardSection
-                  icon={Award}
-                  title="Event sponsors"
-                  description={`Optional partners displayed on your event page and tickets (up to ${MAX_EVENT_SPONSORS}).`}
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/60 bg-muted/20 px-3 py-2.5">
-                    <p className="text-sm text-muted-foreground">
+              <div className="space-y-4">
+                <WizardSection icon={Award} title="Sponsors">
+                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200/70 bg-white px-3 py-2.5 dark:border-slate-700 dark:bg-slate-950">
+                    <p className="text-sm text-slate-500">
                       {sponsors.length >= MAX_EVENT_SPONSORS
-                        ? `Maximum of ${MAX_EVENT_SPONSORS} sponsors reached.`
-                        : 'No sponsors yet? You can skip this step.'}
+                        ? `Max ${MAX_EVENT_SPONSORS}`
+                        : 'Optional'}
                     </p>
                     <div className="flex items-center gap-2">
-                      <span className="text-xs font-medium tabular-nums text-muted-foreground">
+                      <span className="text-xs font-medium tabular-nums text-slate-500">
                         {sponsors.length}/{MAX_EVENT_SPONSORS}
                       </span>
                       <Button
@@ -1831,16 +1799,16 @@ export function EventCreationWizard({
                           setStep('review');
                         }}
                       >
-                        Skip for now
+                        Skip
                       </Button>
                     </div>
                   </div>
 
-                  <div className="space-y-3 rounded-xl border border-border/70 bg-background p-4">
-                    <WizardField label="Sponsor name">
+                  <div className="space-y-3 rounded-xl border border-slate-200/70 bg-white p-3.5 dark:border-slate-700 dark:bg-slate-950">
+                    <WizardField label="Name">
                       <Input
                         type="text"
-                        placeholder="Company or partner name"
+                        placeholder="Partner name"
                         value={newSponsor.name}
                         onChange={(e) => setNewSponsor((prev) => ({ ...prev, name: e.target.value }))}
                         disabled={sponsors.length >= MAX_EVENT_SPONSORS}
@@ -1857,7 +1825,7 @@ export function EventCreationWizard({
                       />
                     </WizardField>
                     {newSponsor.logo ? (
-                      <div className="rounded-lg border border-border/60 bg-muted/20 p-2">
+                      <div className="rounded-lg border border-slate-200/60 bg-slate-50/60 p-2 dark:border-slate-700 dark:bg-slate-900/40">
                         <img src={newSponsor.logo} alt="" className="mx-auto h-10 object-contain" />
                       </div>
                     ) : null}
@@ -1869,7 +1837,7 @@ export function EventCreationWizard({
                       disabled={!newSponsor.name.trim() || sponsors.length >= MAX_EVENT_SPONSORS}
                     >
                       <Plus className="mr-1 h-4 w-4" />
-                      Add sponsor
+                      Add
                     </Button>
                   </div>
 
@@ -1995,16 +1963,16 @@ export function EventCreationWizard({
                 ) : null}
 
                 {normalizedTicketTypes.length > 0 ? (
-                  <WizardSection title="Ticket types" description="What buyers can purchase.">
-                    <div className="divide-y divide-border/60 overflow-hidden rounded-xl border border-border/60 bg-background">
+                  <WizardSection title="Tickets">
+                    <div className="divide-y divide-slate-200/60 overflow-hidden rounded-xl border border-slate-200/70 bg-white dark:divide-slate-800 dark:border-slate-700 dark:bg-slate-950">
                       {normalizedTicketTypes.map((ticketType) => (
                         <div
                           key={ticketType.order_index}
                           className="flex items-center justify-between gap-3 px-3 py-2.5 text-sm"
                         >
                           <span className="font-medium">{ticketType.name}</span>
-                          <span className="shrink-0 tabular-nums text-muted-foreground">
-                            {formatTicketPriceLabel(ticketType.price)} · {ticketType.total_quantity} seats
+                          <span className="shrink-0 tabular-nums text-slate-500">
+                            {formatTicketPriceLabel(ticketType.price)} · {ticketType.total_quantity}
                           </span>
                         </div>
                       ))}
@@ -2018,7 +1986,7 @@ export function EventCreationWizard({
                       {sponsors.map((sponsor) => (
                         <span
                           key={sponsor.id}
-                          className="rounded-full border border-border/60 bg-background px-3 py-1 text-sm"
+                          className="rounded-full border border-slate-200/70 bg-white px-3 py-1 text-sm dark:border-slate-700 dark:bg-slate-950"
                         >
                           {sponsor.name}
                         </span>
@@ -2028,24 +1996,21 @@ export function EventCreationWizard({
                 ) : (
                   <button
                     type="button"
-                    className="text-xs text-muted-foreground underline-offset-2 hover:underline"
+                    className="text-xs text-slate-500 underline-offset-2 hover:underline"
                     onClick={() => goToStep('sponsors')}
                   >
-                    No sponsors — add some?
+                    Add sponsors?
                   </button>
                 )}
 
-                <WizardSection title="Publishing options">
-                  <div className="space-y-3 rounded-xl border border-border/60 bg-background px-3 py-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="space-y-1">
+                <WizardSection title="Options">
+                  <div className="space-y-3 rounded-xl border border-slate-200/70 bg-white px-3 py-3 dark:border-slate-700 dark:bg-slate-950">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
                         <Label htmlFor="affiliates-enabled" className="text-sm font-medium">
-                          Allow affiliates
+                          Affiliates
                         </Label>
-                        <p className="text-xs text-muted-foreground">
-                          Let Ticket95 account holders share your event and earn a commission on
-                          sales they refer.
-                        </p>
+                        <p className="text-[11px] text-slate-500">Partners earn on referrals</p>
                       </div>
                       <Switch
                         id="affiliates-enabled"
@@ -2055,9 +2020,9 @@ export function EventCreationWizard({
                     </div>
 
                     {affiliatesEnabled ? (
-                      <div className="space-y-2 border-t border-border/60 pt-3">
+                      <div className="space-y-2 border-t border-slate-200/60 pt-3 dark:border-slate-800">
                         <Label htmlFor="affiliate-commission-percent" className="text-sm font-medium">
-                          Affiliate commission (%)
+                          Commission %
                         </Label>
                         <Input
                           id="affiliate-commission-percent"
@@ -2074,26 +2039,20 @@ export function EventCreationWizard({
                           }
                           className="max-w-[10rem] rounded-xl"
                         />
-                        <p className="text-xs text-muted-foreground">
-                          Minimum {MIN_AFFILIATE_COMMISSION_PERCENT}%. This rate is shown to
-                          affiliates and applied to referred sales.
+                        <p className="text-[11px] text-slate-500">
+                          Min {MIN_AFFILIATE_COMMISSION_PERCENT}%
                         </p>
                       </div>
                     ) : null}
                   </div>
 
                   {isAdminContext ? (
-                    <div className="space-y-4 rounded-xl border border-border/60 bg-background p-4">
-                      <p className="text-sm font-semibold">Admin settings</p>
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="space-y-1">
-                          <Label htmlFor="featured-event" className="text-sm font-medium">
-                            Featured event
-                          </Label>
-                          <p className="text-xs text-muted-foreground">
-                            Highlight this event on the homepage and discovery surfaces.
-                          </p>
-                        </div>
+                    <div className="space-y-4 rounded-xl border border-slate-200/70 bg-white p-3.5 dark:border-slate-700 dark:bg-slate-950">
+                      <p className="text-sm font-semibold">Admin</p>
+                      <div className="flex items-center justify-between gap-3">
+                        <Label htmlFor="featured-event" className="text-sm font-medium">
+                          Featured
+                        </Label>
                         <Switch
                           id="featured-event"
                           checked={isFeatured}
@@ -2102,7 +2061,7 @@ export function EventCreationWizard({
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="event-status" className="text-sm font-medium">
-                          Approval status
+                          Status
                         </Label>
                         <Select
                           value={eventStatus}
@@ -2110,11 +2069,11 @@ export function EventCreationWizard({
                             setEventStatus(value)
                           }
                         >
-                          <SelectTrigger id="event-status" className="w-full">
+                          <SelectTrigger id="event-status" className="w-full rounded-xl">
                             <SelectValue placeholder="Select status" />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="pending">Pending review</SelectItem>
+                            <SelectItem value="pending">Pending</SelectItem>
                             <SelectItem value="approved">Approved</SelectItem>
                             <SelectItem value="rejected">Rejected</SelectItem>
                           </SelectContent>
@@ -2123,14 +2082,14 @@ export function EventCreationWizard({
                       {eventStatus === 'rejected' ? (
                         <div className="space-y-2">
                           <Label htmlFor="rejection-reason" className="text-sm font-medium">
-                            Rejection note
+                            Note
                           </Label>
                           <Textarea
                             id="rejection-reason"
                             value={rejectionReason}
                             onChange={(e) => setRejectionReason(e.target.value)}
-                            placeholder="Optional note for the organizer"
-                            rows={3}
+                            placeholder="Optional note"
+                            rows={2}
                             className="resize-none"
                           />
                         </div>
@@ -2139,8 +2098,8 @@ export function EventCreationWizard({
                   ) : null}
 
                   {!isAdminContext ? (
-                    <p className="rounded-xl border border-border/60 bg-muted/20 px-3 py-2.5 text-xs text-muted-foreground">
-                      After you submit, an admin reviews the event before it goes live on Ticket95.
+                    <p className="rounded-xl border border-border/60 bg-muted/20 px-3 py-2.5 text-[11px] text-muted-foreground">
+                      Submitted events need admin approval before going live.
                     </p>
                   ) : null}
                 </WizardSection>

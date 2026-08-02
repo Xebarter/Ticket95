@@ -7,10 +7,8 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { RequestPayoutDialog, formatUgx } from '@/components/payouts/request-payout-dialog';
 import {
-  PAYOUT_COOLDOWN_DAYS,
   TOTAL_PLATFORM_AND_GATEWAY_PERCENT,
   payoutCooldownBlockedMessage,
-  payoutCooldownPolicyMessage,
 } from '@/lib/payout-constants';
 import type { Payout } from '@/lib/supabase-client';
 
@@ -103,8 +101,8 @@ export function OrganizerEarningsPanel({ selectedEventId }: { selectedEventId?: 
 
   if (loading && !balance) {
     return (
-      <div className="flex items-center gap-2 rounded-xl border border-border/70 bg-background px-4 py-6 text-sm text-muted-foreground">
-        <Loader2 className="h-4 w-4 animate-spin" />
+      <div className="flex items-center gap-2 rounded-2xl border border-slate-200/70 bg-gradient-to-br from-slate-50/80 to-white px-4 py-6 text-sm text-slate-500 dark:border-slate-700/60 dark:from-slate-900/60 dark:to-slate-950">
+        <Loader2 className="h-4 w-4 animate-spin text-[#9A7B2F]" />
         Loading earnings…
       </div>
     );
@@ -113,29 +111,37 @@ export function OrganizerEarningsPanel({ selectedEventId }: { selectedEventId?: 
   if (!balance) return null;
 
   return (
-    <div className="space-y-3 rounded-xl border border-border/70 bg-background p-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
+    <div className="space-y-3 rounded-2xl border border-slate-200/70 bg-gradient-to-br from-white via-white to-[#f7f2e8]/50 p-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)] sm:p-4 dark:border-slate-700/60 dark:from-slate-950 dark:via-slate-950 dark:to-[#9A7B2F]/5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
+        <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <Wallet className="h-4 w-4 text-muted-foreground" />
-            <h3 className="text-sm font-semibold tracking-tight">Earnings & payouts</h3>
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#9A7B2F]/12 text-[#8a6d28]">
+              <Wallet className="h-3.5 w-3.5" />
+            </span>
+            <h3 className="text-sm font-semibold tracking-tight text-slate-900 dark:text-slate-50">
+              Earnings
+            </h3>
           </div>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Ticket95 retains {TOTAL_PLATFORM_AND_GATEWAY_PERCENT}% (2% platform + 3.5% gateway).
-            Affiliate cuts apply only on referred sales.
-          </p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            {payoutCooldownPolicyMessage(balance.cooldownDays ?? PAYOUT_COOLDOWN_DAYS)}
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+            Ticket95 retains {TOTAL_PLATFORM_AND_GATEWAY_PERCENT}%.
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button type="button" variant="ghost" size="sm" onClick={() => void load()} disabled={loading}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-10 w-10 shrink-0 rounded-xl p-0 text-slate-500 sm:h-9 sm:w-9"
+            onClick={() => void load()}
+            disabled={loading}
+            aria-label="Refresh earnings"
+          >
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
           </Button>
           <Button
             type="button"
             size="sm"
-            className="rounded-lg"
+            className="h-10 flex-1 rounded-xl bg-[#9A7B2F] text-white hover:bg-[#866a28] sm:h-9 sm:flex-none"
             disabled={!balance.canRequest}
             onClick={() => setDialogOpen(true)}
           >
@@ -145,69 +151,89 @@ export function OrganizerEarningsPanel({ selectedEventId }: { selectedEventId?: 
       </div>
 
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <Metric label="Gross sales" value={formatUgx(balance.grossRevenue)} />
+        <Metric label="Gross" value={formatUgx(balance.grossRevenue)} />
         <Metric
-          label="Fees (5.5%)"
+          label="Fees"
           value={formatUgx(balance.gatewayFees + balance.platformFees)}
         />
-        <Metric label="Affiliate cuts" value={formatUgx(balance.affiliateDeductions)} />
+        <Metric label="Affiliates" value={formatUgx(balance.affiliateDeductions)} />
         <Metric label="Available" value={formatUgx(balance.available)} emphasize />
       </div>
 
       {selectedEventShare ? (
-        <p className="text-xs text-muted-foreground">
-          This event net:{' '}
-          <span className="font-medium text-foreground tabular-nums">
+        <p className="text-xs text-slate-500 dark:text-slate-400">
+          This event:{' '}
+          <span className="font-medium text-slate-800 tabular-nums dark:text-slate-200">
             {formatUgx(selectedEventShare.organizerShare)}
           </span>
-          {selectedEventShare.affiliateDeductions > 0
-            ? ` (after ${formatUgx(selectedEventShare.affiliateDeductions)} affiliate)`
-            : null}
         </p>
       ) : null}
 
       {!balance.canRequest && balance.nextPayoutAt ? (
-        <p className="text-xs text-amber-700 dark:text-amber-400">
+        <p className="rounded-xl border border-amber-200/60 bg-amber-50/70 px-3 py-2 text-xs text-amber-800 dark:border-amber-500/25 dark:bg-amber-500/10 dark:text-amber-200">
           {payoutCooldownBlockedMessage(balance.nextPayoutAt)}
         </p>
       ) : null}
 
       {!balance.canRequest && !balance.nextPayoutAt ? (
-        <p className="text-xs text-amber-700 dark:text-amber-400">
-          Payouts unlock at {formatUgx(balance.minPayout)}. Paid out so far:{' '}
-          {formatUgx(balance.paidOut)}.
+        <p className="rounded-xl border border-amber-200/60 bg-amber-50/70 px-3 py-2 text-xs text-amber-800 dark:border-amber-500/25 dark:bg-amber-500/10 dark:text-amber-200">
+          Unlocks at {formatUgx(balance.minPayout)}. Paid: {formatUgx(balance.paidOut)}.
         </p>
       ) : null}
 
       {balance.recentPayouts.length > 0 ? (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[420px] text-left text-xs">
-            <thead className="text-muted-foreground">
-              <tr className="border-b border-border/60">
-                <th className="py-1.5 font-medium">Date</th>
-                <th className="py-1.5 font-medium">Amount</th>
-                <th className="py-1.5 font-medium">Phone</th>
-                <th className="py-1.5 font-medium">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {balance.recentPayouts.slice(0, 5).map((p) => (
-                <tr key={p.id} className="border-b border-border/40">
-                  <td className="py-1.5 tabular-nums">
+        <>
+          <div className="space-y-2 sm:hidden">
+            {balance.recentPayouts.slice(0, 5).map((p) => (
+              <div
+                key={p.id}
+                className="flex items-center justify-between gap-3 rounded-xl border border-slate-200/70 bg-white/80 px-3 py-2.5 text-xs dark:border-slate-700/60 dark:bg-slate-900/50"
+              >
+                <div className="min-w-0">
+                  <p className="font-medium tabular-nums text-slate-900 dark:text-slate-100">
+                    {formatUgx(Number(p.amount))}
+                  </p>
+                  <p className="mt-0.5 truncate text-slate-500">
                     {new Date(p.requested_at).toLocaleDateString()}
-                  </td>
-                  <td className="py-1.5 tabular-nums">{formatUgx(Number(p.amount))}</td>
-                  <td className="py-1.5">{p.phone}</td>
-                  <td className="py-1.5">
-                    <Badge variant={statusVariant(p.status)} className="capitalize">
-                      {p.status}
-                    </Badge>
-                  </td>
+                    <span className="mx-1 opacity-50">·</span>
+                    {p.phone}
+                  </p>
+                </div>
+                <Badge variant={statusVariant(p.status)} className="shrink-0 capitalize">
+                  {p.status}
+                </Badge>
+              </div>
+            ))}
+          </div>
+          <div className="hidden overflow-x-auto sm:block">
+            <table className="w-full min-w-[420px] text-left text-xs">
+              <thead className="text-slate-500">
+                <tr className="border-b border-slate-200/70 dark:border-slate-700/60">
+                  <th className="py-1.5 font-medium">Date</th>
+                  <th className="py-1.5 font-medium">Amount</th>
+                  <th className="py-1.5 font-medium">Phone</th>
+                  <th className="py-1.5 font-medium">Status</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {balance.recentPayouts.slice(0, 5).map((p) => (
+                  <tr key={p.id} className="border-b border-slate-100 dark:border-slate-800/80">
+                    <td className="py-1.5 tabular-nums">
+                      {new Date(p.requested_at).toLocaleDateString()}
+                    </td>
+                    <td className="py-1.5 tabular-nums">{formatUgx(Number(p.amount))}</td>
+                    <td className="py-1.5">{p.phone}</td>
+                    <td className="py-1.5">
+                      <Badge variant={statusVariant(p.status)} className="capitalize">
+                        {p.status}
+                      </Badge>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       ) : null}
 
       <RequestPayoutDialog
@@ -215,7 +241,7 @@ export function OrganizerEarningsPanel({ selectedEventId }: { selectedEventId?: 
         onOpenChange={setDialogOpen}
         available={balance.available}
         defaultPhone={balance.payoutPhone}
-        title="Request organizer payout"
+        title="Request payout"
         submitting={submitting}
         onSubmit={handleRequest}
       />
@@ -233,13 +259,21 @@ function Metric({
   emphasize?: boolean;
 }) {
   return (
-    <div className="rounded-lg border border-border/60 bg-muted/20 px-3 py-2">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+    <div
+      className={`rounded-xl border px-3 py-2.5 ${
+        emphasize
+          ? 'border-emerald-200/70 bg-emerald-50/70 dark:border-emerald-500/25 dark:bg-emerald-500/10'
+          : 'border-slate-200/70 bg-slate-50/60 dark:border-slate-700/50 dark:bg-slate-900/40'
+      }`}
+    >
+      <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">
         {label}
       </p>
       <p
         className={`mt-1 truncate text-sm font-semibold tabular-nums ${
-          emphasize ? 'text-emerald-700 dark:text-emerald-400' : ''
+          emphasize
+            ? 'text-emerald-800 dark:text-emerald-300'
+            : 'text-slate-900 dark:text-slate-100'
         }`}
       >
         {value}

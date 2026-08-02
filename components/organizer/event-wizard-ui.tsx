@@ -36,28 +36,33 @@ export function WizardPageHeader({
   onCancel?: () => void;
 }) {
   return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
       <div className="min-w-0">
         {isAdminContext && onCancel ? (
-          <Button variant="ghost" size="sm" className="mb-2 h-8 px-0 text-muted-foreground" onClick={onCancel}>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="mb-2 h-8 px-0 text-muted-foreground"
+            onClick={onCancel}
+          >
             <ChevronLeft className="mr-1 h-4 w-4" />
             Back
           </Button>
         ) : null}
-        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+        <h1 className="text-2xl font-semibold tracking-tight sm:text-[1.7rem]">
           {mode === 'edit' ? 'Edit event' : 'Create event'}
         </h1>
-        <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+        <p className="mt-1 text-[13px] text-muted-foreground sm:text-sm">
           {mode === 'edit'
-            ? 'Update any section below. Your changes are saved when you finish the review step.'
+            ? 'Update details, then save on Review.'
             : isAdminContext
-              ? 'Set up a new listing on Ticket95 — all steps are saved when you submit.'
-              : 'Build your event step by step. An admin reviews new events before they go live.'}
+              ? 'Fill each step, then submit.'
+              : 'Goes live after admin approval.'}
         </p>
       </div>
-      <div className="shrink-0 rounded-full border border-border/70 bg-muted/30 px-3 py-1.5 text-xs font-medium text-muted-foreground">
-        {mode === 'edit' ? 'Editing' : 'New event'}
-      </div>
+      <span className="w-fit rounded-full border border-border/70 bg-muted/30 px-3 py-1 text-xs font-medium text-muted-foreground">
+        {mode === 'edit' ? 'Editing' : 'New'}
+      </span>
     </div>
   );
 }
@@ -78,7 +83,10 @@ export function WizardStepSidebar({
   isStepValid: (key: WizardStepKey) => boolean;
 }) {
   return (
-    <nav className="space-y-1" aria-label="Event wizard steps">
+    <nav
+      className="space-y-1 rounded-2xl border border-border/70 bg-card/80 p-2 shadow-sm"
+      aria-label="Event wizard steps"
+    >
       {steps.map((s, idx) => {
         const active = step === s.key;
         const done = idx < currentStepIndex && isStepValid(s.key);
@@ -104,14 +112,18 @@ export function WizardStepSidebar({
             <span
               className={cn(
                 'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg',
-                active ? 'bg-primary-foreground/15' : done ? 'bg-primary/10 text-primary' : 'bg-muted'
+                active
+                  ? 'bg-primary-foreground/15'
+                  : done
+                    ? 'bg-primary/10 text-primary'
+                    : 'bg-muted'
               )}
             >
               {done && !active ? <CheckCircle2 className="h-4 w-4" /> : <Icon className="h-4 w-4" />}
             </span>
             <span className="min-w-0">
-              <span className="block text-[11px] font-medium uppercase tracking-wide opacity-80">
-                Step {idx + 1}
+              <span className="block text-[10px] font-medium uppercase tracking-[0.12em] opacity-70">
+                {idx + 1}/{steps.length}
               </span>
               <span className="block truncate text-sm font-semibold">{s.title}</span>
             </span>
@@ -138,14 +150,14 @@ export function WizardMobileStepper({
   isStepValid: (key: WizardStepKey) => boolean;
 }) {
   return (
-    <div className="space-y-3 lg:hidden">
-      <div className="flex items-center justify-between text-xs text-muted-foreground">
-        <span>
-          Step {currentStepIndex + 1} of {steps.length}
+    <div className="space-y-2.5 lg:hidden">
+      <div className="flex items-center justify-between text-xs">
+        <span className="text-muted-foreground">
+          {currentStepIndex + 1}/{steps.length}
         </span>
         <span className="font-medium text-foreground">{steps[currentStepIndex]?.title}</span>
       </div>
-      <div className="flex gap-1.5 overflow-x-auto pb-0.5">
+      <div className="flex gap-1.5">
         {steps.map((s, idx) => {
           const active = step === s.key;
           const done = idx < currentStepIndex && isStepValid(s.key);
@@ -158,7 +170,7 @@ export function WizardMobileStepper({
               aria-current={active ? 'step' : undefined}
               aria-label={s.title}
               className={cn(
-                'flex h-9 min-w-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold transition-colors',
+                'flex h-9 min-w-0 flex-1 items-center justify-center rounded-xl text-xs font-semibold transition-colors',
                 active
                   ? 'bg-primary text-primary-foreground'
                   : done
@@ -171,7 +183,7 @@ export function WizardMobileStepper({
           );
         })}
       </div>
-      <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+      <div className="h-1 w-full overflow-hidden rounded-full bg-muted">
         <div
           className="h-full rounded-full bg-primary transition-all duration-300"
           style={{ width: `${((currentStepIndex + 1) / steps.length) * 100}%` }}
@@ -190,7 +202,7 @@ export function WizardPanel({
 }: {
   embedded: boolean;
   stepTitle: string;
-  stepDescription: string;
+  stepDescription?: string;
   children: React.ReactNode;
   footer: React.ReactNode;
 }) {
@@ -203,20 +215,22 @@ export function WizardPanel({
     >
       <div
         className={cn(
-          'border-border/70 px-4 py-4 sm:px-6 sm:py-5',
+          'border-border/70 px-4 py-3.5 sm:px-6 sm:py-4',
           embedded ? 'border-b bg-muted/20' : 'border-b bg-muted/10'
         )}
       >
-        <h2 className="text-lg font-semibold tracking-tight">{stepTitle}</h2>
-        <p className="mt-0.5 text-sm text-muted-foreground">{stepDescription}</p>
+        <h2 className="text-base font-semibold tracking-tight sm:text-lg">{stepTitle}</h2>
+        {stepDescription ? (
+          <p className="mt-0.5 text-[13px] text-muted-foreground">{stepDescription}</p>
+        ) : null}
       </div>
 
-      <div className="relative px-4 py-5 sm:px-6 sm:py-6">{children}</div>
+      <div className="relative px-4 py-4 sm:px-6 sm:py-5">{children}</div>
 
       <div
         className={cn(
-          'sticky bottom-0 border-t border-border/70 px-4 py-4 sm:px-6',
-          embedded ? 'bg-card/95 backdrop-blur-sm' : 'bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80'
+          'sticky bottom-0 border-t border-border/70 px-4 py-3.5 sm:px-6',
+          'bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80'
         )}
       >
         {footer}
@@ -246,7 +260,7 @@ export function WizardField({
         {label}
         {required ? <span className="text-destructive"> *</span> : null}
       </label>
-      {hint ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
+      {hint ? <p className="text-[11px] text-muted-foreground">{hint}</p> : null}
       {children}
       {error ? <p className="text-xs text-destructive">{error}</p> : null}
     </div>
@@ -268,27 +282,24 @@ export function WizardSection({
 }) {
   return (
     <section
-      className={cn(
-        'rounded-2xl border border-border/70 bg-muted/10 p-4 sm:p-5',
-        className
-      )}
+      className={cn('rounded-2xl border border-border/70 bg-muted/10 p-3.5 sm:p-4', className)}
     >
       {title || description ? (
-        <div className="mb-4 flex items-start gap-3">
+        <div className="mb-3.5 flex items-center gap-2.5">
           {Icon ? (
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-              <Icon className="h-4 w-4" />
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <Icon className="h-3.5 w-3.5" />
             </div>
           ) : null}
           <div className="min-w-0">
             {title ? <h3 className="text-sm font-semibold">{title}</h3> : null}
             {description ? (
-              <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
+              <p className="mt-0.5 text-[11px] text-muted-foreground">{description}</p>
             ) : null}
           </div>
         </div>
       ) : null}
-      <div className="space-y-4">{children}</div>
+      <div className="space-y-3.5">{children}</div>
     </section>
   );
 }
@@ -303,9 +314,11 @@ export function WizardReviewItem({
   onEdit?: () => void;
 }) {
   return (
-    <div className="rounded-xl border border-border/60 bg-background p-3.5">
+    <div className="rounded-xl border border-border/60 bg-background p-3">
       <div className="flex items-start justify-between gap-2">
-        <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
+        <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+          {label}
+        </p>
         {onEdit ? (
           <button
             type="button"
@@ -345,34 +358,38 @@ export function WizardFooterNav({
   onSubmit: () => void;
 }) {
   return (
-    <div className="flex flex-col-reverse gap-2 sm:flex-row sm:gap-3">
+    <div className="grid grid-cols-2 gap-2 sm:flex sm:gap-3">
       <Button
         variant="outline"
         onClick={onBack}
         disabled={!canGoBack || loading}
-        className="flex-1 rounded-xl"
+        className="h-11 rounded-xl sm:h-10 sm:flex-1"
       >
         <ChevronLeft className="mr-1 h-4 w-4" />
         Back
       </Button>
 
       {isReview ? (
-        <Button onClick={onSubmit} disabled={loading} className="flex-1 rounded-xl">
+        <Button
+          onClick={onSubmit}
+          disabled={loading}
+          className="h-11 rounded-xl sm:h-10 sm:flex-1"
+        >
           {loading
             ? mode === 'edit'
               ? 'Saving…'
               : 'Creating…'
             : mode === 'edit'
-              ? 'Save changes'
+              ? 'Save'
               : isAdminContext
-                ? 'Create event'
-                : 'Submit for approval'}
+                ? 'Create'
+                : 'Submit'}
         </Button>
       ) : (
         <Button
           onClick={onNext}
           disabled={!canGoForward || loading}
-          className="flex-1 rounded-xl"
+          className="h-11 rounded-xl sm:h-10 sm:flex-1"
         >
           {nextLabel}
           <ChevronRight className="ml-1 h-4 w-4" />
@@ -391,18 +408,18 @@ export function WizardSuccessState({
 }) {
   return (
     <div className="flex flex-col items-center justify-center rounded-2xl border border-border/70 bg-card px-6 py-16 text-center shadow-sm">
-      <div className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500/10">
-        <CheckCircle2 className="h-8 w-8 text-emerald-500" />
+      <div className="flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500/10">
+        <CheckCircle2 className="h-7 w-7 text-emerald-500" />
       </div>
-      <h2 className="mt-5 text-xl font-semibold">
-        {mode === 'edit' ? 'Event updated' : 'Event submitted'}
+      <h2 className="mt-4 text-xl font-semibold">
+        {mode === 'edit' ? 'Saved' : 'Submitted'}
       </h2>
-      <p className="mt-2 max-w-sm text-sm text-muted-foreground">
+      <p className="mt-1.5 max-w-xs text-sm text-muted-foreground">
         {mode === 'edit'
-          ? 'Your changes have been saved. Redirecting you now…'
+          ? 'Redirecting…'
           : isAdminContext
-            ? 'The event is live in the admin dashboard. Redirecting…'
-            : 'Your event is with the review team. Redirecting to your profile…'}
+            ? 'Redirecting to admin…'
+            : 'Pending review. Redirecting…'}
       </p>
     </div>
   );
