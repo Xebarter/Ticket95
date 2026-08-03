@@ -53,6 +53,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatDateTime, formatMoney, formatPercent } from '../format';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 const PRESET_ITEMS: Array<{ key: AnalyticsDatePreset; label: string }> = [
   { key: 'today', label: 'Today' },
@@ -314,69 +315,93 @@ function LiveStat({
 }
 
 export function AnalyticsSalesCharts({ data }: { data: ProfileAnalyticsPayload }) {
+  const isMobile = useIsMobile();
+  const chartMargin = isMobile
+    ? { left: -8, right: 4, top: 8, bottom: 4 }
+    : { left: 0, right: 8, top: 8, bottom: 0 };
+  const yAxisWidth = isMobile ? 28 : 44;
+  const tickFont = { fontSize: isMobile ? 9 : 10, fill: '#94a3b8' as const };
+
   return (
-    <div className="grid gap-3 xl:grid-cols-3">
-      <ProfileSection title="Revenue" className="xl:col-span-2">
+    <div className="grid min-w-0 gap-3 xl:grid-cols-3">
+      <ProfileSection title="Revenue" className="min-w-0 xl:col-span-2">
         {data.dailySeries.length === 0 ? (
           <EmptyChart />
         ) : (
-          <ChartContainer config={revenueChartConfig} className="h-[220px] w-full sm:h-[280px]">
-            <AreaChart data={data.dailySeries} margin={{ left: 0, right: 8, top: 8, bottom: 0 }}>
-              <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="rgba(148,163,184,0.25)" />
-              <XAxis
-                dataKey="label"
-                tickLine={false}
-                axisLine={false}
-                tick={{ fontSize: 10, fill: '#94a3b8' }}
-                interval="preserveStartEnd"
-                minTickGap={28}
-              />
-              <YAxis
-                tickLine={false}
-                axisLine={false}
-                width={44}
-                tick={{ fontSize: 10, fill: '#94a3b8' }}
-              />
-              <ChartTooltip content={<ChartTooltipContent />} />
-              <Area
-                type="monotone"
-                dataKey="revenue"
-                stroke="var(--color-revenue)"
-                fill="var(--color-revenue)"
-                fillOpacity={0.16}
-              />
-            </AreaChart>
-          </ChartContainer>
+          <div className="-mx-1 min-w-0 overflow-x-auto px-1 sm:mx-0 sm:overflow-visible sm:px-0">
+            <ChartContainer
+              config={revenueChartConfig}
+              className="aspect-auto h-[200px] w-full min-w-0 sm:h-[260px] md:h-[280px]"
+            >
+              <AreaChart data={data.dailySeries} margin={chartMargin}>
+                <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="rgba(148,163,184,0.25)" />
+                <XAxis
+                  dataKey="label"
+                  tickLine={false}
+                  axisLine={false}
+                  tick={tickFont}
+                  interval="preserveStartEnd"
+                  minTickGap={isMobile ? 36 : 28}
+                  tickMargin={6}
+                />
+                <YAxis
+                  tickLine={false}
+                  axisLine={false}
+                  width={yAxisWidth}
+                  tick={tickFont}
+                  tickCount={isMobile ? 4 : 5}
+                  tickFormatter={(value) =>
+                    typeof value === 'number' && value >= 1000
+                      ? `${Math.round(value / 1000)}k`
+                      : String(value)
+                  }
+                />
+                <ChartTooltip content={<ChartTooltipContent className="max-w-[min(16rem,70vw)]" />} />
+                <Area
+                  type="monotone"
+                  dataKey="revenue"
+                  stroke="var(--color-revenue)"
+                  fill="var(--color-revenue)"
+                  fillOpacity={0.16}
+                />
+              </AreaChart>
+            </ChartContainer>
+          </div>
         )}
       </ProfileSection>
 
-      <ProfileSection title="Order status">
+      <ProfileSection title="Order status" className="min-w-0">
         {data.orderStatus.length === 0 ? (
           <EmptyChart />
         ) : (
-          <div className="space-y-4">
-            <ChartContainer config={{ value: { label: 'Orders' } }} className="mx-auto h-[160px] w-full sm:h-[180px]">
+          <div className="space-y-3 sm:space-y-4">
+            <ChartContainer
+              config={{ value: { label: 'Orders' } }}
+              className="mx-auto aspect-square h-[150px] w-full max-w-[190px] sm:aspect-auto sm:h-[180px] sm:max-w-none"
+            >
               <PieChart>
                 <Pie
                   data={data.orderStatus}
                   dataKey="value"
                   nameKey="label"
-                  innerRadius={42}
-                  outerRadius={68}
+                  innerRadius={isMobile ? 36 : 42}
+                  outerRadius={isMobile ? 58 : 68}
                   paddingAngle={3}
                 >
                   {data.orderStatus.map((segment) => (
                     <Cell key={segment.status} fill={segment.color} />
                   ))}
                 </Pie>
-                <ChartTooltip content={<ChartTooltipContent nameKey="label" hideLabel />} />
+                <ChartTooltip
+                  content={<ChartTooltipContent nameKey="label" hideLabel className="max-w-[min(16rem,70vw)]" />}
+                />
               </PieChart>
             </ChartContainer>
             <div className="space-y-2">
               {data.orderStatus.map((item) => (
                 <div
                   key={item.status}
-                  className="flex items-center justify-between rounded-xl border border-slate-200/70 bg-white/70 px-3 py-2 text-sm dark:border-slate-700/60 dark:bg-slate-950/40"
+                  className="flex items-center justify-between gap-2 rounded-xl border border-slate-200/70 bg-white/70 px-3 py-2 text-sm dark:border-slate-700/60 dark:bg-slate-950/40"
                 >
                   <span className="inline-flex min-w-0 items-center gap-2">
                     <span
@@ -393,69 +418,91 @@ export function AnalyticsSalesCharts({ data }: { data: ProfileAnalyticsPayload }
         )}
       </ProfileSection>
 
-      <ProfileSection title="Cumulative sales" className="xl:col-span-2">
+      <ProfileSection title="Cumulative sales" className="min-w-0 xl:col-span-2">
         {data.cumulativeSeries.length === 0 ? (
           <EmptyChart />
         ) : (
-          <ChartContainer config={revenueChartConfig} className="h-[200px] w-full sm:h-[240px]">
-            <LineChart data={data.cumulativeSeries} margin={{ left: 0, right: 8, top: 8, bottom: 0 }}>
+          <div className="-mx-1 min-w-0 overflow-x-auto px-1 sm:mx-0 sm:overflow-visible sm:px-0">
+            <ChartContainer
+              config={revenueChartConfig}
+              className="aspect-auto h-[190px] w-full min-w-0 sm:h-[230px] md:h-[240px]"
+            >
+              <LineChart data={data.cumulativeSeries} margin={chartMargin}>
+                <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="rgba(148,163,184,0.25)" />
+                <XAxis
+                  dataKey="label"
+                  tickLine={false}
+                  axisLine={false}
+                  tick={tickFont}
+                  interval="preserveStartEnd"
+                  minTickGap={isMobile ? 36 : 28}
+                  tickMargin={6}
+                />
+                <YAxis
+                  tickLine={false}
+                  axisLine={false}
+                  width={isMobile ? 24 : 36}
+                  tick={tickFont}
+                  tickCount={isMobile ? 4 : 5}
+                />
+                <ChartTooltip content={<ChartTooltipContent className="max-w-[min(16rem,70vw)]" />} />
+                <Line
+                  type="monotone"
+                  dataKey="tickets"
+                  stroke="var(--color-tickets)"
+                  strokeWidth={2}
+                  dot={false}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="orders"
+                  stroke="var(--color-orders)"
+                  strokeWidth={2}
+                  dot={false}
+                />
+              </LineChart>
+            </ChartContainer>
+          </div>
+        )}
+      </ProfileSection>
+
+      <ProfileSection title="Hourly activity" className="min-w-0">
+        <div className="-mx-1 min-w-0 overflow-x-auto px-1 sm:mx-0 sm:overflow-visible sm:px-0">
+          <ChartContainer
+            config={hourlyChartConfig}
+            className={cn(
+              'aspect-auto h-[190px] w-full min-w-0 sm:h-[230px] md:h-[240px]',
+              isMobile && 'min-w-[22rem]'
+            )}
+          >
+            <BarChart
+              data={data.hourlySeries}
+              margin={isMobile ? { left: -12, right: 2, top: 8, bottom: 0 } : { left: 0, right: 4, top: 8, bottom: 0 }}
+              barCategoryGap={isMobile ? '12%' : '20%'}
+            >
               <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="rgba(148,163,184,0.25)" />
               <XAxis
                 dataKey="label"
                 tickLine={false}
                 axisLine={false}
-                tick={{ fontSize: 10, fill: '#94a3b8' }}
-                interval="preserveStartEnd"
-                minTickGap={28}
+                interval={isMobile ? 5 : 3}
+                tick={tickFont}
+                tickMargin={6}
               />
               <YAxis
                 tickLine={false}
                 axisLine={false}
-                width={36}
-                tick={{ fontSize: 10, fill: '#94a3b8' }}
+                width={isMobile ? 22 : 28}
+                tick={tickFont}
+                tickCount={isMobile ? 4 : 5}
+                allowDecimals={false}
               />
-              <ChartTooltip content={<ChartTooltipContent />} />
-              <Line
-                type="monotone"
-                dataKey="tickets"
-                stroke="var(--color-tickets)"
-                strokeWidth={2}
-                dot={false}
-              />
-              <Line
-                type="monotone"
-                dataKey="orders"
-                stroke="var(--color-orders)"
-                strokeWidth={2}
-                dot={false}
-              />
-            </LineChart>
+              <ChartTooltip content={<ChartTooltipContent className="max-w-[min(16rem,70vw)]" />} />
+              <Bar dataKey="orders" fill="var(--color-orders)" radius={isMobile ? 3 : 4} />
+              <Bar dataKey="checkIns" fill="var(--color-checkIns)" radius={isMobile ? 3 : 4} />
+            </BarChart>
           </ChartContainer>
-        )}
-      </ProfileSection>
-
-      <ProfileSection title="Hourly activity">
-        <ChartContainer config={hourlyChartConfig} className="h-[200px] w-full sm:h-[240px]">
-          <BarChart data={data.hourlySeries} margin={{ left: 0, right: 4, top: 8, bottom: 0 }}>
-            <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="rgba(148,163,184,0.25)" />
-            <XAxis
-              dataKey="label"
-              tickLine={false}
-              axisLine={false}
-              interval={3}
-              tick={{ fontSize: 10, fill: '#94a3b8' }}
-            />
-            <YAxis
-              tickLine={false}
-              axisLine={false}
-              width={28}
-              tick={{ fontSize: 10, fill: '#94a3b8' }}
-            />
-            <ChartTooltip content={<ChartTooltipContent />} />
-            <Bar dataKey="orders" fill="var(--color-orders)" radius={4} />
-            <Bar dataKey="checkIns" fill="var(--color-checkIns)" radius={4} />
-          </BarChart>
-        </ChartContainer>
+        </div>
       </ProfileSection>
     </div>
   );
@@ -560,12 +607,15 @@ export function AnalyticsTicketTypes({ data }: { data: ProfileAnalyticsPayload }
 }
 
 export function AnalyticsAttendance({ data }: { data: ProfileAnalyticsPayload }) {
+  const isMobile = useIsMobile();
+  const tickFont = { fontSize: isMobile ? 9 : 10, fill: '#94a3b8' as const };
+
   return (
-    <div className="grid gap-3 xl:grid-cols-3">
-      <ProfileSection title="Attendance">
+    <div className="grid min-w-0 gap-3 xl:grid-cols-3">
+      <ProfileSection title="Attendance" className="min-w-0">
         <div className="space-y-3">
           <div className="rounded-xl border border-slate-200/70 bg-white/80 p-3 dark:border-slate-700/60 dark:bg-slate-950/50">
-            <div className="flex items-center justify-between text-sm">
+            <div className="flex items-center justify-between gap-2 text-sm">
               <span className="text-slate-600 dark:text-slate-300">Checked in</span>
               <span className="font-semibold tabular-nums">{data.kpis.checkedIn}</span>
             </div>
@@ -576,9 +626,9 @@ export function AnalyticsAttendance({ data }: { data: ProfileAnalyticsPayload })
               <p className="text-slate-500">Remaining</p>
               <p className="mt-1 text-lg font-semibold tabular-nums">{data.kpis.remainingCheckIn}</p>
             </div>
-            <div className="rounded-xl border border-slate-200/70 bg-white/80 p-3 dark:border-slate-700/60 dark:bg-slate-950/50">
+            <div className="min-w-0 rounded-xl border border-slate-200/70 bg-white/80 p-3 dark:border-slate-700/60 dark:bg-slate-950/50">
               <p className="text-slate-500">Peak hour</p>
-              <p className="mt-1 text-lg font-semibold tabular-nums">
+              <p className="mt-1 truncate text-lg font-semibold tabular-nums">
                 {data.peakCheckInHour == null
                   ? '—'
                   : `${String(data.peakCheckInHour).padStart(2, '0')}:00`}
@@ -588,34 +638,49 @@ export function AnalyticsAttendance({ data }: { data: ProfileAnalyticsPayload })
         </div>
       </ProfileSection>
 
-      <ProfileSection title="Check-in timeline" className="xl:col-span-2">
+      <ProfileSection title="Check-in timeline" className="min-w-0 xl:col-span-2">
         {data.checkInTimeline.length === 0 ? (
           <EmptyChart />
         ) : (
-          <ChartContainer
-            config={{ tickets: { label: 'Check-ins', color: '#059669' } }}
-            className="h-[180px] w-full sm:h-[220px]"
-          >
-            <BarChart data={data.checkInTimeline} margin={{ left: 0, right: 4, top: 8, bottom: 0 }}>
-              <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="rgba(148,163,184,0.25)" />
-              <XAxis
-                dataKey="label"
-                tickLine={false}
-                axisLine={false}
-                tick={{ fontSize: 10, fill: '#94a3b8' }}
-                interval="preserveStartEnd"
-                minTickGap={24}
-              />
-              <YAxis
-                tickLine={false}
-                axisLine={false}
-                width={28}
-                tick={{ fontSize: 10, fill: '#94a3b8' }}
-              />
-              <ChartTooltip content={<ChartTooltipContent />} />
-              <Bar dataKey="tickets" fill="var(--color-tickets)" radius={6} />
-            </BarChart>
-          </ChartContainer>
+          <div className="-mx-1 min-w-0 overflow-x-auto px-1 sm:mx-0 sm:overflow-visible sm:px-0">
+            <ChartContainer
+              config={{ tickets: { label: 'Check-ins', color: '#059669' } }}
+              className={cn(
+                'aspect-auto h-[170px] w-full min-w-0 sm:h-[210px] md:h-[220px]',
+                isMobile && data.checkInTimeline.length > 8 && 'min-w-[20rem]'
+              )}
+            >
+              <BarChart
+                data={data.checkInTimeline}
+                margin={
+                  isMobile
+                    ? { left: -12, right: 2, top: 8, bottom: 0 }
+                    : { left: 0, right: 4, top: 8, bottom: 0 }
+                }
+              >
+                <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="rgba(148,163,184,0.25)" />
+                <XAxis
+                  dataKey="label"
+                  tickLine={false}
+                  axisLine={false}
+                  tick={tickFont}
+                  interval="preserveStartEnd"
+                  minTickGap={isMobile ? 32 : 24}
+                  tickMargin={6}
+                />
+                <YAxis
+                  tickLine={false}
+                  axisLine={false}
+                  width={isMobile ? 22 : 28}
+                  tick={tickFont}
+                  tickCount={isMobile ? 4 : 5}
+                  allowDecimals={false}
+                />
+                <ChartTooltip content={<ChartTooltipContent className="max-w-[min(16rem,70vw)]" />} />
+                <Bar dataKey="tickets" fill="var(--color-tickets)" radius={isMobile ? 4 : 6} />
+              </BarChart>
+            </ChartContainer>
+          </div>
         )}
       </ProfileSection>
     </div>

@@ -129,7 +129,7 @@ export function ProfileSection({
           {actions ? <div className="flex shrink-0 flex-wrap gap-2">{actions}</div> : null}
         </div>
       ) : null}
-      <div className="p-3 sm:p-5">{children}</div>
+      <div className="min-w-0 overflow-hidden p-3 sm:p-5">{children}</div>
     </section>
   );
 }
